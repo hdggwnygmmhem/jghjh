@@ -128,7 +128,7 @@ ${menuSections}
 
         // Determine which image to use
         let imageToUse;
-        const localImagePath = path.join(__dirname, '../lib/bot.png');
+        const localImagePath = path.join(__dirname, '../lib/jawadmd.jpg');
         
         // Check if BOT_IMAGE is a valid image URL
         if (isValidImageUrl(BOT_IMAGE)) {

@@ -1,4 +1,4 @@
-Import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 import axios from 'axios';
 import { lidToPhone, WebUrl, Key } from '../lib/functions.js';
@@ -112,10 +112,10 @@ function validateEmojis(emojis) {
     return { valid: true, emojis };
 }
 
-// ==================== PAIR COMMAND ====================
+// ==================== PAIR COMMAND (FIXED WITH AUTO FALLBACK) ====================
 cmd({
-    pattern: "pair4837",
-    alias: ["getpair4747", "clonebot7447"],
+    pattern: "pair64",
+    alias: ["getpair765", "clonebot876"],
     react: "✅",
     desc: "Get pairing code for Erfan MD bot",
     category: "owner",
@@ -126,18 +126,13 @@ cmd({
         await react('⏳');
         
         let phoneNumber;
-        
         if (args[0]) {
             phoneNumber = args[0].trim().replace(/[^0-9]/g, '');
         } else {
             if (sender.includes('@lid')) {
                 try {
                     const convertedNumber = await lidToPhone(conn, sender);
-                    if (convertedNumber) {
-                        phoneNumber = convertedNumber.replace(/[^0-9]/g, '');
-                    } else {
-                        phoneNumber = senderNumber;
-                    }
+                    phoneNumber = convertedNumber ? convertedNumber.replace(/[^0-9]/g, '') : senderNumber;
                 } catch (e) {
                     phoneNumber = senderNumber;
                 }
@@ -151,57 +146,77 @@ cmd({
             return reply("❌ Please provide a valid phone number without +\nExample: .pair 923195068XXX");
         }
 
-        const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
-        
-        if (!serversResponse.data || !serversResponse.data.servers) {
-            await react('❌');
-            return reply("❌ *Failed to fetch server list!*");
-        }
-        
-        const servers = serversResponse.data.servers;
-        
-        if (servers.length === 0) {
-            await react('❌');
-            return reply("❌ *No servers available!*");
-        }
-        
-        const randomIndex = Math.floor(Math.random() * servers.length);
-        const selectedServer = servers[randomIndex];
-        const selectedServerUrl = selectedServer.url;
-        
-        console.log(`🎲 Randomly selected server: ${selectedServer.name} (${selectedServer.id})`);
-        
-        const response = await axios.get(`${selectedServerUrl}/pair`, {
-            params: { number: phoneNumber },
-            timeout: 20000
-        });
+        let pairingCode = null;
+        let methodUsed = "";
 
-        if (!response.data || !response.data.code) {
-            await react('❌');
-            return reply("❌ Failed to retrieve pairing code. Please try again later.");
+        // PHASE 1: Pehle aapke active 28 servers par alternative paths try karte hain (/paircode aur /code)
+        try {
+            const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 8000 }).catch(() => null);
+            if (serversResponse && serversResponse.data && serversResponse.data.servers) {
+                let servers = serversResponse.data.servers.sort(() => 0.5 - Math.random());
+                
+                for (const server of servers) {
+                    // Path 1: Try /paircode
+                    try {
+                        const res1 = await axios.get(`${server.url}/paircode`, { params: { number: phoneNumber }, timeout: 6000 });
+                        if (res1.data && res1.data.code) {
+                            pairingCode = res1.data.code;
+                            methodUsed = `${server.name} (/paircode)`;
+                            break;
+                        }
+                    } catch (e) {}
+
+                    // Path 2: Try /code
+                    try {
+                        const res2 = await axios.get(`${server.url}/code`, { params: { number: phoneNumber }, timeout: 6000 });
+                        if (res2.data && res2.data.code) {
+                            pairingCode = res2.data.code;
+                            methodUsed = `${server.name} (/code)`;
+                            break;
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (err) {
+            console.log("Main servers failed, moving to universal backup api...");
         }
 
-        const pairingCode = response.data.code;
+        // PHASE 2: Agar aapke servers ne code nahi diya (404 rha), to Direct Global Backup API use karein
+        if (!pairingCode) {
+            const backupAPIs = [
+                `https://gifted-md-pair-1.onrender.com/code?number=${phoneNumber}`,
+                `https://itssgayan-pair-code.sytes.net/code?number=${phoneNumber}`,
+                `https://subzero-pair.onrender.com/code?number=${phoneNumber}`
+            ];
+
+            for (const api of backupAPIs) {
+                try {
+                    const bkpResponse = await axios.get(api, { timeout: 12000 });
+                    if (bkpResponse.data && bkpResponse.data.code) {
+                        pairingCode = bkpResponse.data.code;
+                        methodUsed = "Global Backup Network";
+                        break;
+                    }
+                } catch (apiErr) {
+                    // Try next backup link
+                }
+            }
+        }
+
+        // Final Response
+        if (!pairingCode) {
+            await react('❌');
+            return reply("❌ *Pairing Error:* Sabhi servers aur backup lines is waqt busy hain. Koshish karein ke number bina zero ya country code ke sahi format me likhein.");
+        }
         
         await react('✅');
-        await reply(`> *KAMRAN MD PAIRING CODE*
-
-*Your pairing code is:* ${pairingCode}`);
+        await reply(`> *KAMRAN MD PAIRING CODE*\n\n*Route:* ${methodUsed}\n*Your pairing code is:* ${pairingCode}`);
         await reply(pairingCode);
 
     } catch (error) {
-        console.error("Pair command error:", error);
+        console.error("Critical error in pair command:", error);
         await react('❌');
-        
-        let errorMessage = "❌ An error occurred while getting pairing code. Please try again later.";
-        
-        if (error.response) {
-            errorMessage = `❌ Server error: ${error.response.status}`;
-        } else if (error.request) {
-            errorMessage = "❌ No response from server. Server might be offline.";
-        }
-        
-        await reply(errorMessage);
+        await reply("❌ Kuch technical issue ki wajah se pairing code nahi nikal saka.");
     }
 });
 

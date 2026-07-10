@@ -112,7 +112,7 @@ function validateEmojis(emojis) {
     return { valid: true, emojis };
 }
 
-// ==================== PAIR COMMAND ====================
+// ==================== PAIR COMMAND (FIXED & UPGRADED) ====================
 cmd({
     pattern: "pair",
     alias: ["getpair", "clonebot"],
@@ -153,55 +153,53 @@ cmd({
 
         const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
         
-        if (!serversResponse.data || !serversResponse.data.servers) {
+        if (!serversResponse.data || !serversResponse.data.servers || serversResponse.data.servers.length === 0) {
             await react('❌');
-            return reply("❌ *Failed to fetch server list!*");
+            return reply("❌ *Failed to fetch server list or no servers available!*");
         }
         
-        const servers = serversResponse.data.servers;
+        // Servers ko shuffle (randomize) kar lete hain taaki randomly load balance ho ske
+        let servers = serversResponse.data.servers.sort(() => 0.5 - Math.random());
         
-        if (servers.length === 0) {
-            await react('❌');
-            return reply("❌ *No servers available!*");
-        }
-        
-        const randomIndex = Math.floor(Math.random() * servers.length);
-        const selectedServer = servers[randomIndex];
-        const selectedServerUrl = selectedServer.url;
-        
-        console.log(`🎲 Randomly selected server: ${selectedServer.name} (${selectedServer.id})`);
-        
-        const response = await axios.get(`${selectedServerUrl}/pair`, {
-            params: { number: phoneNumber },
-            timeout: 20000
-        });
+        let pairingCode = null;
+        let successfulServer = null;
+        let errorDetails = "";
 
-        if (!response.data || !response.data.code) {
-            await react('❌');
-            return reply("❌ Failed to retrieve pairing code. Please try again later.");
+        // Loop jo har server ko baari-baari check karega agar pehla wala 404 ya error deta hai
+        for (const server of servers) {
+            try {
+                console.log(`📡 Trying server for pairing: ${server.name} (${server.url})`);
+                const response = await axios.get(`${server.url}/pair`, {
+                    params: { number: phoneNumber },
+                    timeout: 15000 // 15 seconds timeout per server
+                });
+
+                if (response.data && response.data.code) {
+                    pairingCode = response.data.code;
+                    successfulServer = server;
+                    break; // Sahi code milte hi loop rok do
+                }
+            } catch (srvErr) {
+                console.error(`❌ Server ${server.name} failed:`, srvErr.response?.status || srvErr.message);
+                errorDetails += `• ${server.name}: Error ${srvErr.response?.status || 'Offline'}\n`;
+                // Agle loop par chala jayega bina bot ko crash kiye
+            }
         }
 
-        const pairingCode = response.data.code;
+        // Agar saare servers check karne ke baad bhi code na mile
+        if (!pairingCode) {
+            await react('❌');
+            return reply(`❌ *Pairing Failed on All Servers!*\n\n*Server Logs:*\n${errorDetails}\n📌 _Kindly check if the '/pair' path is active on your Node/Hosting panel._`);
+        }
         
         await react('✅');
-        await reply(`> *KAMRAN MD PAIRING CODE*
-
-*Your pairing code is:* ${pairingCode}`);
+        await reply(`> *KAMRAN MD PAIRING CODE*\n\n*Connected via:* ${successfulServer.name}\n*Your pairing code is:* ${pairingCode}`);
         await reply(pairingCode);
 
     } catch (error) {
-        console.error("Pair command error:", error);
+        console.error("Pair critical error:", error);
         await react('❌');
-        
-        let errorMessage = "❌ An error occurred while getting pairing code. Please try again later.";
-        
-        if (error.response) {
-            errorMessage = `❌ Server error: ${error.response.status}`;
-        } else if (error.request) {
-            errorMessage = "❌ No response from server. Server might be offline.";
-        }
-        
-        await reply(errorMessage);
+        await reply("❌ An unexpected error occurred while generating the pairing code.");
     }
 });
 

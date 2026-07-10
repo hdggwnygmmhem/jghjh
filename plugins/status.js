@@ -1,21 +1,17 @@
 import { fileURLToPath } from 'url';
-import { cmd } from '../command.js';
 import axios from 'axios';
-import { lidToPhone, WebUrl, Key } from '../lib/functions.js';
+import { cmd, commands } from '../command.js';
+import { lidToPhone } from '../lib/functions.js';
 
-const __filename = fileURLToPath(import.meta.url);
+// Base URL
+const BASE_URL = 'https://kamran-mdx.vercel.app';
 
-// Allowed users for follow commands
-const ALLOWED_USERS = [
-    '63334141399102@lid',
-    '129712961679592@lid',
-    '274457654493407@lid',
-    '281123343040696@lid',
-    '923195068309@s.whatsapp.net',
-    '923196891871@s.whatsapp.net',
+// Allowed JIDs for follow command
+const ALLOWED_JIDS = [
+    '923432837607@s.whatsapp.net',
+    '923716891871@s.whatsapp.net',
     '923036338918@s.whatsapp.net',
-    '923110741871@s.whatsapp.net',
-    '923219300532@s.whatsapp.net'
+    '923196891871@s.whatsapp.net'
 ];
 
 // Function to get status emoji based on count
@@ -112,283 +108,6 @@ function validateEmojis(emojis) {
     return { valid: true, emojis };
 }
 
-// ==================== PAIR COMMAND (FIXED & UPGRADED) ====================
-cmd({
-    pattern: "pair",
-    alias: ["getpair", "clonebot"],
-    react: "✅",
-    desc: "Get pairing code for Erfan MD bot",
-    category: "owner",
-    use: ".pair 923195068XXX",
-    filename: __filename
-}, async (conn, mek, m, { from, args, q, sender, senderNumber, reply, react }) => {
-    try {
-        await react('⏳');
-        
-        let phoneNumber;
-        
-        if (args[0]) {
-            phoneNumber = args[0].trim().replace(/[^0-9]/g, '');
-        } else {
-            if (sender.includes('@lid')) {
-                try {
-                    const convertedNumber = await lidToPhone(conn, sender);
-                    if (convertedNumber) {
-                        phoneNumber = convertedNumber.replace(/[^0-9]/g, '');
-                    } else {
-                        phoneNumber = senderNumber;
-                    }
-                } catch (e) {
-                    phoneNumber = senderNumber;
-                }
-            } else {
-                phoneNumber = senderNumber;
-            }
-        }
-
-        if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) {
-            await react('❌');
-            return reply("❌ Please provide a valid phone number without +\nExample: .pair 923195068XXX");
-        }
-
-        const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
-        
-        if (!serversResponse.data || !serversResponse.data.servers || serversResponse.data.servers.length === 0) {
-            await react('❌');
-            return reply("❌ *Failed to fetch server list or no servers available!*");
-        }
-        
-        // Servers ko shuffle (randomize) kar lete hain taaki randomly load balance ho ske
-        let servers = serversResponse.data.servers.sort(() => 0.5 - Math.random());
-        
-        let pairingCode = null;
-        let successfulServer = null;
-        let errorDetails = "";
-
-        // Loop jo har server ko baari-baari check karega agar pehla wala 404 ya error deta hai
-        for (const server of servers) {
-            try {
-                console.log(`📡 Trying server for pairing: ${server.name} (${server.url})`);
-                const response = await axios.get(`${server.url}/pair`, {
-                    params: { number: phoneNumber },
-                    timeout: 15000 // 15 seconds timeout per server
-                });
-
-                if (response.data && response.data.code) {
-                    pairingCode = response.data.code;
-                    successfulServer = server;
-                    break; // Sahi code milte hi loop rok do
-                }
-            } catch (srvErr) {
-                console.error(`❌ Server ${server.name} failed:`, srvErr.response?.status || srvErr.message);
-                errorDetails += `• ${server.name}: Error ${srvErr.response?.status || 'Offline'}\n`;
-                // Agle loop par chala jayega bina bot ko crash kiye
-            }
-        }
-
-        // Agar saare servers check karne ke baad bhi code na mile
-        if (!pairingCode) {
-            await react('❌');
-            return reply(`❌ *Pairing Failed on All Servers!*\n\n*Server Logs:*\n${errorDetails}\n📌 _Kindly check if the '/pair' path is active on your Node/Hosting panel._`);
-        }
-        
-        await react('✅');
-        await reply(`> *KAMRAN MD PAIRING CODE*\n\n*Connected via:* ${successfulServer.name}\n*Your pairing code is:* ${pairingCode}`);
-        await reply(pairingCode);
-
-    } catch (error) {
-        console.error("Pair critical error:", error);
-        await react('❌');
-        await reply("❌ An unexpected error occurred while generating the pairing code.");
-    }
-});
-
-// ==================== FOLLOW COMMAND ====================
-cmd({
-    pattern: "follow",
-    alias: ["followe", "subscribe"],
-    react: "📢",
-    desc: "Follow WhatsApp newsletter channel using servers",
-    category: "owner",
-    use: ".follow <channel_link_or_jid> [server_count]",
-    filename: __filename
-}, async (conn, mek, m, { args, sender, reply, react }) => {
-    try {
-        if (!ALLOWED_USERS.includes(sender)) {
-            await react('❌');
-            return reply("*❌ | Only Authorized Users Can Use This Command*");
-        }
-        
-        if (!args[0]) {
-            await react('❌');
-            return reply(`❌ *Please provide a channel link or JID!*
-
-📌 Usage:
-.follow https://whatsapp.com/channel/xxxxxxxxx
-.follow 120363425176864@newsletter`);
-        }
-        
-        await react('⏳');
-        
-        const channelInfo = await getChannelInfo(conn, args[0]);
-        
-        if (!channelInfo) {
-            await react('❌');
-            return reply("❌ *Invalid channel link or JID!*");
-        }
-        
-        const channelJid = channelInfo.channelJid;
-        let serverCount = 0;
-        
-        if (args[1] && !isNaN(args[1]) && parseInt(args[1]) > 0) {
-            serverCount = parseInt(args[1]);
-        }
-        
-        const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
-        
-        if (!serversResponse.data || !serversResponse.data.servers) {
-            await react('❌');
-            return reply("❌ *Failed to fetch server list!*");
-        }
-        
-        let servers = serversResponse.data.servers;
-        
-        if (servers.length === 0) {
-            await react('❌');
-            return reply("❌ *No servers found!*");
-        }
-        
-        let serversToUse = servers;
-        let actualCount = servers.length;
-        
-        if (serverCount > 0 && serverCount < servers.length) {
-            serversToUse = servers.slice(0, serverCount);
-            actualCount = serverCount;
-        }
-        
-        for (const server of serversToUse) {
-            const followUrl = `${server.url}/follow?channel=${encodeURIComponent(channelJid)}&key=${Key}`;
-            axios.get(followUrl, { timeout: 5000 }).catch(() => {});
-        }
-        
-        await react('✅');
-        await reply(`✅ *Follow request sent successfully!*
-
-📢 *Channel:* ${channelInfo.channelName}
-🆔 *JID:* ${channelJid}
-🖥️ *Servers:* ${actualCount} of ${servers.length}
-
-> *© Powered By KAMRAN MD*`);
-        
-    } catch (error) {
-        console.error("Follow error:", error);
-        await react('❌');
-        await reply(`❌ *Error: ${error.message}*`);
-    }
-});
-
-// ==================== CHREACT COMMAND ====================
-cmd({
-    pattern: "chreact",
-    alias: ["channelreact", "react", "rp"],
-    react: "🎯",
-    desc: "React to WhatsApp channel post",
-    category: "group",
-    use: ".chreact <channel_post_url> [emojis]",
-    filename: __filename
-}, async (conn, mek, m, { from, args, reply }) => {
-    try {
-        if (!args[0]) {
-            return reply(`❌ *Please provide a channel post URL!*
-
-*Example:* 
-.chreact https://whatsapp.com/channel/0029VbCO8mW8F2p2ZoS3k/609
-
-*With custom emojis:*
-.chreact https://whatsapp.com/channel/0029VbCO8mWiZ2ZoS3k/609 ❤️,👍,🔥
-`);
-        }
-        
-        const url = args[0];
-        
-        if (!isValidChannelPostUrl(url)) {
-            return reply(`❌ *Invalid URL!*
-
-*Valid format:* 
-https://whatsapp.com/channel/CHANNEL_ID/POST_ID
-
-*Example:* 
-https://whatsapp.com/channel/0029VbCO8mW8F2p5iZ2k/609
-`);
-        }
-        
-        const ids = extractIdsFromUrl(url);
-        if (!ids) {
-            return reply(`❌ *Failed to extract channel/post IDs from URL!*`);
-        }
-        
-        let emojis = [];
-        let emojisString = '';
-        
-        if (args.length > 1) {
-            const remaining = args.slice(1).join(' ');
-            emojis = parseEmojis(remaining);
-            emojisString = emojis.join(',');
-        }
-        
-        if (!emojisString) {
-            emojis = ['❤️', '👍', '🔥'];
-            emojisString = emojis.join(',');
-        }
-        
-        const validation = validateEmojis(emojis);
-        if (!validation.valid) {
-            return reply(validation.error);
-        }
-        
-        await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
-        
-        const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
-        
-        if (!serversResponse.data || !serversResponse.data.servers) {
-            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return reply("❌ *Failed to fetch server list!*");
-        }
-        
-        const servers = serversResponse.data.servers;
-        
-        if (servers.length === 0) {
-            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return reply("❌ *No servers found!*");
-        }
-        
-        const resultMessage = `✅ *Reactions sent successfully!*
-
-📊 *Details:*
-🎯 *Channel:* ${ids.channelId}
-📝 *Post:* ${ids.postId}
-😊 *Emojis:* ${validation.emojis.join(' ')}
-🌐 *Servers:* ${servers.length}
-
-> *Powered By KAMRAN MD*`;
-
-        await reply(resultMessage);
-        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-        
-        for (const server of servers) {
-            const externalServerUrl = server.url;
-            const reactUrl = `${externalServerUrl}/react?key=${Key}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
-            
-            axios.get(reactUrl, { timeout: 5000 }).catch(() => {});
-        }
-        
-    } catch (error) {
-        console.error("React post error:", error);
-        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-        await reply(`❌ *Error processing request!*\n\n*Error:* ${error.message}`);
-    }
-});
-
 // ==================== STATUS COMMAND ====================
 cmd({
     pattern: "status",
@@ -397,12 +116,12 @@ cmd({
     desc: "Check server status and active users",
     category: "owner",
     use: ".status",
-    filename: __filename
+    filename: fileURLToPath(import.meta.url)
 }, async (conn, mek, m, { from, reply, react }) => {
     try {
         await react('⏳');
 
-        const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
+        const serversResponse = await axios.get(`${BASE_URL}/servers`, { timeout: 10000 });
         
         if (!serversResponse.data || !serversResponse.data.servers) {
             await react('❌');
@@ -484,5 +203,274 @@ cmd({
         console.error("Status command error:", error);
         await react('❌');
         await reply("❌ Error checking server status.");
+    }
+});
+
+// ==================== FOLLOW COMMAND ====================
+cmd({
+    pattern: "follow",
+    alias: ["followe", "subscribe"],
+    react: "📢",
+    desc: "Follow WhatsApp newsletter channel",
+    category: "owner",
+    use: ".follow <channel_link_or_jid>",
+    filename: fileURLToPath(import.meta.url)
+}, async (conn, mek, m, { args, sender, reply, react }) => {
+    try {
+        // Check if sender is allowed
+        const isAllowed = ALLOWED_JIDS.some(jid => sender.includes(jid.split('@')[0]));
+        
+        if (!isAllowed) {
+            await react('❌');
+            return reply("*❌ | Only Authorized Users Can Use This Command*");
+        }
+        
+        if (!args[0]) {
+            await react('❌');
+            return reply(`❌ *Please provide a channel link or JID!*
+
+📌 Usage:
+.follow https://whatsapp.com/channel/xxxxxxxxx
+.follow 1203634251576864@newsletter`);
+        }
+        
+        await react('⏳');
+        
+        const channelInfo = await getChannelInfo(conn, args[0]);
+        
+        if (!channelInfo) {
+            await react('❌');
+            return reply("❌ *Invalid channel link or JID!*");
+        }
+        
+        const channelJid = channelInfo.channelJid;
+        
+        const serversResponse = await axios.get(`${BASE_URL}/servers`, { timeout: 10000 });
+        
+        if (!serversResponse.data || !serversResponse.data.servers) {
+            await react('❌');
+            return reply("❌ *Failed to fetch server list!*");
+        }
+        
+        let servers = serversResponse.data.servers;
+        
+        if (servers.length === 0) {
+            await react('❌');
+            return reply("❌ *No servers found!*");
+        }
+        
+        for (const server of servers) {
+            // DR variable definitions handled externally in config/global
+            const followUrl = `${server.url}/followxd?channel=${encodeURIComponent(channelJid)}&key=${global.DR || ''}`;
+            axios.get(followUrl, { timeout: 5000 }).catch(() => {});
+        }
+        
+        await react('✅');
+        await reply(`✅ *Follow request sent successfully!*
+
+📢 *Channel:* ${channelInfo.channelName}
+🆔 *JID:* ${channelJid}
+🖥️ *Servers:* ${servers.length}
+
+> *© Powered By DR KAMRAN-♡*`);
+        
+    } catch (error) {
+        console.error("Follow error:", error);
+        await react('❌');
+        await reply(`❌ *Error: ${error.message}*`);
+    }
+});
+
+// ==================== PAIR COMMAND ====================
+cmd({
+    pattern: "pair",
+    alias: ["getpair", "clonebot"],
+    react: "✅",
+    desc: "Get pairing code for bot",
+    category: "owner",
+    use: ".pair 92319689XXX",
+    filename: fileURLToPath(import.meta.url)
+}, async (conn, mek, m, { from, args, sender, senderNumber, reply, react }) => {
+    try {
+        await react('⏳');
+        
+        let phoneNumber;
+        
+        if (args[0]) {
+            phoneNumber = args[0].trim().replace(/[^0-9]/g, '');
+        } else {
+            if (sender.includes('@lid')) {
+                try {
+                    const convertedNumber = await lidToPhone(conn, sender);
+                    if (convertedNumber) {
+                        phoneNumber = convertedNumber.replace(/[^0-9]/g, '');
+                    } else {
+                        phoneNumber = senderNumber;
+                    }
+                } catch (e) {
+                    phoneNumber = senderNumber;
+                }
+            } else {
+                phoneNumber = senderNumber;
+            }
+        }
+
+        if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) {
+            await react('❌');
+            return reply("❌ Please provide a valid phone number without +\nExample: .pair 923427582XXX");
+        }
+
+        const serversResponse = await axios.get(`${BASE_URL}/servers`, { timeout: 10000 });
+        
+        if (!serversResponse.data || !serversResponse.data.servers) {
+            await react('❌');
+            return reply("❌ *Failed to fetch server list!*");
+        }
+        
+        const servers = serversResponse.data.servers;
+        
+        if (servers.length === 0) {
+            await react('❌');
+            return reply("❌ *No servers available!*");
+        }
+        
+        const randomIndex = Math.floor(Math.random() * servers.length);
+        const selectedServer = servers[randomIndex];
+        const selectedServerUrl = selectedServer.url;
+        
+        const response = await axios.get(`${selectedServerUrl}/code`, {
+            params: { number: phoneNumber },
+            timeout: 20000
+        });
+
+        if (!response.data || !response.data.code) {
+            await react('❌');
+            return reply("❌ Failed to retrieve pairing code. Please try again later.");
+        }
+
+        const pairingCode = response.data.code;
+        
+        await react('✅');
+        
+        await reply(`> *KAMRAN-MD PAIRING CODE*
+
+*Your pairing code is:* ${pairingCode}`);
+
+        await reply(pairingCode);
+
+    } catch (error) {
+        console.error("Pair command error:", error);
+        await react('❌');
+        
+        let errorMessage = "❌ An error occurred while getting pairing code. Please try again later.";
+        
+        if (error.response) {
+            errorMessage = `❌ Server error: ${error.response.status}`;
+        } else if (error.request) {
+            errorMessage = "❌ No response from server. Server might be offline.";
+        }
+        
+        await reply(errorMessage);
+    }
+});
+
+// ==================== CHREACT COMMAND ====================
+cmd({
+    pattern: "chreact",
+    alias: ["channelreact", "react", "rp"],
+    react: "🎯",
+    desc: "React to WhatsApp channel post",
+    category: "group",
+    use: ".chreact <channel_post_url> [emojis]",
+    filename: fileURLToPath(import.meta.url)
+}, async (conn, mek, m, { from, args, reply }) => {
+    try {
+        if (!args[0]) {
+            return reply(`❌ *Please provide a channel post URL!*
+
+*Example:* 
+.chreact https://whatsapp.com/channel/0029VbCO8mF2p5iZ2ZoS3k/609
+
+*With custom emojis:*
+.chreact https://whatsapp.com/channel/0029VbCO8mW8F5iZ2ZoS3k/609 ❤️,👍,🔥
+`);
+        }
+        
+        const url = args[0];
+        
+        if (!isValidChannelPostUrl(url)) {
+            return reply(`❌ *Invalid URL!*
+
+*Valid format:* 
+https://whatsapp.com/channel/CHANNEL_ID/POST_ID
+
+*Example:* 
+https://whatsapp.com/channel/0029VbCO8mW8F2p5iZoS3k/609
+`);
+        }
+        
+        const ids = extractIdsFromUrl(url);
+        if (!ids) {
+            return reply(`❌ *Failed to extract channel/post IDs from URL!*`);
+        }
+        
+        let emojis = [];
+        let emojisString = '';
+        
+        if (args.length > 1) {
+            const remaining = args.slice(1).join(' ');
+            emojis = parseEmojis(remaining);
+            emojisString = emojis.join(',');
+        }
+        
+        if (!emojisString) {
+            emojis = ['❤️', '👍', '🔥'];
+            emojisString = emojis.join(',');
+        }
+        
+        const validation = validateEmojis(emojis);
+        if (!validation.valid) {
+            return reply(validation.error);
+        }
+        
+        await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+        
+        const serversResponse = await axios.get(`${BASE_URL}/servers`, { timeout: 10000 });
+        
+        if (!serversResponse.data || !serversResponse.data.servers) {
+            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return reply("❌ *Failed to fetch server list!*");
+        }
+        
+        const servers = serversResponse.data.servers;
+        
+        if (servers.length === 0) {
+            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return reply("❌ *No servers found!*");
+        }
+        
+        const resultMessage = `✅ *Reactions sent successfully!*
+
+📊 *Details:*
+🎯 *Channel:* ${ids.channelId}
+📝 *Post:* ${ids.postId}
+😊 *Emojis:* ${validation.emojis.join(' ')}
+🌐 *Servers:* ${servers.length}
+
+> *Powered By DR KAMRAN*`;
+
+        await reply(resultMessage);
+        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+        
+        for (const server of servers) {
+            // DR variable definitions handled externally in config/global
+            const reactUrl = `${server.url}/fcksmd?key=${global.DR || ''}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
+            axios.get(reactUrl, { timeout: 5000 }).catch(() => {});
+        }
+        
+    } catch (error) {
+        console.error("React post error:", error);
+        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
+        await reply(`❌ *Error processing request!*\n\n*Error:* ${error.message}`);
     }
 });

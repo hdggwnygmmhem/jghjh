@@ -3,190 +3,54 @@ import axios from 'axios';
 import sharp from 'sharp';
 import { cmd } from '../command.js';
 
-// Helper function to process high-compatibility jpeg thumbnails
-async function getThumbnailBuffer(url) {
-  if (!url) return null;
-  try {
-    const { data } = await axios.get(url, { responseType: "arraybuffer" });
-    return await sharp(data)
-      .resize(300, 300)
-      .jpeg({ quality: 80 })
-      .toBuffer();
-  } catch (err) {
-    console.error("Error processing thumbnail:", err.message || err);
-    return null;
-  }
-}
-
-cmd({
-    pattern: "mlfbd",
-    alias: ["movie2", "downloadmovie", "cinemalk"],
-    desc: "Search and download movies from MLFBD via API",
-    category: "downloader",
-    filename: fileURLToPath(import.meta.url)
-},
-async (conn, mek, m, { from, reply, react, q }) => {
-    const apiKey = "vajira-VajiraOfficial2003";
-    const searchApiUrl = `https://vajira-official-apis.vercel.app/api/mlfbds`;
-    const downloadApiUrl = `https://vajira-official-apis.vercel.app/api/mlfbddl`;
-
+const _0x539b = ["\x6d\x6c\x66\x62\x64", "\x6d\x6f\x76\x69\x65", "\x64\x6f\x77\x6e\x6c\x6f\x61\x64\x6d\x6f\x76\x69\x65", "\x63\x69\x6e\x65\x6d\x61\x6c\x6b", "\x64\x6f\x77\x6e\x6c\x6f\x61\x64\x65\x72", "\x61\x72\x72\x61\x79\x62\x75\x66\x66\x65\x72", "\x6a\x70\x65\x67", "\x45\x72\x72\x6f\x72\x20\x70\x72\x6f\x63\x65\x73\x73\x69\x6e\x67\x20\x74\x68\x75\x6d\x62\x6e\x61\x69\x6c\x3a"];
+async function getThumbnailBuffer(_0x3df1e5) { if (!_0x3df1e5) return null; try { const { data: _0x21a2b } = await axios['\x67\x65\x74'](_0x3df1e5, { '\x72\x65\x73\x70\x6f\x6e\x73\x65\x54\x79\x70\x65': _0x539b[5] }); return await sharp(_0x21a2b)['\x72\x65\x73\x69\x7a\x65'](0x12c, 0x12c)[_0x539b[6]]({ '\x71\x75\x61\x6c\x69\x74\x79': 0x50 })['\x74\x6f\x42\x75\x66\x66\x65\x72'](); } catch (_0x429ab7) { console['\x65\x72\x72\x6f\x72'](_0x539b[7], _0x429ab7['\x6d\x65\x73\x73\x61\x67\x65'] || _0x429ab7); return null; } }
+cmd({ pattern: _0x539b[0], alias: [_0x539b[1], _0x539b[2], _0x539b[3]], desc: "\x53\x65\x61\x72\x63\x68\x20\x61\x6e\x64\x20\x64\x6f\x77\x6e\x6c\x6f\x61\x64\x20\x6d\x6f\x76\x69\x65\x73\x20\x66\x72\x6f\x6d\x20\x4d\x4c\x46\x42\x44\x20\x76\x69\x61\x20\x41\x50\x49", category: _0x539b[4], filename: fileURLToPath(import.meta.url) }, async (_0x5c8e1a, _0x3e1aa2, _0x4f882a, { from: _0x12a3b1, reply: _0x41ab2c, react: _0x2fb3a4, q: _0x3b2c1d }) => {
+    const _0x0a1b2c = "\x76\x61\x6a\x69\x72\x61\x2d\x56\x61\x6a\x69\x72\x61\x4f\x66\x66\x69\x63\x69\x61\x6c\x32\x30\x30\x33";
+    const _0x3c4d5e = `\x68\x74\x74\x70\x73\x3a\x2f\x2f\x76\x61\x6a\x69\x72\x61\x2d\x6f\x66\x66\x69\x63\x69\x61\x6c\x2d\x61\x70\x69\x73\x2e\x76\x65\x72\x63\x65\x6c\x2e\x61\x70\x70\x2f\x61\x70\x69\x2f\x6d\x6c\x66\x62\x64\x73`;
+    const _0x5e6f7a = `\x68\x74\x74\x70\x73\x3a\x2f\x2f\x76\x61\x6a\x69\x72\x61\x2d\x6f\x66\x66\x69\x63\x69\x61\x6c\x2d\x61\x70\x69\x73\x2e\x76\x65\x72\x63\x65\x6c\x2e\x61\x70\x70\x2f\x61\x70\x69\x2f\x6d\x6c\x66\x62\x64\x64\x6c`;
     try {
-        await react("🎬");
-
-        if (!q || typeof q !== 'string' || !q.trim()) {
-            return reply(
-                "❌ Please provide a movie name to search!\n\n" +
-                "Example: .mlfbd From Season 4\n" +
-                "Or: .mlfbd Drishyam 3"
-            );
-        }
-
-        await reply(`🔍 Searching for "${q.trim()}" on MLFBD...`);
-
-        const response = await axios.get(searchApiUrl, {
-            params: { apikey: apiKey, text: q.trim() },
-            timeout: 30000
-        });
-
-        if (response.status !== 200 || !response.data || !response.data.result || response.data.result.length === 0) {
-            await react("❌");
-            return reply("❌ No results found on MLFBD for your query.");
-        }
-
-        const results = response.data.result;
-
-        let listText = `🎬 *MLFBD MOVIE SEARCH*\n\n🔎 *Query:* ${q.trim().toUpperCase()}\n\n`;
-        results.forEach((v, i) => {
-            listText += `*${i + 1}* ☛ ${v.title} \n⭐ Rating: [${v.rate || 'N/A'}] | Year: [${v.year || 'N/A'}]\n\n`;
-        });
-
-        listText += `*🔢 Reply with a number to select your choice*\n\n> © KAMRAN-MINI-BOT ッ`;
-
-        const sentSearch = await conn.sendMessage(from, {
-            image: { url: results[0].image || "https://placehold.co/600x400?text=No+Poster" },
-            caption: listText
-        }, { quoted: mek });
-
-        const searchMsgId = sentSearch.key.id;
-
-        // Timeouts ke liye reference variables
-        let detailsTimeout, downloadTimeout;
-
-        // ================= INTERACTIVE STEP: DETAILS HANDLER =================
-        const detailsHandler = async (update) => {
-            const msg = update.messages[0];
-            if (!msg?.message || msg.key.remoteJid !== from) return;
-
-            const ctx = msg.message.extendedTextMessage?.contextInfo || msg.message.conversation?.contextInfo;
-            if (ctx?.stanzaId !== searchMsgId) return;
-
-            const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
-            const num = parseInt(choice);
-            if (isNaN(num) || num < 1 || num > results.length) return;
-            
-            const selected = results[num - 1];
-            if (!selected) return;
-
-            // Listener off aur timeout clear
-            conn.ev.off("messages.upsert", detailsHandler);
-            clearTimeout(detailsTimeout);
-
-            await react("⏳");
-
-            const detailResponse = await axios.get(downloadApiUrl, {
-                params: { apikey: apiKey, url: selected.link },
-                timeout: 30000
-            });
-
-            if (detailResponse.status !== 200 || !detailResponse.data || !detailResponse.data.result) {
-                await react("❌");
-                return reply("❌ Failed to pull download properties for this item.");
-            }
-
-            const movieDetails = detailResponse.data.result;
-            const dlLinks = movieDetails.downloads || [];
-
-            if (dlLinks.length === 0) {
-                await react("❌");
-                return reply("❌ No downloadable files were located for this selection.");
-            }
-
-            let cap = `🎬 *${movieDetails.title || selected.title}*\n\n`;
-            cap += `ℹ️ *Description:* ${movieDetails.description || 'No description available'}\n`;
-            cap += `🎭 *Genres:* ${movieDetails.genres || 'N/A'}\n`;
-            cap += `📅 *Release Date:* ${movieDetails.release || 'N/A'}\n`;
-            cap += `⭐ *Rating:* ${movieDetails.rating || selected.rate}\n\n`;
-            cap += `┌───────────────────\n`;
-            cap += `│ 📂 *Available Download Mirrors:*\n`;
-            
-            dlLinks.forEach((dl, i) => {
-                cap += `│ *${i + 1}* ☛ Mirror ${i + 1} - Quality: [${dl.quality || '720p'}] (${dl.size || 'Unknown'})\n`;
-            });
-            cap += `└───────────────────\n\n`;
-            cap += `*🔢 Reply a number to begin download submission*\n\n> © KAMRAN-MINI-BOT ッ`;
-
-            const sentDetail = await conn.sendMessage(from, {
-                image: { url: movieDetails.image || selected.image || "https://placehold.co/600x400?text=No+Poster" },
-                caption: cap
-            }, { quoted: msg });
-
-            const detailMsgId = sentDetail.key.id;
-
-            // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
-            const downloadHandler = async (up) => {
-                const dlMsg = up.messages[0];
-                if (!dlMsg?.message || dlMsg.key.remoteJid !== from) return;
-
-                const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
-                if (dlCtx?.stanzaId !== detailMsgId) return;
-
-                const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
-                const dlNum = parseInt(pick);
-                if (isNaN(dlNum) || dlNum < 1 || dlNum > dlLinks.length) return;
-
-                const selectedDl = dlLinks[dlNum - 1];
-                if (!selectedDl) return;
-
-                // Handler aur timeout clear
-                conn.ev.off("messages.upsert", downloadHandler);
-                clearTimeout(downloadTimeout);
-
-                await conn.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
-                
-                const targetFileUrl = selectedDl.direct;
-                const cleanFileName = `${(movieDetails.title || selected.title).replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || '720p'}.mp4`;
-
-                await reply(`🚀 Processing your movie file request... Sending Document now.`);
-
-                await conn.sendMessage(from, {
-                    document: { url: targetFileUrl },
-                    mimetype: "video/mp4",
-                    fileName: cleanFileName,
-                    jpegThumbnail: await getThumbnailBuffer(movieDetails.image || selected.image),
-                    caption: `🎬 *${movieDetails.title || selected.title}*\n⚖️ *Size:* ${selectedDl.size || 'N/A'}\n🌟 *Quality:* ${selectedDl.quality || '720p'}\n\n> © KAMRAN-MINI-BOT ッ`
-                }, { quoted: dlMsg });
-
-                await conn.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });
+        await _0x2fb3a4("\x63\x6c\x61\x70\x62\x6f\x61\x72\x64"); if (!_0x3b2c1d || typeof _0x3b2c1d !== '\x73\x74\x72\x69\x6e\x67' || !_0x3b2c1d['\x74\x72\x69\x6d']()) { return _0x41ab2c("\x58\x20\x50\x6c\x65\x61\x73\x65\x20\x70\x72\x6f\x76\x69\x64\x65\x20\x61\x20\x6d\x6f\x76\x69\x65\x20\x6e\x61\x6d\x65\x20\x74\x6f\x20\x73\x65\x61\x72\x63\x68\x21"); }
+        const _0x1a2b3c = _0x3b2c1d['\x74\x72\x69\x6d'](); await _0x41ab2c(`\ud83d\udd0d\x20\x53\x65\x61\x72\x63\x68\x69\x6e\x67\x20\x66\x6f\x72\x20\x22${_0x1a2b3c}\x22\x20\x6f\x6e\x20\x4d\x4c\x46\x42\x44\x2e\x2e\x2e`);
+        const _0x4d5e6f = await axios['\x67\x65\x74'](_0x3c4d5e, { params: { apikey: _0x0a1b2c, text: _0x1a2b3c }, timeout: 0x7530 });
+        if (_0x4d5e6f['\x73\x74\x61\x74\x75\x73'] !== 0xc8 || !_0x4d5e6f['\x64\x61\x74\x61'] || !_0x4d5e6f['\x64\x61\x74\x61']['\x72\x65\x73\x75\x6c\x74'] || _0x4d5e6f['\x64\x61\x74\x61']['\x72\x65\x73\x75\x6c\x74']['\x6c\x65\x6e\x67\x74\x68'] === 0x0) { await _0x2fb3a4("\x58"); return _0x41ab2c("\u274c\x20\x4e\x6f\x20\x72\x65\x73\x75\x6c\x74\x73\x20\x66\x6f\x75\x6e\x64\x2e"); }
+        const _0x3a4b5c = _0x4d5e6f['\x64\x61\x74\x61']['\x72\x65\x73\x75\x6c\x74']; let _0x2c3d4e = `\ud83c\udfac\x20\x2a\x4d\x4c\x46\x42\x44\x20\x4d\x4f\x56\x49\x45\x20\x53\x45\x41\x52\x43\x48\x2a\n\n\ud83d\udd0e\x20\x2a\x51\x75\x65\x72\x79\x3a\x2a\x20${_0x1a2b3c['\x74\x6f\x55\x70\x70\x65\x72\x43\x61\x73\x65']()}\n\n`;
+        _0x3a4b5c['\x66\x6f\x72\x45\x61\x63\x68']((_0xbd1, _0xidx) => { _0x2c3d4e += `\x2a${_0xidx + 0x1}\x2a\x20\u261e\x20${_0xbd1['\x74\x69\x74\x6c\x65']}\x20\n\u2b50\x20\x52\x61\x74\x69\x6e\x67\x3a\x20\x5b${_0xbd1['\x72\x61\x74\x65'] || '\x4e\x2f\x41'}\x5b\x20\x7c\x20\x59\x65\x61\x72\x3a\x20\x5b${_0xbd1['\x79\x65\x61\x72'] || '\x4e\x2f\x41'}\x5d\n\n`; });
+        _0x2c3d4e += `\x2a\ud83d\udd22\x20\x52\x65\x70\x6c\x79\x20\x77\x69\x74\x68\x20\x61\x20\x6e\x75\x6d\x62\x65\x72\x2a\n\n\x3e\x20\xa9\x20\x53\x49\x47\x4d\x41\x2d\x4d\x44\x20\u30c3`;
+        const _0x5f6e7d = await _0x5c8e1a['\x73\x65\x6e\x64\x4d\x65\x73\x73\x61\x67\x65'](_0x12a3b1, { image: { url: _0x3a4b5c[0]['\x69\x6d\x61\x67\x65'] || "\x6a\x68\x74\x74\x70\x73\x3a\x2f\x2f\x70\x6c\x61\x63\x65\x68\x6f\x6c\x64\x2e\x63\x6f" }, caption: _0x2c3d4e }, { quoted: _0x4f882a });
+        const _0x2a3b4c = _0x5f6e7d['\x6b\x65\x79']['\x69\x64']; let _0x4d5e, _0x6f7a;
+        const _0x12345 = async (_0xupdate) => {
+            const _0xmsg = _0xupdate['\x6d\x65\x73\x73\x61\x67\x65\x73'][0]; if (!_0xmsg || !_0xmsg['\x6d\x65\x73\x73\x61\x67\x65'] || _0xmsg['\x6b\x65\x79']['\x72\x65\x6d\x6f\x74\x65\x4a\x69\x64'] !== _0x12a3b1) return;
+            const _0xctx = _0xmsg['\x6d\x65\x73\x73\x61\x67\x65']?.['\x65\x78\x74\x65\x6e\x64\x65\x64\x54\x65\x78\x74\x4d\x65\x73\x73\x61\x67\x65']?.['\x63\x6f\x6e\x74\x65\x78\x74\x49\x6e\x66\x6f'] || _0xmsg['\x6d\x65\x73\x73\x61\x67\x65']?.['\x63\x6f\x6e\x76\x65\x72\x73\x61\x74\x69\x6f\x6e']?.['\x63\x6f\x6e\x74\x65\x78\x74\x49\x6e\x66\x6f'];
+            if (_0xctx?.['\x73\x74\x61\x6e\x7a\x61\x49\x64'] !== _0x2a3b4c) return;
+            const _0xchoice = (_0xmsg['\x6d\x65\x73\x73\x61\x67\x65']?.['\x63\x6f\x6e\x76\x65\x72\x73\x61\x74\x69\x6f\x6e'] || _0xmsg['\x6d\x65\x73\x73\x61\x67\x65']?.['\x65\x78\x74\x65\x6e\x64\x65\x64\x54\x65\x78\x74\x4d\x65\x73\x73\x61\x67\x65']?.['\x74\x65\x78\x74'] || "")['\x74\x72\x69\x6d']();
+            const _0xnum = parseInt(_0xchoice); if (isNaN(_0xnum) || _0xnum < 0x1 || _0xnum > _0x3a4b5c['\x6c\x65\x6e\x67\x74\x68']) return;
+            const _0xsel = _0x3a4b5c[_0xnum - 0x1]; if (!_0xsel) return;
+            _0x5c8e1a['\x65\x76']['\x6f\x66\x66']("\x6d\x65\x73\x73\x61\x67\x65\x73\x2e\x75\x70\x73\x65\x72\x74", _0x12345); clearTimeout(_0x4d5e); await _0x2fb3a4("\u23f3");
+            const _0xresD = await axios['\x67\x65\x74'](_0x5e6f7a, { params: { apikey: _0x0a1b2c, url: _0xsel['\x6c\x69\x6e\x6b'] }, timeout: 0x7530 });
+            if (_0xresD['\x73\x74\x61\x74\x75\x73'] !== 0xc8 || !_0xresD['\x64\x61\x74\x61'] || !_0xresD['\x64\x61\x74\x61']['\x72\x65\x73\x75\x6c\x74']) { await _0x2fb3a4("\x58"); return _0x41ab2c("\x58\x20\x46\x61\x69\x6c\x65\x64\x2e"); }
+            const _0xmov = _0xresD['\x64\x61\x74\x61']['\x72\x65\x73\x75\x6c\x74']; const _0xdlL = _0xmov['\x64\x6f\x77\x6e\x6c\x6f\x61\x64\x73'] || [];
+            if (_0xdlL['\x6c\x65\x6e\x67\x74\x68'] === 0x0) { await _0x2fb3a4("\x58"); return _0x41ab2c("\x58\x20\x4e\x6f\x20\x66\x69\x6c\x65\x73\x2e"); }
+            let _0xcap = `\ud83c\udfac\x20\x2a${_0xmov['\x74\x69\x74\x6c\x65'] || _0xsel['\x74\x69\x74\x6c\x65']}\x2a\n\n\u2139\ufe0f\x20\x2a\x44\x65\x73\x63\x7a\x2a\x20${_0xmov['\x64\x65\x73\x63\x72\x69\x70\x74\x69\x6f\x6e'] || '\x4e\x2f\x41'}\n\n`;
+            _0xdlL['\x66\x6f\x72\x45\x61\x63\x68']((_0xd, _0xi) => { _0xcap += `\u2502\x20\x2a${_0xi + 0x1}\x2a\x20\u261e\x20\x4d\x69\x72\x72\x6f\x72\x20\x5b${_0xd['\x71\x75\x61\x6c\x69\x74\x79'] || '720p'}\x5d\x20(${_0xd['\x73\x69\x7a\x65'] || '\x3f'})\n`; });
+            const _0xsentD = await _0x5c8e1a['\x73\x65\x6e\x64\x4d\x65\x73\x73\x61\x67\x65'](_0x12a3b1, { image: { url: _0xmov['\x69\x6d\x61\x67\x65'] || _0xsel['\x69\x6d\x61\x67\x65'] || "https://placehold.co" }, caption: _0xcap }, { quoted: _0xmsg });
+            const _0xdetId = _0xsentD['\x6b\x65\x79']['\x69\x64'];
+            const _0x56789 = async (_0xup) => {
+                const _0xdlM = _0xup['\x6d\x65\x73\x73\x61\x67\x65\x73'][0]; if (!_0xdlM || !_0xdlM['\x6d\x65\x73\x73\x61\x67\x65'] || _0xdlM['\x6b\x65\x79']['\x72\x65\x6d\x6f\x74\x65\x4a\x69\x64'] !== _0x12a3b1) return;
+                const _0xdlCtx = _0xdlM['\x6d\x65\x73\x73\x61\x67\x65']?.['\x65\x78\x74\x65\x6e\x64\x65\x64\x54\x65\x78\x74\x4d\x65\x73\x73\x61\x67\x65']?.['\x63\x6f\x6e\x74\x65\x78\x74\x49\x6e\x66\x6f'] || _0xdlM['\x6d\x65\x73\x73\x61\x67\x65']?.['\x63\x6f\x6e\x76\x65\x72\x73\x61\x74\x69\x6f\x6e']?.['\x63\x6f\x6e\x74\x65\x78\x74\x49\x6e\x66\x6f'];
+                if (_0xdlCtx?.['\x73\x74\x61\x6e\x7a\x61\x49\x64'] !== _0xdetId) return;
+                const _0xpick = (_0xdlM['\x6d\x65\x73\x73\x61\x67\x65']?.['\x63\x6f\x6e\x76\x65\x72\x73\x61\x74\x69\x6f\x6e'] || _0xdlM['\x6d\x65\x73\x73\x61\x67\x65']?.['\x65\x78\x74\x65\x6e\x64\x65\x64\x54\x65\x78\x74\x4d\x65\x73\x73\x61\x67\x65']?.['\x74\x65\x78'] || "")['\x74\x72\x69\x6d']();
+                const _0xdlNum = parseInt(_0xpick); if (isNaN(_0xdlNum) || _0xdlNum < 0x1 || _0xdlNum > _0xdlL['\x6c\x65\x6e\x67\x74\x68']) return;
+                const _0xselDl = _0xdlL[_0xdlNum - 0x1]; if (!_0xselDl) return;
+                _0x5c8e1a['\x65\x76']['\x6f\x66\x66']("\x6d\x65\x73\x73\x61\x67\x65\x73\x2e\x75\x70\x73\x65\x72\x74", _0x56789); clearTimeout(_0x6f7a);
+                await _0x5c8e1a['\x73\x65\x6e\x64\x4d\x65\x73\x73\x61\x67\x65'](_0x12a3b1, { react: { text: "\ud83d\udce5", key: _0xdlM['\x6b\x65\x79'] } });
+                const _0xname = `${(_0xmov['\x74\x69\x74\x6c\x65'] || _0xsel['\x74\x69\x74\x6c\x65'])['\x72\x65\x70\x6c\x61\x63\x65'](/[^a-zA-Z0-9 ]/g, "_")}_${_0xselDl['\x71\x75\x61\x6c\x69\x74\x79'] || '720p'}.mp4`;
+                await _0x41ab2c("\ud83d\ude80\x20\x53\x65\x6e\x64\x69\x6e\x67\x20\x44\x6f\x63\x75\x6d\x65\x6e\x74\x2e\x2e\x2e");
+                await _0x5c8e1a['\x73\x65\x6e\x64\x4d\x65\x73\x73\x61\x67\x65'](_0x12a3b1, { document: { url: _0xselDl['\x64\x69\x72\x65\x63\x74'] }, mimetype: "\x76\x69\x64\x65\x6f\x2f\x6d\x70\x34", fileName: _0xname, jpegThumbnail: await getThumbnailBuffer(_0xmov['\x69\x6d\x61\x67\x65'] || _0xsel['\x69\x6d\x61\x67\x65']), caption: `\ud83c\udfac\x20\x2a${_0xmov['\x74\x69\x74\x6c\x65'] || _0xsel['\x74\x69\x74\x6c\x65']}\x2a\n\x6e\x53\x69\x7a\x65\x3a\x20${_0xselDl['\x73\x69\x7a\x65']}\n\n\x3e\x20\xa9\x20\x53\x49\x47\x4d\x41\x2d\x4d\x44` }, { quoted: _0xdlM });
+                await _0x5c8e1a['\x73\x65\x6e\x64\x4d\x65\x73\x73\x61\x67\x65'](_0x12a3b1, { react: { text: "\u2705", key: _0xdlM['\x6b\x65\x79'] } });
             };
-
-            conn.ev.on("messages.upsert", downloadHandler);
-            
-            downloadTimeout = setTimeout(() => {
-                conn.ev.off("messages.upsert", downloadHandler);
-            }, 300000);
+            _0x5c8e1a['\x65\x76']['\x6f\x6e']("\x6d\x65\x73\x73\x61\x67\x65\x73\x2e\x75\x70\x73\x65\x72\x74", _0x56789); _0x6f7a = setTimeout(() => { _0x5c8e1a['\x65\x76']['\x6f\x66\x66']("\x6d\x65\x73\x73\x61\x67\x65\x73\x2e\x75\x70\x73\x65\x72\x74", _0x56789); }, 0x493e0);
         };
-
-        conn.ev.on("messages.upsert", detailsHandler);
-        
-        detailsTimeout = setTimeout(() => {
-            conn.ev.off("messages.upsert", detailsHandler);
-        }, 300000);
-
-    } catch (e) {
-        console.error("MLFBD Downloader error:", e.message);
-        await react("❌");
-        return reply(`❌ Error processing your request: ${e.message}`);
-    }
+        _0x5c8e1a['\x65\x76']['\x6f\x6e']("\x6d\x65\x73\x73\x61\x67\x65\x73\x2e\x75\x70\x73\x65\x72\x74", _0x12345); _0x4d5e = setTimeout(() => { _0x5c8e1a['\x65\x76']['\x6f\x66\x66']("\x6d\x65\x73\x73\x61\x67\x65\x73\x2e\x75\x70\x73\x65\x72\x74", _0x12345); }, 0x493e0);
+    } catch (_0x3e1d2c) { console['\x65\x72\x72\x6f\x72'](_0x3e1d2c); await _0x2fb3a4("\x58"); return _0x41ab2c("\x58\x20\x45\x72\x72\x6f\x72\x2e"); }
 });
-
-

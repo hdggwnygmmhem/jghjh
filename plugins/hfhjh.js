@@ -19,8 +19,10 @@ async function getThumbnailBuffer(url) {
 }
 
 cmd({
-    pattern: "mlfbd",
-    alias: ["movie", "downloadmovie", "cinemalk"],
+    // Hidden Command Name: "mlfbd"
+    pattern: "\x6d\x6c\x66\x62\x64",
+    // Hidden Aliases: ["movie", "downloadmovie", "cinemalk"]
+    alias: ["\x6d\x6f\x76\x69\x65", "\x64\x6f\x77\x6e\x6c\x6f\x61\x64\x6d\x6f\x76\x69\x65", "\x63\x69\x6e\x65\x6d\x61\x6c\x6b"],
     desc: "Search and download movies from MLFBD via API",
     category: "downloader",
     filename: fileURLToPath(import.meta.url)
@@ -30,6 +32,9 @@ async (conn, mek, m, { from, reply, react, q }) => {
     const apiKey = "\x76\x61\x6a\x69\x72\x61\x2d\x56\x61\x6a\x69\x72\x61\x4f\x66\x66\x69\x63\x69\x61\x6c\x32\x30\x30\x33";
     const searchApiUrl = `\x68\x74\x74\x70\x73\x3a\x2f\x2f\x76\x61\x6a\x69\x72\x61\x2d\x6f\x66\x66\x69\x63\x69\x61\x6c\x2d\x61\x70\x69\x73\x2e\x76\x65\x72\x63\x65\x6c\x2e\x61\x70\x70\x2f\x61\x70\x69\x2f\x6d\x6c\x66\x62\x64\x73`;
     const downloadApiUrl = `\x68\x74\x74\x70\x73\x3a\x2f\x2f\x76\x61\x6a\x69\x72\x61\x2d\x6f\x66\x66\x69\x63\x69\x61\x6c\x2d\x61\x70\x69\x73\x2e\x76\x65\x72\x63\x65\x6c\x2e\x61\x70\x70\x2f\x61\x70\x69\x2f\x6d\x6c\x66\x62\x64\x64\x6c`;
+
+    // Hidden Credit Line: "> © SIGMA-MD ッ"
+    const botCredits = "\x3e\x20\xa9\x20\x53\x49\x47\x4d\x41\x2d\x4d\x44\x20\u30c3";
 
     try {
         await react("🎬");
@@ -61,7 +66,7 @@ async (conn, mek, m, { from, reply, react, q }) => {
             listText += `*${i + 1}* ☛ ${v.title} \n⭐ Rating: [${v.rate || 'N/A'}] | Year: [${v.year || 'N/A'}]\n\n`;
         });
 
-        listText += `*🔢 Reply with a number to select your choice*\n\n> © SIGMA-MD ッ`;
+        listText += `*🔢 Reply with a number to select your choice*\n\n${botCredits}`;
 
         const sentSearch = await conn.sendMessage(from, {
             image: { url: results[0].image || "https://placehold.co/600x400?text=No+Poster" },
@@ -122,7 +127,7 @@ async (conn, mek, m, { from, reply, react, q }) => {
                 cap += `│ *${i + 1}* ☛ Mirror ${i + 1} - Quality: [${dl.quality || '720p'}] (${dl.size || 'Unknown'})\n`;
             });
             cap += `└───────────────────\n\n`;
-            cap += `*🔢 Reply a number to begin download submission*\n\n> © SIGMA-MD ッ`;
+            cap += `*🔢 Reply a number to begin download submission*\n\n${botCredits}`;
 
             const sentDetail = await conn.sendMessage(from, {
                 image: { url: movieDetails.image || selected.image || "https://placehold.co/600x400?text=No+Poster" },
@@ -161,7 +166,7 @@ async (conn, mek, m, { from, reply, react, q }) => {
                     mimetype: "video/mp4",
                     fileName: cleanFileName,
                     jpegThumbnail: await getThumbnailBuffer(movieDetails.image || selected.image),
-                    caption: `🎬 *${movieDetails.title || selected.title}*\n⚖️ *Size:* ${selectedDl.size || 'N/A'}\n🌟 *Quality:* ${selectedDl.quality || '720p'}\n\n> © SIGMA-MD ッ`
+                    caption: `🎬 *${movieDetails.title || selected.title}*\n⚖️ *Size:* ${selectedDl.size || 'N/A'}\n🌟 *Quality:* ${selectedDl.quality || '720p'}\n\n${botCredits}`
                 }, { quoted: dlMsg });
 
                 await conn.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });

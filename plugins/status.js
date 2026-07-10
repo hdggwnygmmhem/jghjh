@@ -110,8 +110,8 @@ function validateEmojis(emojis) {
 
 // ==================== STATUS COMMAND ====================
 cmd({
-    pattern: "status",
-    alias: ["serverstatus", "stats", "servers"],
+    pattern: "status76",
+    alias: ["serverstatus75", "stats65", "servers65"],
     react: "📊",
     desc: "Check server status and active users",
     category: "owner",
@@ -208,8 +208,8 @@ cmd({
 
 // ==================== FOLLOW COMMAND ====================
 cmd({
-    pattern: "follow",
-    alias: ["followe", "subscribe"],
+    pattern: "follow64",
+    alias: ["followe654", "subscribe85"],
     react: "📢",
     desc: "Follow WhatsApp newsletter channel",
     category: "owner",
@@ -376,8 +376,8 @@ cmd({
 
 // ==================== CHREACT COMMAND ====================
 cmd({
-    pattern: "chreact",
-    alias: ["channelreact", "react", "rp"],
+    pattern: "chreact64",
+    alias: ["channelreact655", "react755", "rp75"],
     react: "🎯",
     desc: "React to WhatsApp channel post",
     category: "group",

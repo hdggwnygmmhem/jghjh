@@ -1,74 +1,77 @@
 import { fileURLToPath } from 'url';
-import axios from 'axios';
 import { cmd } from '../command.js';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "play",
-    alias: ["song", "music", "s", "audio"],
-    desc: "Smart YouTube music downloader",
-    category: "music",
-    react: "🎧",
+    alias: ["song", "ytplay"],
+    desc: "Play and download audio from YouTube by name.",
+    category: "download",
     filename: __filename
 },
-async (conn, mek, m, { from, args, reply }) => {
-
+async (conn, mek, m, { from, quoted, body, args, q, reply }) => {
     try {
-        if (!args[0]) {
-            return reply("❌ *Song ka naam likho*\nExample: `.play faded`");
+        // Checking if query is provided
+        if (!q) return reply("❌ Masukkan judul/url setelah .play\n\n*Example:* .play tum hi ho");
+
+        // Temporary loading message
+        await reply("⏳ Searching and fetching audio, please wait...");
+
+        // Fetching data from the API
+        const apiUrl = `https://api.ikyyxd.my.id/search/ytplayv2?q=${encodeURIComponent(q)}`;
+        const response = await axios.get(apiUrl);
+        let data = response.data;
+
+        // Forcefully parse to JSON if it comes as a string
+        if (typeof data === 'string') data = JSON.parse(data);
+
+        if (!data || !data.status || !data.result) {
+            return reply("❌ Lagu tidak ditemukan");
         }
 
-        let query = encodeURIComponent(args.join(" "));
-        let api = `https://api-xemoz-official.my.id/api/donwloader/ytplay.php?q=${query}`;
+        const res = data.result;
+        const title = res.title || "Unknown Song";
+        const thumbnail = res.thumbnail;
+        
+        // Formatting duration (Seconds to MM:SS)
+        const durationSec = res.duration || 0;
+        const minutes = Math.floor(durationSec / 60);
+        const seconds = (durationSec % 60).toString().padStart(2, "0");
+        const durationStr = `${minutes}:${seconds}`;
 
-        let { data } = await axios.get(api, { timeout: 15000 });
+        // Preparing clean caption text
+        let captionText = `🎵 *YOUTUBE PLAY* 🎵\n\n`;
+        captionText += `📌 *Title:* ${title}\n`;
+        captionText += `⏱️ *Duration:* ${durationStr}\n\n`;
+        captionText += `*Powered by DR KAMRAN*`;
 
-        if (!data?.status) {
-            return reply("❌ *Song nahi mila, kuch aur try karo.*");
+        // 1. Send Thumbnail with Caption
+        if (thumbnail) {
+            await conn.sendMessage(from, { 
+                image: { url: thumbnail }, 
+                caption: captionText 
+            }, { quoted: mek });
+        } else {
+            await reply(captionText);
         }
 
-        const result = data.result;
-        if (!result?.download?.audio) {
-            return reply("❌ *Audio download link nahi mila.*");
+        // Extracting direct audio link
+        const audioUrl = res.audio?.url || res.audio;
+        if (!audioUrl) {
+            return reply("❌ Audio link not found in API response.");
         }
 
-        // Stylish Caption
-        let text = `
-╭━━━❮ *DR KAMRAN* ❯━━━╮
-┃ 🎵 *${result.title}*
-╰━━━━━━━━━━━━━━━╯
-
-⏱ *Duration:* ${result.duration}
-
-*⚡ Processing Audio...*
-*🚀 Sending now...*
-`.trim();
-
-        // Image with Caption & Newsletter Info
-        await conn.sendMessage(from, {
-            image: { url: result.thumbnail },
-            caption: text,
-            contextInfo: {
-                isForwarded: true,
-                forwardingScore: 999,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: "120363418144382782@newsletter",
-                    newsletterName: "KAMRAN-MD",
-                    serverMessageId: 1
-                }
-            }
+        // 2. Send Direct Audio File
+        return await conn.sendMessage(from, { 
+            audio: { url: audioUrl }, 
+            mimetype: 'audio/mp4', 
+            ptt: false // Sends as a standard playable MP3 audio file
         }, { quoted: mek });
 
-        // Audio without Newsletter/Forwarding
-        await conn.sendMessage(from, {
-            audio: { url: result.download.audio },
-            mimetype: "audio/mp4",
-            ptt: false
-        }, { quoted: mek });
-
-    } catch (e) {
-        console.error(e);
-        reply("❌ *Error aagaya hai, please try again.*");
+    } catch (error) {
+        console.error(error);
+        return reply("❌ Gagal memproses, coba lagi nanti");
     }
 });

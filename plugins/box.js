@@ -4,11 +4,9 @@ import axios from 'axios';
 import sharp from 'sharp';
 import { cmd } from '../command.js';
 
-// Mengatur __filename dan __dirname untuk lingkungan ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper function to process high-compatibility jpeg thumbnails
 async function getThumbnailBuffer(url) {
   if (!url) return null;
   try {
@@ -31,7 +29,6 @@ cmd({
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
-    // Menyesuaikan variabel client agar kompatibel dengan berbagai struktur base bot
     const client = socket || sock || conn;
 
     // API CONFIGURATION (UPDATED)
@@ -53,7 +50,6 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         await reply(`🔍 _Searching for *"${q}"* on MovieBox servers..._`);
 
-        // Get Search Results
         const response = await axios.get(searchApiUrl, {
             params: { 
                 apikey: apiKey, 
@@ -69,7 +65,6 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             return reply("🛸 *API Error:* Server responded with an invalid status.");
         }
 
-        // Extracting array dari response data secara dinamis
         let results = null;
         if (response.data) {
             if (Array.isArray(response.data.data)) {
@@ -82,7 +77,6 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                     }
                 }
             }
-            
             if (!results) {
                 results = response.data.result || response.data.results || response.data.list || (Array.isArray(response.data) ? response.data : null);
             }
@@ -90,15 +84,14 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         if (results && Array.isArray(results) && results.length === 0) {
             await react("❌");
-            return reply(`🛸 *No Results Found!*\nMovieBox par *"${q}"* naam ki koi movie nahi mili. Kripya sahi naam likhein.`);
+            return reply(`🛸 *No Results Found!*\nMovieBox par *"${q}"* naam ki koi movie nahi mili.`);
         }
 
         if (!results || !Array.isArray(results)) {
             await react("❌");
-            return reply(`🛸 *Parsing Error:* API format changed. Please contact developer.`);
+            return reply(`🛸 *Parsing Error:* API format changed.`);
         }
 
-        // Stylish MovieBox Search List Layout
         let listText = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
         listText += `┃ 🎬  *MOVIEBOX SEARCH*   🎬 ┃\n`;
         listText += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
@@ -147,14 +140,18 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 await react("⏳");
 
-                // Get Movie/Series Detail
+                // Auto-detect season/episode agar series hai (warna 0 and 0)
+                const isTvSeries = (selected.type && selected.type.toLowerCase().includes("tv")) || (selected.type && selected.type.toLowerCase().includes("series"));
+                const seasonVal = isTvSeries ? 1 : 0;
+                const episodeVal = isTvSeries ? 1 : 0;
+
                 const detailResponse = await axios.get(detailsApiUrl, {
                     params: { 
                         apikey: apiKey, 
                         subjectId: selected.subjectId || selected.id || selected.subject_id, 
                         detailPath: selected.detailPath || selected.path || selected.detail_path,
-                        season: 0,
-                        episode: 0
+                        season: seasonVal,
+                        episode: episodeVal
                     },
                     timeout: 30000
                 });
@@ -166,19 +163,36 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 const movieDetails = detailResponse.data.data || detailResponse.data.result || detailResponse.data;
                 
+                // Advanced Link Extractor (Fail-Proof)
                 let dlLinks = [];
                 if (movieDetails) {
+                    // 1. Agar direct arrays mil rahe hain
                     if (Array.isArray(movieDetails.downloads)) dlLinks = movieDetails.downloads;
                     else if (Array.isArray(movieDetails.streams)) dlLinks = movieDetails.streams;
                     else if (Array.isArray(movieDetails.links)) dlLinks = movieDetails.links;
+                    else if (Array.isArray(movieDetails.list)) dlLinks = movieDetails.list;
+                    // 2. Agar object me se find karna pade (nested loop)
                     else if (typeof movieDetails === 'object') {
                         for (let key in movieDetails) {
                             if (Array.isArray(movieDetails[key])) {
                                 dlLinks = movieDetails[key];
                                 break;
+                            } else if (movieDetails[key] && typeof movieDetails[key] === 'object') {
+                                // Ek step aur gehra check karte hain (for nested responses)
+                                for (let subKey in movieDetails[key]) {
+                                    if (Array.isArray(movieDetails[key][subKey])) {
+                                        dlLinks = movieDetails[key][subKey];
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
+                }
+
+                // Fallback: Agar upar ke tariko se links nahi mile, par root response khud array ho
+                if (dlLinks.length === 0 && Array.isArray(movieDetails)) {
+                    dlLinks = movieDetails;
                 }
 
                 if (dlLinks.length === 0) {
@@ -189,8 +203,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 let cap = `╭──────────────◆\n`;
                 cap += `│ 🎥 *${movieDetails.title || selected.title || selected.name}*\n`;
                 cap += `╰──────────────◆\n\n`;
-                cap += `🎭 *Type:* \`${movieDetails.type || 'Movie'}\`\n`;
-                cap += `📅 *Year:* ${movieDetails.year || 'N/A'}\n\n`;
+                cap += `🎭 *Type:* \`${movieDetails.type || selected.type || 'Movie'}\`\n`;
+                cap += `📅 *Year:* ${movieDetails.year || selected.year || 'N/A'}\n\n`;
                 if (movieDetails.description) {
                     cap += `📝 *Description:* \n_${movieDetails.description}_\n\n`;
                 }
@@ -201,7 +215,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 
                 dlLinks.forEach((dl, i) => {
                     cap += `╭─ 📥 *[${i + 1}]* Mirror ${i + 1}\n`;
-                    cap += `├─ 🌟 *Quality:* \`${dl.quality || 'HD'}\`\n`;
+                    cap += `├─ 🌟 *Quality:* \`${dl.quality || dl.resolution || 'HD'}\`\n`;
                     cap += `╰─ ⚖️ *Size:* \`${dl.size || 'Unknown'}\`\n\n`;
                 });
 
@@ -238,25 +252,25 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
-                        // Hit download API to get the final download URL
+                        // Hit download endpoint
                         const finalDlResponse = await axios.get(downloadApiUrl, {
                             params: {
                                 apikey: apiKey,
                                 subjectId: selected.subjectId || selected.id || selected.subject_id,
                                 detailPath: selected.detailPath || selected.path || selected.detail_path,
-                                season: 0,
-                                episode: 0
+                                season: seasonVal,
+                                episode: episodeVal
                             },
                             timeout: 30000
                         });
 
                         const dlData = finalDlResponse.data?.data || finalDlResponse.data?.result || finalDlResponse.data;
                         
-                        // Resolve Direct URL
+                        // Ultra Safe Direct URL Extraction
                         let targetFileUrl = selectedDl.direct || selectedDl.url || selectedDl.link || selectedDl.download || selectedDl.file;
                         
                         if (!targetFileUrl && dlData) {
-                            targetFileUrl = dlData.direct || dlData.url || dlData.link || dlData.download;
+                            targetFileUrl = dlData.direct || dlData.url || dlData.link || dlData.download || dlData.file;
                         }
 
                         if (!targetFileUrl && typeof selectedDl === 'object') {
@@ -270,7 +284,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         if (!targetFileUrl) {
                             await react("❌");
-                            return reply("❌ *Error:* Direct download link could not be resolved from this mirror.");
+                            return reply("❌ *Error:* Direct download link could not be resolved.");
                         }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || selected.name || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;

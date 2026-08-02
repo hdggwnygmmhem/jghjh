@@ -5,7 +5,6 @@ import { cmd } from '../command.js';
 
 /**
  * KAMRAN-MD: Universal Group Status V2 Relay
- * Fixed Audio/Voice formatting to prevent "Audio not available" error.
  */
 async function relayStatus(conn, jid, content, type) {
     const messageSecret = crypto.randomBytes(32);
@@ -16,12 +15,11 @@ async function relayStatus(conn, jid, content, type) {
     } else if (type === 'video') {
         mediaObject = { video: content.buffer, caption: content.caption };
     } else if (type === 'audio') {
-        // Fix: Status audio must be OGG with OPUS codec to avoid errors
         mediaObject = { 
             audio: content.buffer, 
             mimetype: 'audio/ogg; codecs=opus', 
             ptt: true,
-            waveform: new Uint8Array(20) // Adding dummy waveform for stability
+            waveform: new Uint8Array(20)
         };
     } else {
         mediaObject = { 
@@ -56,8 +54,14 @@ cmd({
     category: "tools",
     use: ".gcstatus <text> OR reply to media",
     filename: fileURLToPath(import.meta.url)
-}, async (conn, mek, m, { args, q, reply, react, isAdmins, isOwner }) => {
+}, async (conn, mek, m, { args, q, reply, react, isAdmins, isOwner, isGroup }) => {
     try {
+        if (!isGroup) {
+            await react('❌');
+            return reply("❌ *یہ کمانڈ صرف گروپس میں کام کرتی ہے!*");
+        }
+
+        // نوٹ: اگر آپ ایڈمن چیک ہٹانا چاہتے ہیں تو نیچے والی 4 لائنیں ڈلیٹ کر سکتے ہیں
         if (!isAdmins && !isOwner) {
             await react('❌');
             return reply("❌ *Admin Only Command!*");
@@ -88,10 +92,9 @@ cmd({
         // --- AUDIO (VOICE) ---
         if (/audio/.test(mime)) {
             const buffer = await target.download();
-            // We send it as audio but Baileys/WhatsApp will handle the Opus requirement
             await relayStatus(conn, m.chat, { buffer }, 'audio');
             await react('✅');
-            return reply("✅ *Voice Status Uploaded!* (If it fails to play, the audio format needs OGG/OPUS conversion)");
+            return reply("✅ *Voice Status Uploaded!*");
         }
 
         // --- TEXT ---
@@ -102,7 +105,7 @@ cmd({
         }
 
         await react('❓');
-        return reply("❌ Reply to a photo/video/audio or type text.");
+        return reply("❌ کسی تصویر/ویڈیو/آڈیو کو رپلائی کریں یا ٹیکسٹ لکھیں۔");
 
     } catch (err) {
         console.error(err);

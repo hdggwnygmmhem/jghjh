@@ -53,8 +53,8 @@ async function fetchAudio(url, retries = 2) {
 
 cmd(
 {
-    pattern: "play",
-    alias: ["song", "music", "audio", "mp3"],
+    pattern: "play2",
+    alias: ["song2", "music2", "audio", "mp3"],
     react: "🎵",
     desc: "Download YouTube Audio",
     category: "download",

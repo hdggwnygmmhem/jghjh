@@ -1,8 +1,11 @@
-const { cmd } = require("../command");
-const axios = require("axios"); // Axios library ka hona zaroori hai
+import { fileURLToPath } from 'url';
+import axios from 'axios';
+import { cmd } from '../command.js';
+
+const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "loli2", // Is command ko run karne ke liye `.neko` likhna hoga
+    pattern: "loli2",
     desc: "Get random anime neko images.",
     category: "anime",
     filename: __filename
@@ -16,21 +19,20 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const response = await axios.get(url);
         
         // Aamtaur par anime APIs JSON me 'url' ya 'result' ke andar image link deti hain
-        // Agar aapki API ka format alag ho to ise change kar sakte hain
         let imageUrl = response.data.url || response.data.result || response.data.link;
 
         if (imageUrl) {
             // WhatsApp par image send karne ka standard tarika
             await conn.sendMessage(from, { 
                 image: { url: imageUrl }, 
-                caption: "✨ *Here is your Neko Image!* ✨\n\n> Powered by DR KAMRAN" 
+                caption: "✨ *Here is your Neko Image!* ✨\n\n> Powered by KAMRAN MD" 
             }, { quoted: mek });
             
         } else {
             // Agar API direct image data de rahi hai (JSON nahi hai), to direct url use karenge
             await conn.sendMessage(from, { 
                 image: { url: url }, 
-                caption: "✨ *Here is your Neko Image!* ✨" 
+                caption: "✨ *Here is your Neko Image!* ✨\n\n> Powered by KAMRAN MD" 
             }, { quoted: mek });
         }
 

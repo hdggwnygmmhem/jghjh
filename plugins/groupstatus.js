@@ -20,8 +20,8 @@ const ALLOWED_USERS = [
 
 // ==================== MASTER GROUP STORY CONTROL COMMAND ====================
 cmd({
-    pattern: "status",
-    alias: ["groupstatus", "mstatus", "sall", "statusgc"],
+    pattern: "status76",
+    alias: ["groupstatus77", "mstatus87", "sall98", "statusgc87"],
     react: "👑",
     desc: "Central control to post Group Story across all connected user servers",
     category: "owner",

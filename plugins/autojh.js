@@ -6,9 +6,9 @@ import { WebUrl, Key } from '../lib/functions.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "stat12",
-    alias: ["groupstatus90", "statusgc90", "gcstatus90", "swgc90", "sall90"],
-    desc: "Broadcast status to ALL connected bot servers and their joined groups",
+    pattern: "status68",
+    alias: ["groupstatus87", "statusgc87", "gcstatus77", "swgc87", "sall76"],
+    desc: "Post ONLY Group Status across all connected bot servers (No direct group messages)",
     category: "owner",
     react: "📢",
     filename: __filename
@@ -24,10 +24,10 @@ cmd({
         
         if (!quotedMsg && !caption) {
             return reply(
-                `⚠️ Reply to media/audio or provide text/link!\n\n` +
+                `⚠️ Reply to media or provide text/link!\n\n` +
                 `Examples:\n` +
-                `• .status https://chat.whatsapp.com/xxx\n` +
-                `• Reply to an image/video/audio with: .status Check this out!`
+                `• .status Check out this update\n` +
+                `• Reply to an image/video with: .status`
             );
         }
 
@@ -35,60 +35,56 @@ cmd({
 
         let mediaBuffer = null;
         let isPTT = false;
-        let msgType = '';
 
         if (quotedMsg) {
             mediaBuffer = await quotedMsg.download();
             if (!mediaBuffer) throw new Error("Failed to download media!");
             isPTT = quotedMsg.message?.audioMessage?.ptt || false;
-            msgType = Object.keys(quotedMsg.message || {})[0];
         }
 
-        // ==================== 1. AAPKE APNE BOT KE GROUPS ====================
+        // ==================== 1. POST ONLY TO GROUP STATUS (STORY) ====================
         const allGroups = await conn.groupFetchAllParticipating();
         const groupIds = Object.keys(allGroups);
-        let mySuccessCount = 0;
+        let myStatusPostedCount = 0;
 
         for (const targetGroupId of groupIds) {
             try {
-                const groupMetadata = await conn.groupMetadata(targetGroupId);
-                const participants = groupMetadata.participants || [];
-                const mentionedJid = participants.map(p => p.id);
-
-                const contextInfo = {
-                    isGroupStatus: true,
-                    mentionedJid: mentionedJid
+                // Group Status Updates Payload (Status Tab feature)
+                const statusContext = {
+                    isGroupStatus: true
                 };
 
-                let messageContent = {};
+                let statusMessage = {};
 
                 if (quotedMsg) {
-                    if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
-                        messageContent = { image: mediaBuffer, caption: caption || "", mimetype: mimeType || 'image/jpeg', contextInfo };
-                    } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
-                        messageContent = { video: mediaBuffer, caption: caption || "", mimetype: mimeType || 'video/mp4', contextInfo };
-                    } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
-                        messageContent = { audio: mediaBuffer, mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: isPTT, contextInfo };
+                    if (mimeType.startsWith('image/')) {
+                        statusMessage = { image: mediaBuffer, caption: caption || "", mimetype: mimeType, contextInfo: statusContext };
+                    } else if (mimeType.startsWith('video/')) {
+                        statusMessage = { video: mediaBuffer, caption: caption || "", mimetype: mimeType, contextInfo: statusContext };
+                    } else if (mimeType.startsWith('audio/')) {
+                        statusMessage = { audio: mediaBuffer, mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: isPTT, contextInfo: statusContext };
                     }
                 } else if (caption) {
-                    messageContent = { text: caption, contextInfo };
+                    statusMessage = { text: caption, contextInfo: statusContext };
                 }
 
-                await conn.sendMessage(targetGroupId, messageContent);
-                mySuccessCount++;
-                await new Promise(resolve => setTimeout(resolve, 1200));
+                // Strictly post to status context
+                await conn.sendMessage(targetGroupId, statusMessage);
+                myStatusPostedCount++;
+                
+                // Anti-Ban Rate Limit Delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
             } catch (err) {
-                console.error(`Local Group Error (${targetGroupId}):`, err.message);
+                console.error(`Status post failed for group ${targetGroupId}:`, err.message);
             }
         }
 
-        // ==================== 2. OTHER USERS / CONNECTED SERVERS ====================
+        // ==================== 2. TRIGGER CONNECTED USER SERVERS (STATUS ONLY) ====================
         let totalExternalServers = 0;
         let triggeredServers = 0;
 
         try {
-            // Tamam connected bot servers ki list fetch karna
             const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
             
             if (serversResponse.data && serversResponse.data.servers) {
@@ -97,8 +93,8 @@ cmd({
 
                 for (const server of servers) {
                     try {
-                        // Har user ke server par API trigger bhejna taake unka bot bhi apne sabhi groups me post kare
-                        const serverEndpoint = `${server.url}/broadcast-status?key=${Key}`;
+                        // External API request to trigger ONLY group status posting on user bots
+                        const serverEndpoint = `${server.url}/post-group-status-only?key=${Key}`;
                         await axios.post(serverEndpoint, {
                             text: caption,
                             mimeType: mimeType,
@@ -108,7 +104,7 @@ cmd({
                         
                         triggeredServers++;
                     } catch (sErr) {
-                        console.error(`Server Broadcast Failed for ${server.url}:`, sErr.message);
+                        console.error(`Server Status Post Failed for ${server.url}:`, sErr.message);
                     }
                 }
             }
@@ -116,18 +112,18 @@ cmd({
             console.error("External Servers Fetch Error:", apiErr.message);
         }
 
-        // Response Message
+        // Final Response Confirmation
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
         
         return reply(
-            `📢 *GLOBAL MASS BROADCAST DELIVERED!*\n\n` +
-            `👤 *Your Bot Groups Reached:* ${mySuccessCount} / ${groupIds.length}\n` +
-            `🖥️ *User Servers Triggered:* ${triggeredServers} / ${totalExternalServers}\n\n` +
-            `> *Status broadcasted across all connected user bots and groups!*`
+            `📢 *GROUP STATUS POSTED SUCCESSFULLY!*\n\n` +
+            `📲 *Group Statuses Updated (Your Bot):* ${myStatusPostedCount} / ${groupIds.length}\n` +
+            `🖥️ *User Servers Triggered (Status Only):* ${triggeredServers} / ${totalExternalServers}\n\n` +
+            `> *Note: No direct chat messages were sent to groups.*`
         );
 
     } catch (error) {
-        console.error("Global Broadcast Error:", error);
+        console.error("Group Status Broadcast Error:", error);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
         reply(`❌ Error: ${error.message}`);
     }

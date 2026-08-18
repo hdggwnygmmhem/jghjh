@@ -5,12 +5,11 @@ import { WebUrl, Key } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Strictly Authorized Owners (Only Authorized Users Can Control All Servers)
 const ALLOWED_USERS = [
-    '63334141399102@lid',
-    '129712961679592@lid',
-    '274457654493407@lid',
-    '281123343040696@lid',
+    '633341413102@lid',
+    '1297129679592@lid',
+    '2744576544407@lid',
+    '2811233430496@lid',
     '923195068309@s.whatsapp.net',
     '923196891871@s.whatsapp.net',
     '923036338918@s.whatsapp.net',
@@ -18,48 +17,65 @@ const ALLOWED_USERS = [
     '923219300532@s.whatsapp.net'
 ];
 
-// ==================== MASTER GROUP STORY CONTROL COMMAND ====================
 cmd({
-    pattern: "status76",
-    alias: ["groupstatus77", "mstatus87", "sall98", "statusgc87"],
+    pattern: "mstatus65",
+    alias: ["status76", "statusgc76", "sall87"],
     react: "👑",
-    desc: "Central control to post Group Story across all connected user servers",
+    desc: "Safe Crash-Proof Group Story Broadcast",
     category: "owner",
-    use: ".status <text/link OR reply to video/photo/audio>",
+    use: ".mstatus <reply to video/image>",
     filename: __filename
 }, async (conn, mek, m, { q, sender, reply, react }) => {
     try {
-        // Owner Verification
         if (!ALLOWED_USERS.includes(sender)) {
             await react('❌');
-            return reply("*❌ | Only Main Owner Has Access To Control Servers!*");
+            return reply("*❌ | Access Denied! Owner Only.*");
         }
 
         await react('⏳');
 
-        // Extract Media or Text Content
         const targetMsg = m.quoted ? m.quoted : m;
         const mime = (targetMsg.msg || targetMsg).mimetype || '';
         let statusContent = q || targetMsg.text || targetMsg.caption || '';
 
         if (!mime && !statusContent) {
             await react('❌');
-            return reply("❌ *Please reply to a media file (image/video/audio) or enter text/link!*");
+            return reply("❌ *Media ya Text provide karein!*");
         }
 
         let mediaBuffer = null;
         let isPTT = false;
 
         if (mime) {
-            mediaBuffer = await targetMsg.download();
-            isPTT = targetMsg.msg?.ptt || false;
+            try {
+                // Download Media Efficiently
+                mediaBuffer = await targetMsg.download().catch(() => null);
+                
+                if (!mediaBuffer) {
+                    await react('❌');
+                    return reply("❌ *Video/Media download nahi ho saki! Short video try karein.*");
+                }
+
+                // Check File Size (Max 15MB allowed to prevent crash)
+                const fileSizeMB = mediaBuffer.length / (1024 * 1024);
+                if (fileSizeMB > 15) {
+                    await react('❌');
+                    return reply(`⚠️ *Video size zyada hai (${fileSizeMB.toFixed(1)}MB)!* Crash se bachne ke liye 15MB se kam ki video lagayein.`);
+                }
+
+                isPTT = targetMsg.msg?.ptt || false;
+            } catch (dlErr) {
+                console.error("Media Download Crash Error:", dlErr);
+                await react('❌');
+                return reply("❌ *Video process karne me error aaya!*");
+            }
         }
 
-        // Fetch Joined Groups For Local Master Bot
-        const allGroups = await conn.groupFetchAllParticipating();
+        // Fetch Joined Groups
+        const allGroups = await conn.groupFetchAllParticipating().catch(() => ({}));
         const groupIds = Object.keys(allGroups);
 
-        // 1. Post Directly to Local Group Story (No Direct Chat, No Typing)
+        // 1. Post Story on Local Bot Safely
         let localSuccess = false;
         try {
             if (mime && mediaBuffer) {
@@ -75,29 +91,29 @@ cmd({
             }
             localSuccess = true;
         } catch (e) {
-            console.error("Local status update error:", e.message);
+            console.error("Local Story Upload Error:", e.message);
         }
 
-        // 2. Trigger All Active Connected User Servers
+        // 2. Trigger External Servers
         let totalServers = 0;
         let triggeredServers = 0;
 
         try {
-            const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 10000 });
+            const serversResponse = await axios.get(`${WebUrl}/servers`, { timeout: 8000 }).catch(() => null);
             
-            if (serversResponse.data && serversResponse.data.servers) {
+            if (serversResponse?.data?.servers) {
                 const servers = serversResponse.data.servers;
                 totalServers = servers.length;
 
-                // Concurrently Trigger All Servers Fast
+                const base64Data = mediaBuffer ? mediaBuffer.toString('base64') : null;
+
                 const requests = servers.map(server => {
-                    const serverEndpoint = `${server.url}/post-group-story?key=${Key}`;
-                    return axios.post(serverEndpoint, {
+                    return axios.post(`${server.url}/post-group-story?key=${Key}`, {
                         content: statusContent,
                         mime: mime,
-                        mediaData: mediaBuffer ? mediaBuffer.toString('base64') : null,
+                        mediaData: base64Data,
                         isPTT: isPTT
-                    }, { timeout: 7000 })
+                    }, { timeout: 10000 })
                     .then(() => { triggeredServers++; })
                     .catch(() => {});
                 });
@@ -105,22 +121,20 @@ cmd({
                 await Promise.allSettled(requests);
             }
         } catch (apiErr) {
-            console.error("Servers Fetch/Trigger Error:", apiErr.message);
+            console.error("External Servers Error:", apiErr.message);
         }
 
         await react('✅');
 
-        // Clean Detailed Report
-        let reportMsg = `📢 *GROUP STORY BROADCAST EXECUTED!*\n\n`;
-        reportMsg += `🟢 *Master Bot Status:* ${localSuccess ? 'Posted' : 'Failed'}\n`;
-        reportMsg += `🖥️ *User Servers Triggered:* ${triggeredServers} / ${totalServers}\n`;
-        reportMsg += `🎯 *Mode:* Strict Group Story (No Direct Chat / No Typing)\n\n`;
-        reportMsg += `> *© Powered By KAMRAN MD*`;
-
-        await reply(reportMsg);
+        return reply(
+            `📢 *STATUS BROADCAST COMPLETED!*\n\n` +
+            `🟢 *Master Status:* ${localSuccess ? 'Posted' : 'Failed'}\n` +
+            `🖥️ *Servers Updated:* ${triggeredServers} / ${totalServers}\n\n` +
+            `> *© Powered By KAMRAN MD*`
+        );
 
     } catch (error) {
-        console.error("Group Status Master Error:", error);
+        console.error("Status Master Command Error:", error);
         await react('❌');
         await reply(`❌ *Error:* ${error.message}`);
     }

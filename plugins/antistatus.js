@@ -1,12 +1,13 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 
-// Database object to store group settings
+// Global database for group settings
 global.antiStatusDb = global.antiStatusDb || {};
 
-// ==================== LID ADMIN CHECKER ====================
+// Helper: Clean IDs to handle LID & Phone Numbers
 const cleanId = (id) => id ? id.split('@')[0].split(':')[0] : '';
 
+// Admin Checker (Handles both normal JID & LID)
 async function checkAdminStatus(conn, chatId, senderId) {
     try {
         const metadata = await conn.groupMetadata(chatId);
@@ -36,7 +37,7 @@ async function checkAdminStatus(conn, chatId, senderId) {
 
         return { isBotAdmin, isSenderAdmin };
     } catch (e) {
-        console.error("Admin check error:", e);
+        console.error("Admin Check Error:", e);
         return { isBotAdmin: false, isSenderAdmin: false };
     }
 }
@@ -50,7 +51,7 @@ cmd({
     category: "group",
     use: ".antistatus <on/off/kick/delete/warn>",
     filename: fileURLToPath(import.meta.url)
-}, async (conn, mek, m, { args, q, reply, react, isGroup, isOwner }) => {
+}, async (conn, mek, m, { args, reply, react, isGroup, isOwner }) => {
     try {
         if (!isGroup) {
             await react('❌');
@@ -117,63 +118,83 @@ cmd({
 // ==================== AUTO DETECTION LISTENER ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { isGroup }) => {
+}, async (conn, mek, m, { isGroup, isOwner }) => {
     try {
         if (!isGroup || !m.chat) return;
 
         const mode = global.antiStatusDb[m.chat] || "off";
         if (mode === "off") return;
 
-        // --- DEEP STATUS MENTION DETECTION ---
-        const msg = mek.message;
+        // --- ULTRA SENSITIVE STATUS MENTION DETECTION ---
+        const rawMsg = mek.message || {};
         const isStatusMention = Boolean(
-            m.mtype === 'groupStatusMentionMessage' || 
-            msg?.groupStatusMentionMessage || 
-            msg?.messageContextInfo?.groupStatusMentionMessage ||
-            m.msg?.contextInfo?.groupStatusMentionMessage
+            m.mtype === 'groupStatusMentionMessage' ||
+            rawMsg.groupStatusMentionMessage ||
+            rawMsg.messageContextInfo?.groupStatusMentionMessage ||
+            m.msg?.contextInfo?.groupStatusMentionMessage ||
+            JSON.stringify(rawMsg).includes('groupStatusMentionMessage')
         );
 
         if (!isStatusMention) return;
 
-        const sender = m.sender || mek.key.participant;
+        const sender = m.sender || mek.key.participant || m.key.participant;
 
-        // Check Admin Status
+        // Check if Bot and Sender are Admins
         const { isBotAdmin, isSenderAdmin } = await checkAdminStatus(conn, m.chat, sender);
 
-        // 1. Delete Message First
-        try {
-            await conn.sendMessage(m.chat, { delete: mek.key });
-        } catch (e) {
-            console.error("Failed to delete status mention:", e);
+        // Admins/Owners are immune to Anti-Status
+        if (isSenderAdmin || isOwner) return;
+
+        // 1. Force Delete Message Constructing Full Key
+        const deleteKey = {
+            remoteJid: m.chat,
+            fromMe: false,
+            id: mek.key.id,
+            participant: sender
+        };
+
+        if (isBotAdmin) {
+            try {
+                await conn.sendMessage(m.chat, { delete: deleteKey });
+            } catch (e) {
+                console.error("Deletion failed using constructed key, trying mek.key...", e);
+                try {
+                    await conn.sendMessage(m.chat, { delete: mek.key });
+                } catch (err) {
+                    console.error("Direct Deletion Failed:", err);
+                }
+            }
         }
 
-        // 2. Action based on Mode
-        if (mode === "kick") {
+        // 2. Take Action according to set Mode
+        if (mode === "kick" || mode === "on") {
             if (!isBotAdmin) {
-                return conn.sendMessage(m.chat, { text: "⚠️ *Bot is not admin! Cannot remove member for Status Mention.*" }, { quoted: mek });
+                return conn.sendMessage(m.chat, { 
+                    text: "⚠️ *Anti-Status Mention Triggered!* لیکن میں اسے کِک/ڈیلیٹ نہیں کر سکتا کیونکہ بوٹ گروپ کا **Admin** نہیں ہے۔" 
+                }, { quoted: mek });
             }
 
             // Perform Kick
             await conn.groupParticipantsUpdate(m.chat, [sender], "remove");
 
             await conn.sendMessage(m.chat, {
-                text: `⚠️ *Status mentions are strictly not allowed in this group.*\n• *@${sender.split('@')[0]} has been removed.*`,
+                text: `⚠️ *Status mentions are strictly prohibited in this group.*\n\n🚫 *@${sender.split('@')[0]} was removed.*`,
                 mentions: [sender]
             });
         } 
         else if (mode === "warn") {
             await conn.sendMessage(m.chat, {
-                text: `⚠️ *@${sender.split('@')[0]} Warning! Status mentions are strictly prohibited in this group.*`,
+                text: `⚠️ *@${sender.split('@')[0]} Warning! Status mentions are not allowed in this group.*`,
                 mentions: [sender]
             });
         }
         else if (mode === "delete") {
-            await conn.sendMessage(m.chat, {
-                text: `⚠️ *Status mention deleted.*`
-            });
+            if (!isBotAdmin) {
+                return conn.sendMessage(m.chat, { text: "⚠️ *Bot is not admin! Cannot delete status mention message.*" });
+            }
         }
 
     } catch (err) {
-        console.error("AntiStatus Detector Error:", err);
+        console.error("AntiStatus Listener Error:", err);
     }
 });

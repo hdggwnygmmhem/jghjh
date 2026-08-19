@@ -25,12 +25,9 @@ async function checkAdminStatus(conn, chatId, senderId) {
                 const pLid = cleanId(p.lid);
                 const pPhone = p.phoneNumber ? cleanId(p.phoneNumber) : '';
 
-                // Bot admin check
                 if (pId === botId || pLid === botLid || pPhone === botId) {
                     isBotAdmin = true;
                 }
-
-                // Sender admin check
                 if (pId === sender || pLid === sender || pPhone === sender) {
                     isSenderAdmin = true;
                 }
@@ -60,7 +57,6 @@ cmd({
             return reply("❌ *یہ کمانڈ صرف گروپس کے لیے ہے!*");
         }
 
-        // Use the new LID admin checker for command authorization
         const { isSenderAdmin } = await checkAdminStatus(conn, m.chat, m.sender);
 
         if (!isSenderAdmin && !isOwner) {
@@ -121,47 +117,47 @@ cmd({
 // ==================== AUTO DETECTION LISTENER ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { isGroup, isOwner }) => {
+}, async (conn, mek, m, { isGroup }) => {
     try {
         if (!isGroup || !m.chat) return;
 
         const mode = global.antiStatusDb[m.chat] || "off";
         if (mode === "off") return;
 
-        // Check if message is a Group Status Mention
-        const isStatusMention = 
+        // --- DEEP STATUS MENTION DETECTION ---
+        const msg = mek.message;
+        const isStatusMention = Boolean(
             m.mtype === 'groupStatusMentionMessage' || 
-            Boolean(m.message?.groupStatusMentionMessage) ||
-            Boolean(m.messageContextInfo?.groupStatusMentionMessage);
+            msg?.groupStatusMentionMessage || 
+            msg?.messageContextInfo?.groupStatusMentionMessage ||
+            m.msg?.contextInfo?.groupStatusMentionMessage
+        );
 
         if (!isStatusMention) return;
 
         const sender = m.sender || mek.key.participant;
 
-        // Check Admin Status using LID Logic
+        // Check Admin Status
         const { isBotAdmin, isSenderAdmin } = await checkAdminStatus(conn, m.chat, sender);
-
-        // Admins & Owners are immune to Anti-Status
-        if (isSenderAdmin || isOwner) return;
 
         // 1. Delete Message First
         try {
             await conn.sendMessage(m.chat, { delete: mek.key });
         } catch (e) {
-            console.error("Failed to delete status mention message:", e);
+            console.error("Failed to delete status mention:", e);
         }
 
-        // 2. Action based on set Mode
+        // 2. Action based on Mode
         if (mode === "kick") {
             if (!isBotAdmin) {
                 return conn.sendMessage(m.chat, { text: "⚠️ *Bot is not admin! Cannot remove member for Status Mention.*" }, { quoted: mek });
             }
 
-            // Remove member from group safely
+            // Perform Kick
             await conn.groupParticipantsUpdate(m.chat, [sender], "remove");
 
             await conn.sendMessage(m.chat, {
-                text: `⚠️ *Status mentions are not allowed in this group.*\n• *@${sender.split('@')[0]} has been removed.*`,
+                text: `⚠️ *Status mentions are strictly not allowed in this group.*\n• *@${sender.split('@')[0]} has been removed.*`,
                 mentions: [sender]
             });
         } 

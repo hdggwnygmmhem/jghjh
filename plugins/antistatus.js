@@ -1,10 +1,21 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 
+// Global DB
 global.antiStatusDb = global.antiStatusDb || {};
+
+// Prevent Bot Crash from Baileys Protocol Errors
+process.on('uncaughtException', (err) => {
+    if (err.message?.includes("reading 'id'") || err.message?.includes("Bad MAC")) {
+        console.log("[SAFE-GUARD] Ignored protocol error to prevent crash.");
+        return;
+    }
+    console.error("[CRITICAL UNCAUGHT ERROR]:", err);
+});
+
 const cleanId = (id) => id ? id.split('@')[0].split(':')[0] : '';
 
-// Admin Status Checker
+// Admin Verification Logic
 async function checkAdminStatus(conn, chatId, senderId) {
     try {
         const metadata = await conn.groupMetadata(chatId);
@@ -36,7 +47,7 @@ async function checkAdminStatus(conn, chatId, senderId) {
 // ==================== MAIN COMMAND & REPLY REMOVER ====================
 cmd({
     pattern: "antistatus",
-    alias: ["skick", "statuskick", "antistatusmention"],
+    alias: ["skick", "statuskick", "sdel"],
     react: "🛡️",
     desc: "Remove user who sent status mention",
     category: "group",
@@ -53,7 +64,7 @@ cmd({
             return reply("❌ *یہ کمانڈ صرف ایڈمنز کے لیے ہے!*");
         }
 
-        // 1. IF REPLIED TO A MESSAGE (DIRECT REMOVE)
+        // 1. DIRECT REPLY TO STATUS MENTION
         if (m.quoted) {
             if (!isBotAdmin) {
                 await react('❌');
@@ -68,23 +79,33 @@ cmd({
                 return reply("❌ *آپ کسی ایڈمن کو ریموو نہیں کر سکتے!*");
             }
 
-            // Delete quoted status mention message
-            try { await conn.sendMessage(m.chat, { delete: m.quoted.key }); } catch (e) {}
+            // Safe Delete Quoted Message
+            try { 
+                if (m.quoted.key && m.quoted.key.id) {
+                    await conn.sendMessage(m.chat, { delete: m.quoted.key }); 
+                }
+            } catch (e) {
+                console.log("[DELETE ERROR] Could not delete msg:", e.message);
+            }
 
-            // Remove/Kick the user
-            await conn.groupParticipantsUpdate(m.chat, [targetSender], "remove");
-            await react('✅');
-
-            return reply(`⚠️ *اسٹیٹس منشن بھیجنے پر ممبر کو گروپ سے ریموو کر دیا گیا ہے۔*\n\n🚫 *@${targetSender.split('@')[0]} removed.*`, { mentions: [targetSender] });
+            // Kick Participant
+            try {
+                await conn.groupParticipantsUpdate(m.chat, [targetSender], "remove");
+                await react('✅');
+                return reply(`⚠️ *اسٹیٹس منشن پر ممبر کو گروپ سے ریموو کر دیا گیا ہے۔*\n\n🚫 *@${targetSender.split('@')[0]} removed.*`, { mentions: [targetSender] });
+            } catch (kickErr) {
+                await react('❌');
+                return reply(`❌ *Remoal Failed:* ${kickErr.message}`);
+            }
         }
 
-        // 2. TOGGLE ON/OFF
+        // 2. SETTINGS ON / OFF
         const action = args[0]?.toLowerCase();
 
         if (action === "on" || action === "kick") {
             global.antiStatusDb[m.chat] = "kick";
             await react('✅');
-            return reply("✅ *Anti Status Mention Enabled! (Mode: Kick)*");
+            return reply("✅ *Anti Status Mention Enabled!*");
         } else if (action === "off") {
             global.antiStatusDb[m.chat] = "off";
             await react('✅');
@@ -96,7 +117,7 @@ cmd({
 • Turn On: \`.antistatus on\`
 • Turn Off: \`.antistatus off\`
 
-💡 *Quick Remove:* کسی بھی اسٹیٹس منشن پر **Reply** کر کے \`.skick\` یا \`.antistatus\` لکھیں، بوٹ اسے فوراً ریموو کر دے گا۔`);
+💡 *Quick Kick:* کسی بھی اسٹیٹس منشن پر **Reply** کر کے \`.skick\` یا \`.antistatus\` لکھیں، بوٹ اسے ڈیلیٹ کر کے ممبر کو کِک کر دے گا۔`);
         }
 
     } catch (error) {
@@ -105,7 +126,7 @@ cmd({
     }
 });
 
-// ==================== AUTO LISTENER (TRY-CATCH) ====================
+// ==================== SAFE AUTO LISTENER ====================
 cmd({
     on: "message"
 }, async (conn, mek, m, { isGroup, isOwner }) => {
@@ -115,24 +136,30 @@ cmd({
         const mode = global.antiStatusDb[m.chat] || "off";
         if (mode === "off") return;
 
-        const isStatus = 
+        // Safely check status message
+        const rawMsg = mek?.message || {};
+        const isStatus = Boolean(
             m.mtype === 'groupStatusMentionMessage' || 
-            mek.message?.groupStatusMentionMessage ||
-            mek.message?.protocolMessage?.type === 0;
+            rawMsg.groupStatusMentionMessage
+        );
 
         if (!isStatus) return;
 
         const sender = m.sender;
-        const { isBotAdmin, isSenderAdmin } = await checkAdminStatus(conn, m.chat, sender);
+        if (!sender) return;
 
+        const { isBotAdmin, isSenderAdmin } = await checkAdminStatus(conn, m.chat, sender);
         if (isSenderAdmin || isOwner || !isBotAdmin) return;
 
-        // Auto Delete & Kick
-        try { await conn.sendMessage(m.chat, { delete: mek.key }); } catch (e) {}
+        // Delete & Kick Safely
+        if (mek.key && mek.key.id) {
+            try { await conn.sendMessage(m.chat, { delete: mek.key }); } catch (e) {}
+        }
+        
         await conn.groupParticipantsUpdate(m.chat, [sender], "remove");
         await conn.sendMessage(m.chat, { text: `🚫 *@${sender.split('@')[0]} removed for sending status mention.*`, mentions: [sender] });
 
     } catch (err) {
-        console.error("Auto Listener Error:", err);
+        console.error("Auto Listener Safe Error Log:", err.message);
     }
 });

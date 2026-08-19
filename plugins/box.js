@@ -32,7 +32,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
     const client = socket || sock || conn;
 
     // API CONFIGURATION (UPDATED)
-    const apiKey = "drkamran7864@gmail.com:vajira-32839";
+    const apiKey = "drkamran185@gmail.com:vajira-72024";
     const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxs`;
     const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxdl`;
     const downloadApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxd`;

@@ -10,13 +10,13 @@ const __dirname = path.dirname(__filename);
 async function getThumbnailBuffer(url) {
   if (!url) return null;
   try {
-    const { data } = await axios.get(url, { responseType: "arraybuffer" });
+    const { data } = await axios.get(url, { responseType: "arraybuffer", timeout: 5000 });
     return await sharp(data)
       .resize(300, 300)
       .jpeg({ quality: 80 })
       .toBuffer();
   } catch (err) {
-    console.error("Error processing thumbnail:", err.message || err);
+    console.error("Thumbnail error:", err.message);
     return null;
   }
 }
@@ -55,11 +55,11 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 q: q
             },
             timeout: 30000
-        });
+        }).catch(err => ({ error: true, message: err.message }));
 
-        if (response.status !== 200 || !response.data) {
+        if (response.error || response.status !== 200 || !response.data) {
             await react("❌");
-            return reply("🛸 *API Error:* Server responded with an invalid status.");
+            return reply(`🛸 *API Error:* ${response.message || 'Server responded with an invalid status.'}`);
         }
 
         let results = null;
@@ -98,8 +98,14 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             caption: listText
         }, { quoted: mek });
 
-        const searchMsgId = sentSearch.key.id;
+        const searchMsgId = sentSearch?.key?.id;
         let detailsTimeout, downloadTimeout;
+
+        // Cleanup helper
+        const cleanupDetails = () => {
+            if (client?.ev) client.ev.off("messages.upsert", detailsHandler);
+            if (detailsTimeout) clearTimeout(detailsTimeout);
+        };
 
         // ================= INTERACTIVE STEP: DETAILS HANDLER =================
         const detailsHandler = async (update) => {
@@ -107,27 +113,15 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 const msg = update.messages?.[0];
                 if (!msg?.message) return;
 
-                // Ensure message belongs to current chat context
                 const msgChat = msg.key.remoteJid;
                 if (msgChat !== from) return;
-
-                // Extract quoted stanza ID safely across different Baileys message structures
-                const ctx = msg.message.extendedTextMessage?.contextInfo || 
-                            msg.message.conversation?.contextInfo || 
-                            msg.message.imageMessage?.contextInfo;
-                
-                const stanzaId = ctx?.stanzaId;
 
                 const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
                 const num = parseInt(choice);
                 if (isNaN(num) || num < 1 || num > results.length) return;
 
-                // Accept if it's replying to the search message, OR if quoted check is bypassed for self-messages
-                if (stanzaId && stanzaId !== searchMsgId) return;
-
-                // Unbind event listener immediately to prevent memory leaks and duplicate runs
-                client.ev.off("messages.upsert", detailsHandler);
-                if (detailsTimeout) clearTimeout(detailsTimeout);
+                // Stop listener once valid number is entered
+                cleanupDetails();
 
                 const selected = results[num - 1];
                 if (!selected) return;
@@ -140,11 +134,11 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         url: selected.url
                     },
                     timeout: 30000
-                });
+                }).catch(err => ({ error: true, message: err.message }));
 
-                if (detailResponse.status !== 200 || !detailResponse.data || !detailResponse.data.success) {
+                if (detailResponse.error || detailResponse.status !== 200 || !detailResponse.data || !detailResponse.data.success) {
                     await react("❌");
-                    return reply("❌ *Error:* Failed to pull details for this item.");
+                    return reply(`❌ *Error:* Failed to pull details (${detailResponse.message || 'API Error'}).`);
                 }
 
                 const movieDetails = detailResponse.data.movie || {};
@@ -189,7 +183,12 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                     caption: cap
                 }, { quoted: msg });
 
-                const detailMsgId = sentDetail.key.id;
+                const detailMsgId = sentDetail?.key?.id;
+
+                const cleanupDownload = () => {
+                    if (client?.ev) client.ev.off("messages.upsert", downloadHandler);
+                    if (downloadTimeout) clearTimeout(downloadTimeout);
+                };
 
                 // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
@@ -200,24 +199,14 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         const dlChat = dlMsg.key.remoteJid;
                         if (dlChat !== from) return;
 
-                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || 
-                                      dlMsg.message.conversation?.contextInfo || 
-                                      dlMsg.message.imageMessage?.contextInfo;
-
-                        const dlStanzaId = dlCtx?.stanzaId;
-
                         const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
                         const dlNum = parseInt(pick);
                         if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
 
-                        if (dlStanzaId && dlStanzaId !== detailMsgId) return;
-
                         const selectedDl = downloads[dlNum - 1];
                         if (!selectedDl) return;
 
-                        // Unbind listener immediately
-                        client.ev.off("messages.upsert", downloadHandler);
-                        if (downloadTimeout) clearTimeout(downloadTimeout);
+                        cleanupDownload();
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
@@ -257,31 +246,29 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         await client.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });
 
                     } catch (dlErr) {
-                        console.error("Cineflura download failed:", dlErr.message);
+                        console.error("Cineflura download error:", dlErr);
                         reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
+                    } finally {
+                        cleanupDownload();
                     }
                 };
 
                 client.ev.on("messages.upsert", downloadHandler);
-                
-                downloadTimeout = setTimeout(() => {
-                    client.ev.off("messages.upsert", downloadHandler);
-                }, 300000);
+                downloadTimeout = setTimeout(cleanupDownload, 180000);
 
             } catch (detErr) {
-                console.error("Cineflura details failed:", detErr.message);
+                console.error("Cineflura details error:", detErr);
                 reply(`❌ An error occurred while loading details: ${detErr.message}`);
+            } finally {
+                cleanupDetails();
             }
         };
 
         client.ev.on("messages.upsert", detailsHandler);
-        
-        detailsTimeout = setTimeout(() => {
-            client.ev.off("messages.upsert", detailsHandler);
-        }, 300000);
+        detailsTimeout = setTimeout(cleanupDetails, 180000);
 
     } catch (e) {
-        console.error("Cineflura Downloader error:", e.message);
+        console.error("Cineflura command error:", e);
         await react("❌");
         return reply(`❌ *Error Processing Request:* ${e.message}`);
     }

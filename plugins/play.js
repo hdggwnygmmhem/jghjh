@@ -7,7 +7,6 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Optimized Image Thumbnail Generator
 async function getThumbnailBuffer(url) {
     if (!url) return null;
     try {
@@ -67,12 +66,10 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
 
         const firstImage = limitResults[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
         const sentSearch = await client.sendMessage(from, { image: { url: firstImage }, caption: listText }, { quoted: mek });
-        const searchMsgId = sentSearch.key.id;
 
         let detailsTimeout = null;
         let downloadTimeout = null;
 
-        // Clean up listeners
         const cleanupDetails = () => {
             client.ev.off("messages.upsert", detailsHandler);
             if (detailsTimeout) clearTimeout(detailsTimeout);
@@ -84,22 +81,19 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
                 const msg = update.messages?.[0];
                 if (!msg?.message) return;
 
-                // Check correct chat JID
+                // Match chat JID
                 const msgJid = msg.key.remoteJid;
                 if (msgJid !== from) return;
 
-                // Extract reply stanza
-                const ctx = msg.message.extendedTextMessage?.contextInfo;
-                const quotedId = ctx?.stanzaId;
-
-                // Check if user replied to search list OR typed number directly
-                const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
+                // Extract user text choice (Works for both reply and direct text)
+                const textMsg = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+                const choice = textMsg.trim();
                 const num = parseInt(choice);
 
+                // Reject if not a valid number in range
                 if (isNaN(num) || num < 1 || num > limitResults.length) return;
-                if (quotedId && quotedId !== searchMsgId) return; // Ignore if replying to another message
 
-                cleanupDetails(); // Stop listening once matched
+                cleanupDetails();
                 await react("⏳");
 
                 const selected = limitResults[num - 1];
@@ -132,8 +126,7 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
                 cap += `\n⚡ *Reply with the download number (1-${downloads.length})* to start.`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
-                const sentDetail = await client.sendMessage(from, { image: { url: detailImg }, caption: cap }, { quoted: msg });
-                const detailMsgId = sentDetail.key.id;
+                await client.sendMessage(from, { image: { url: detailImg }, caption: cap }, { quoted: msg });
 
                 const cleanupDownload = () => {
                     client.ev.off("messages.upsert", downloadHandler);
@@ -147,14 +140,11 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
                         if (!dlMsg?.message) return;
                         if (dlMsg.key.remoteJid !== from) return;
 
-                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo;
-                        const dlQuotedId = dlCtx?.stanzaId;
-
-                        const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
+                        const dlText = dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "";
+                        const pick = dlText.trim();
                         const dlNum = parseInt(pick);
 
                         if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
-                        if (dlQuotedId && dlQuotedId !== detailMsgId) return;
 
                         cleanupDownload();
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
@@ -192,7 +182,7 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
                 };
 
                 client.ev.on("messages.upsert", downloadHandler);
-                downloadTimeout = setTimeout(cleanupDownload, 180000); // 3 min timeout
+                downloadTimeout = setTimeout(cleanupDownload, 180000);
 
             } catch (detErr) {
                 reply(`❌ Error: ${detErr.message}`);
@@ -202,7 +192,7 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
         };
 
         client.ev.on("messages.upsert", detailsHandler);
-        detailsTimeout = setTimeout(cleanupDetails, 180000); // 3 min timeout
+        detailsTimeout = setTimeout(cleanupDetails, 180000);
 
     } catch (e) {
         await react("❌");

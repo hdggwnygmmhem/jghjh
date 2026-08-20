@@ -8,20 +8,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function getThumbnailBuffer(url) {
-    if (!url) return null;
-    try {
-        const { data } = await axios.get(url, { 
-            responseType: "arraybuffer", 
-            timeout: 5000,
-            maxContentLength: 5 * 1024 * 1024 
-        });
-        return await sharp(data)
-            .resize(200, 200)
-            .jpeg({ quality: 60 })
-            .toBuffer();
-    } catch {
-        return null;
-    }
+  if (!url) return null;
+  try {
+    const { data } = await axios.get(url, { responseType: "arraybuffer", timeout: 8000 });
+    return await sharp(data)
+      .resize(300, 300)
+      .jpeg({ quality: 80 })
+      .toBuffer();
+  } catch (err) {
+    console.error("Error processing thumbnail:", err.message || err);
+    return null;
+  }
 }
 
 cmd({
@@ -31,8 +28,10 @@ cmd({
     category: "downloader",
     filename: __filename
 },
-async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
+async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
+
+    // API CONFIGURATION
     const apiKey = "VajiraOfc";
     const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/search`;
     const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/details`;
@@ -41,70 +40,113 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
         await react("🎬");
 
         if (!q) {
-            return reply("❌ *Title Missing!*\nExample: `.cineflura Interstellar`");
+            return reply(
+                "❌ *Opps! Title Missing* ❌\n\n" +
+                "Please provide a movie name to search!\n" +
+                "📌 *Example:* `.cineflura Interstellar`"
+            );
         }
+
+        await reply(`🔍 _Searching for *"${q}"* on Cineflura servers..._`);
 
         const response = await axios.get(searchApiUrl, {
-            params: { apikey: apiKey, q: q },
-            timeout: 15000
+            params: { 
+                apikey: apiKey, 
+                q: q
+            },
+            timeout: 30000
         });
 
-        const results = response.data?.success ? response.data.results : null;
-        if (!results || results.length === 0) {
+        if (response.status !== 200 || !response.data) {
             await react("❌");
-            return reply(`🛸 *No Results Found for:* "${q}"`);
+            return reply("🛸 *API Error:* Server responded with an invalid status.");
         }
 
-        let listText = `🎬 *CINEFLURA SEARCH*\n\n🔎 *Query:* \`${q.toUpperCase()}\`\n\n`;
-        const limitResults = results.slice(0, 10);
-        
-        limitResults.forEach((v, i) => {
-            const title = v.title ? (v.title.length > 40 ? v.title.substring(0, 40) + '...' : v.title) : 'Unknown';
-            listText += `*${i + 1}.* ${title}\n📊 Rating: ${v.rating || 'N/A'}\n\n`;
+        let results = null;
+        if (response.data && response.data.success) {
+            results = response.data.results || [];
+        }
+
+        if (!results || results.length === 0) {
+            await react("❌");
+            return reply(`🛸 *No Results Found!*\nCineflura par *"${q}"* naam ki koi movie nahi mili.`);
+        }
+
+        let listText = `┏━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+        listText += `┃ 🎬  *CINEFLURA SEARCH*  🎬 ┃\n`;
+        listText += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+        listText += `🔎 *Query:* \`${q.toUpperCase()}\`\n`;
+        listText += `✨ *Results Found:* ${results.length}\n\n`;
+        listText += `┌─────────────────────┐\n`;
+
+        results.forEach((v, i) => {
+            const title = v.title || 'Unknown Title';
+            const displayTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
+            listText += `┃ 🎥 *[${i + 1}]* _${displayTitle}_\n`;
+            listText += `┃ └─ 📊 Rating: ${v.rating || 'N/A'} | ${v.type || 'Movie'}\n`;
+            if (i !== results.length - 1) listText += `┃─────────────────────┃\n`;
         });
-        listText += `⚡ *Reply with the number (1-${limitResults.length})* to get details.`;
 
-        const firstImage = limitResults[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
-        const sentSearch = await client.sendMessage(from, { image: { url: firstImage }, caption: listText }, { quoted: mek });
+        listText += `└─────────────────────┘\n\n`;
+        listText += `⚡ *Reply with the item number* to view download options.\n\n`;
+        listText += `> *© KAMRAN-MINI-BOT ッ*`;
 
-        let detailsTimeout = null;
-        let downloadTimeout = null;
+        const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
-        const cleanupDetails = () => {
+        const sentSearch = await client.sendMessage(from, {
+            image: { url: firstImage },
+            caption: listText
+        }, { quoted: mek });
+
+        const searchMsgId = sentSearch.key.id;
+        let detailsTimeout, downloadTimeout;
+
+        // Cleanup helper function to prevent RAM leak
+        const removeDetailsListener = () => {
             client.ev.off("messages.upsert", detailsHandler);
             if (detailsTimeout) clearTimeout(detailsTimeout);
         };
 
-        // --- STEP 1: DETAILS HANDLER ---
+        // ================= INTERACTIVE STEP: DETAILS HANDLER =================
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages?.[0];
                 if (!msg?.message) return;
 
-                // Match chat JID
+                // Check chat room
                 const msgJid = msg.key.remoteJid;
                 if (msgJid !== from) return;
 
-                // Extract user text choice (Works for both reply and direct text)
-                const textMsg = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
-                const choice = textMsg.trim();
+                // Relaxed context check for Self Chat / Message Yourself
+                const ctx = msg.message.extendedTextMessage?.contextInfo || msg.message.conversation?.contextInfo;
+                const stanzaId = ctx?.stanzaId;
+
+                const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
                 const num = parseInt(choice);
+                if (isNaN(num) || num < 1 || num > results.length) return;
 
-                // Reject if not a valid number in range
-                if (isNaN(num) || num < 1 || num > limitResults.length) return;
+                // Match with quoted message OR allow direct number if in correct chat
+                if (stanzaId && stanzaId !== searchMsgId) return;
 
-                cleanupDetails();
+                // Off listener immediately
+                removeDetailsListener();
+
+                const selected = results[num - 1];
+                if (!selected) return;
+
                 await react("⏳");
 
-                const selected = limitResults[num - 1];
                 const detailResponse = await axios.get(detailsApiUrl, {
-                    params: { apikey: apiKey, url: selected.url },
-                    timeout: 15000
+                    params: { 
+                        apikey: apiKey, 
+                        url: selected.url
+                    },
+                    timeout: 30000
                 });
 
-                if (!detailResponse.data?.success) {
+                if (detailResponse.status !== 200 || !detailResponse.data || !detailResponse.data.success) {
                     await react("❌");
-                    return reply("❌ Failed to fetch movie details.");
+                    return reply("❌ *Error:* Failed to pull details for this item.");
                 }
 
                 const movieDetails = detailResponse.data.movie || {};
@@ -112,62 +154,102 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
 
                 if (downloads.length === 0) {
                     await react("❌");
-                    return reply("❌ No download links available.");
+                    return reply("❌ *Sorry:* No downloadable links were located for this selection.");
                 }
 
-                let cap = `🎥 *${movieDetails.title || selected.title}*\n\n`;
-                cap += `📋 *Type:* ${movieDetails.type || 'Movie'} | 📅 *Year:* ${movieDetails.year || 'N/A'}\n`;
-                cap += `🗣️ *Language:* ${movieDetails.language || 'N/A'}\n\n`;
-                cap += `*AVAILABLE DOWNLOADS:*\n`;
+                let cap = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+                cap += `┃ 🎥 *${movieDetails.title || selected.title}*\n`;
+                cap += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                cap += `📋 *Type:* \`${movieDetails.type || 'Movie'}\`\n`;
+                cap += `📅 *Year:* ${movieDetails.year || 'N/A'}\n`;
+                cap += `🌍 *Country:* ${movieDetails.country || 'N/A'}\n`;
+                cap += `🗣️ *Language:* ${movieDetails.language || 'N/A'}\n`;
+                cap += `🎭 *Genre:* ${movieDetails.genre || 'N/A'}\n`;
+                cap += `🎬 *Director:* ${movieDetails.director || 'N/A'}\n\n`;
+                
+                if (movieDetails.story) {
+                    const story = movieDetails.story.length > 200 ? movieDetails.story.substring(0, 200) + '...' : movieDetails.story;
+                    cap += `📝 *Story:* \n_${story}_\n\n`;
+                }
+                
+                cap += `┌───────── DOWNLOADS ─────────┐\n`;
                 
                 downloads.forEach((dl, i) => {
-                    cap += `*${i + 1}.* Quality: \`${dl.quality || 'HD'}\` | Size: \`${dl.size || 'N/A'}\`\n`;
+                    cap += `┃ 🔥 *[${i + 1}]* Quality: \`${dl.quality || 'HD'}\`\n`;
+                    cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`\n`;
+                    if (i !== downloads.length - 1) cap += `┃─────────────────────┃\n`;
                 });
-                cap += `\n⚡ *Reply with the download number (1-${downloads.length})* to start.`;
+
+                cap += `└─────────────────────────────┘\n\n`;
+                cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
+                cap += `> *© KAMRAN-MINI-BOT ッ*`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
-                await client.sendMessage(from, { image: { url: detailImg }, caption: cap }, { quoted: msg });
 
-                const cleanupDownload = () => {
+                const sentDetail = await client.sendMessage(from, {
+                    image: { url: detailImg },
+                    caption: cap
+                }, { quoted: msg });
+
+                const detailMsgId = sentDetail.key.id;
+
+                const removeDownloadListener = () => {
                     client.ev.off("messages.upsert", downloadHandler);
                     if (downloadTimeout) clearTimeout(downloadTimeout);
                 };
 
-                // --- STEP 2: DOWNLOAD HANDLER ---
+                // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
                     try {
                         const dlMsg = up.messages?.[0];
                         if (!dlMsg?.message) return;
                         if (dlMsg.key.remoteJid !== from) return;
 
-                        const dlText = dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "";
-                        const pick = dlText.trim();
-                        const dlNum = parseInt(pick);
+                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
+                        const dlStanzaId = dlCtx?.stanzaId;
 
+                        const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
+                        const dlNum = parseInt(pick);
                         if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
 
-                        cleanupDownload();
-                        await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
+                        if (dlStanzaId && dlStanzaId !== detailMsgId) return;
 
                         const selectedDl = downloads[dlNum - 1];
-                        const targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
+                        if (!selectedDl) return;
 
+                        removeDownloadListener();
+
+                        await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
+                        
+                        let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
+                        
                         if (!targetFileUrl) {
                             await react("❌");
-                            return reply("❌ Direct download link could not be resolved.");
+                            return reply("❌ *Error:* Direct download link could not be resolved.");
                         }
 
-                        const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
-                        const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
+                        const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
 
-                        const documentPayload = {
+                        await reply(`🚀 *Processing Cineflura File...* \nUploading document. Please wait!`);
+
+                        let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+                        finalCaption += `┃ 🎬 *${movieDetails.title || selected.title}*\n`;
+                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                        finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
+                        finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
+                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                        finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
+
+                        const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
+                        
+                        let documentPayload = {
                             document: { url: targetFileUrl },
                             mimetype: "video/mp4",
                             fileName: cleanFileName,
-                            caption: `🎬 *${movieDetails.title || selected.title}*\n🌟 Quality: ${selectedDl.quality || 'HD'}\n📦 Size: ${selectedDl.size || 'N/A'}`
+                            caption: finalCaption
                         };
 
-                        if (thumbBuffer) {
+                        if (thumbBuffer && Buffer.isBuffer(thumbBuffer)) {
                             documentPayload.jpegThumbnail = thumbBuffer;
                         }
 
@@ -175,27 +257,30 @@ async (conn, mek, m, { from, reply, react, q, socket, sock }) => {
                         await client.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });
 
                     } catch (dlErr) {
-                        reply(`❌ Download Error: ${dlErr.message}`);
+                        console.error("Cineflura download failed:", dlErr.message);
+                        reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
                     } finally {
-                        cleanupDownload();
+                        removeDownloadListener();
                     }
                 };
 
                 client.ev.on("messages.upsert", downloadHandler);
-                downloadTimeout = setTimeout(cleanupDownload, 180000);
+                downloadTimeout = setTimeout(removeDownloadListener, 180000);
 
             } catch (detErr) {
-                reply(`❌ Error: ${detErr.message}`);
+                console.error("Cineflura details failed:", detErr.message);
+                reply(`❌ An error occurred while loading details: ${detErr.message}`);
             } finally {
-                cleanupDetails();
+                removeDetailsListener();
             }
         };
 
         client.ev.on("messages.upsert", detailsHandler);
-        detailsTimeout = setTimeout(cleanupDetails, 180000);
+        detailsTimeout = setTimeout(removeDetailsListener, 180000);
 
     } catch (e) {
+        console.error("Cineflura Downloader error:", e.message);
         await react("❌");
-        return reply(`❌ Error: ${e.message}`);
+        return reply(`❌ *Error Processing Request:* ${e.message}`);
     }
 });

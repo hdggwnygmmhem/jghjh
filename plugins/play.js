@@ -50,10 +50,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         await reply(`🔍 _Searching for *"${q}"* on Cineflura servers..._`);
 
         const response = await axios.get(searchApiUrl, {
-            params: { 
-                apikey: apiKey, 
-                q: q
-            },
+            params: { apikey: apiKey, q: q },
             timeout: 30000
         }).catch(err => ({ error: true, message: err.message }));
 
@@ -98,10 +95,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             caption: listText
         }, { quoted: mek });
 
-        const searchMsgId = sentSearch?.key?.id;
         let detailsTimeout, downloadTimeout;
 
-        // Cleanup helper
         const cleanupDetails = () => {
             if (client?.ev) client.ev.off("messages.upsert", detailsHandler);
             if (detailsTimeout) clearTimeout(detailsTimeout);
@@ -111,16 +106,24 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages?.[0];
-                if (!msg?.message) return;
+                if (!msg || !msg.message) return;
 
+                // Match remote JID
                 const msgChat = msg.key.remoteJid;
                 if (msgChat !== from) return;
 
-                const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
+                // Extract text from any message type (text, extendedText, image, etc.)
+                const choice = (
+                    msg.message.conversation ||
+                    msg.message.extendedTextMessage?.text ||
+                    msg.message.imageMessage?.caption ||
+                    ""
+                ).trim();
+
                 const num = parseInt(choice);
                 if (isNaN(num) || num < 1 || num > results.length) return;
 
-                // Stop listener once valid number is entered
+                // Stop listening once valid number is processed
                 cleanupDetails();
 
                 const selected = results[num - 1];
@@ -129,10 +132,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 await react("⏳");
 
                 const detailResponse = await axios.get(detailsApiUrl, {
-                    params: { 
-                        apikey: apiKey, 
-                        url: selected.url
-                    },
+                    params: { apikey: apiKey, url: selected.url },
                     timeout: 30000
                 }).catch(err => ({ error: true, message: err.message }));
 
@@ -183,8 +183,6 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                     caption: cap
                 }, { quoted: msg });
 
-                const detailMsgId = sentDetail?.key?.id;
-
                 const cleanupDownload = () => {
                     if (client?.ev) client.ev.off("messages.upsert", downloadHandler);
                     if (downloadTimeout) clearTimeout(downloadTimeout);
@@ -194,12 +192,18 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 const downloadHandler = async (up) => {
                     try {
                         const dlMsg = up.messages?.[0];
-                        if (!dlMsg?.message) return;
+                        if (!dlMsg || !dlMsg.message) return;
 
                         const dlChat = dlMsg.key.remoteJid;
                         if (dlChat !== from) return;
 
-                        const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
+                        const pick = (
+                            dlMsg.message.conversation ||
+                            dlMsg.message.extendedTextMessage?.text ||
+                            dlMsg.message.imageMessage?.caption ||
+                            ""
+                        ).trim();
+
                         const dlNum = parseInt(pick);
                         if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
 

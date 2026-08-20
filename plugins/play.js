@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 async function getThumbnailBuffer(url) {
   if (!url) return null;
   try {
-    const { data } = await axios.get(url, { responseType: "arraybuffer", timeout: 8000 });
+    const { data } = await axios.get(url, { responseType: "arraybuffer" });
     return await sharp(data)
       .resize(300, 300)
       .jpeg({ quality: 80 })
@@ -101,35 +101,33 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         const searchMsgId = sentSearch.key.id;
         let detailsTimeout, downloadTimeout;
 
-        // Cleanup helper function to prevent RAM leak
-        const removeDetailsListener = () => {
-            client.ev.off("messages.upsert", detailsHandler);
-            if (detailsTimeout) clearTimeout(detailsTimeout);
-        };
-
         // ================= INTERACTIVE STEP: DETAILS HANDLER =================
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages?.[0];
                 if (!msg?.message) return;
 
-                // Check chat room
-                const msgJid = msg.key.remoteJid;
-                if (msgJid !== from) return;
+                // Ensure message belongs to current chat context
+                const msgChat = msg.key.remoteJid;
+                if (msgChat !== from) return;
 
-                // Relaxed context check for Self Chat / Message Yourself
-                const ctx = msg.message.extendedTextMessage?.contextInfo || msg.message.conversation?.contextInfo;
+                // Extract quoted stanza ID safely across different Baileys message structures
+                const ctx = msg.message.extendedTextMessage?.contextInfo || 
+                            msg.message.conversation?.contextInfo || 
+                            msg.message.imageMessage?.contextInfo;
+                
                 const stanzaId = ctx?.stanzaId;
 
                 const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
                 const num = parseInt(choice);
                 if (isNaN(num) || num < 1 || num > results.length) return;
 
-                // Match with quoted message OR allow direct number if in correct chat
+                // Accept if it's replying to the search message, OR if quoted check is bypassed for self-messages
                 if (stanzaId && stanzaId !== searchMsgId) return;
 
-                // Off listener immediately
-                removeDetailsListener();
+                // Unbind event listener immediately to prevent memory leaks and duplicate runs
+                client.ev.off("messages.upsert", detailsHandler);
+                if (detailsTimeout) clearTimeout(detailsTimeout);
 
                 const selected = results[num - 1];
                 if (!selected) return;
@@ -193,19 +191,19 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 const detailMsgId = sentDetail.key.id;
 
-                const removeDownloadListener = () => {
-                    client.ev.off("messages.upsert", downloadHandler);
-                    if (downloadTimeout) clearTimeout(downloadTimeout);
-                };
-
                 // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
                     try {
                         const dlMsg = up.messages?.[0];
                         if (!dlMsg?.message) return;
-                        if (dlMsg.key.remoteJid !== from) return;
 
-                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
+                        const dlChat = dlMsg.key.remoteJid;
+                        if (dlChat !== from) return;
+
+                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || 
+                                      dlMsg.message.conversation?.contextInfo || 
+                                      dlMsg.message.imageMessage?.contextInfo;
+
                         const dlStanzaId = dlCtx?.stanzaId;
 
                         const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
@@ -217,7 +215,9 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         const selectedDl = downloads[dlNum - 1];
                         if (!selectedDl) return;
 
-                        removeDownloadListener();
+                        // Unbind listener immediately
+                        client.ev.off("messages.upsert", downloadHandler);
+                        if (downloadTimeout) clearTimeout(downloadTimeout);
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
@@ -259,24 +259,26 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                     } catch (dlErr) {
                         console.error("Cineflura download failed:", dlErr.message);
                         reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
-                    } finally {
-                        removeDownloadListener();
                     }
                 };
 
                 client.ev.on("messages.upsert", downloadHandler);
-                downloadTimeout = setTimeout(removeDownloadListener, 180000);
+                
+                downloadTimeout = setTimeout(() => {
+                    client.ev.off("messages.upsert", downloadHandler);
+                }, 300000);
 
             } catch (detErr) {
                 console.error("Cineflura details failed:", detErr.message);
                 reply(`❌ An error occurred while loading details: ${detErr.message}`);
-            } finally {
-                removeDetailsListener();
             }
         };
 
         client.ev.on("messages.upsert", detailsHandler);
-        detailsTimeout = setTimeout(removeDetailsListener, 180000);
+        
+        detailsTimeout = setTimeout(() => {
+            client.ev.off("messages.upsert", detailsHandler);
+        }, 300000);
 
     } catch (e) {
         console.error("Cineflura Downloader error:", e.message);

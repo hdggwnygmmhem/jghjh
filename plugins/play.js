@@ -56,7 +56,7 @@ async (conn, mek, m, { from, q, reply, react, socket, sock }) => {
         listText += `⚡ *REPLY TO THIS MESSAGE with item number (1-10)* to view details.\n\n`;
         listText += `> *© KAMRAN-MINI-BOT*`;
 
-        const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
+        const firstImage = (results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster").trim();
 
         // Send Search List
         const searchMsg = await client.sendMessage(from, {
@@ -72,10 +72,8 @@ async (conn, mek, m, { from, q, reply, react, socket, sock }) => {
                 const incoming = update.messages?.[0];
                 if (!incoming || !incoming.message) return;
 
-                // Check if message is from same chat
                 if (incoming.key.remoteJid !== from) return;
 
-                // Check text input
                 const text = (
                     incoming.message.conversation ||
                     incoming.message.extendedTextMessage?.text ||
@@ -85,14 +83,11 @@ async (conn, mek, m, { from, q, reply, react, socket, sock }) => {
                 const num = parseInt(text);
                 if (isNaN(num) || num < 1 || num > results.length) return;
 
-                // Quoted Message Match Check (Ensures it's replying to search msg or active chat)
                 const quotedId = incoming.message.extendedTextMessage?.contextInfo?.stanzaId;
                 if (quotedId && quotedId !== searchMsgId) return;
 
-                // Stop this listener
                 client.ev.off("messages.upsert", detailsListener);
 
-                // REACTION FOR SEARCHING/PROCESSING (TATOO IS HERE)
                 await client.sendMessage(from, { react: { text: "⏳", key: incoming.key } });
 
                 const selected = results[num - 1];
@@ -126,7 +121,7 @@ async (conn, mek, m, { from, q, reply, react, socket, sock }) => {
                 cap += `└─────────────────────┘\n\n`;
                 cap += `⚡ *REPLY TO THIS MESSAGE with quality number* to download file.`;
 
-                const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
+                const detailImg = (movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster").trim();
 
                 const detailMsg = await client.sendMessage(from, {
                     image: { url: detailImg },
@@ -159,18 +154,21 @@ async (conn, mek, m, { from, q, reply, react, socket, sock }) => {
                         await client.sendMessage(from, { react: { text: "📥", key: dlIncoming.key } });
 
                         const selectedDl = downloads[dlNum - 1];
-                        let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
+                        
+                        // FIX: TRIM SPACES FROM DOWNLOAD URL
+                        let rawUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl || "";
+                        let targetFileUrl = rawUrl.trim();
 
-                        if (!targetFileUrl) {
+                        if (!targetFileUrl || !targetFileUrl.startsWith("http")) {
                             await client.sendMessage(from, { react: { text: "❌", key: dlIncoming.key } });
-                            return reply("❌ File link invalid.");
+                            return reply("❌ File URL invalid or corrupted.");
                         }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}.mp4`;
 
                         await reply(`🚀 *Uploading File...*\nPlease wait!`);
 
-                        // Send Document safely using streams (RAM clean)
+                        // Send Document safely using URL stream
                         await client.sendMessage(from, {
                             document: { url: targetFileUrl },
                             mimetype: "video/mp4",

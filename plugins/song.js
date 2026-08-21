@@ -147,8 +147,8 @@ cmd({
 
 // ==================== 2. MP4 / VIDEO COMMAND ====================
 cmd({
-    pattern: "video",
-    alias: ["ytmp4", "v"],
+    pattern: "video2",
+    alias: ["ytmp42", "v2"],
     react: "🎬",
     desc: "Download MP4 video from YouTube URL",
     category: "download",

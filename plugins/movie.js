@@ -88,8 +88,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         });
 
         listText += `└─────────────────────┘\n\n`;
-        listText += `⚡ *Reply with the item number* to view download options.\n\n`;
-        listText += `> *© JAWAD-MD ッ*`;
+        listText += `⚡ *Reply with the item number* to view download options.`;
 
         const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -167,8 +166,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 });
 
                 cap += `└─────────────────────────────┘\n\n`;
-                cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
-                cap += `> *© JAWAD-MD ッ*`;
+                cap += `⚡ *Reply with a download number* to start downloading.`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -217,8 +215,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
                         finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
                         finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
-                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += `> *© JAWAD-MD ッ*`;
+                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛`;
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         

@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'url';
+Import { fileURLToPath } from 'url';
 import path from 'path';
 import axios from 'axios';
 import sharp from 'sharp';
@@ -6,32 +6,6 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Helper function to decode Base64
-const _d = (str) => Buffer.from(str, 'base64').toString('utf-8');
-
-// ================= SIRF CONFIGURATION LOCKED =================
-const BOT_NAME = Object.freeze(_d("SkFXQUQgTUQg44OD")); // "JAWAD MD ッ"
-const API_KEY = Object.freeze(_d("VmFqaXJhT2Zj")); // "VajiraOfc"
-const SEARCH_API_URL = Object.freeze(_d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo"));
-const DETAILS_API_URL = Object.freeze(_d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw=="));
-const MAX_SIZE_MB = Object.freeze(1024); // 1GB Limit
-// =============================================================
-
-// Size parser to check 1GB limit
-function parseSizeToMB(sizeStr) {
-    if (!sizeStr || typeof sizeStr !== 'string') return 0;
-    const match = sizeStr.match(/([\d.]+)\s*(MB|GB|KB)/i);
-    if (!match) return 0;
-    
-    const value = parseFloat(match[1]);
-    const unit = match[2].toUpperCase();
-
-    if (unit === 'GB') return value * 1024;
-    if (unit === 'MB') return value;
-    if (unit === 'KB') return value / 1024;
-    return 0;
-}
 
 async function getThumbnailBuffer(url) {
   if (!url) return null;
@@ -57,6 +31,11 @@ cmd({
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
+    // API CONFIGURATION
+    const apiKey = "VajiraOfc";
+    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/search`;
+    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/details`;
+
     try {
         await react("🎬");
 
@@ -70,9 +49,9 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         await reply(`🔍 _Searching for *"${q}"* on Cineflura servers..._`);
 
-        const response = await axios.get(SEARCH_API_URL, {
+        const response = await axios.get(searchApiUrl, {
             params: { 
-                apikey: API_KEY, 
+                apikey: apiKey, 
                 q: q
             },
             timeout: 30000
@@ -110,7 +89,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         listText += `└─────────────────────┘\n\n`;
         listText += `⚡ *Reply with the item number* to view download options.\n\n`;
-        listText += `> *© ${BOT_NAME}*`;
+        listText += `> *© JAWAD-MD ッ*`;
 
         const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -122,7 +101,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         const searchMsgId = sentSearch.key.id;
         let detailsTimeout, downloadTimeout;
 
-        // ================= INTERACTIVE STEP 1: DETAILS HANDLER =================
+        // ================= INTERACTIVE STEP: DETAILS HANDLER =================
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages[0];
@@ -143,9 +122,9 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 await react("⏳");
 
-                const detailResponse = await axios.get(DETAILS_API_URL, {
+                const detailResponse = await axios.get(detailsApiUrl, {
                     params: { 
-                        apikey: API_KEY, 
+                        apikey: apiKey, 
                         url: selected.url
                     },
                     timeout: 30000
@@ -182,18 +161,14 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 cap += `┌───────── DOWNLOADS ─────────┐\n`;
                 
                 downloads.forEach((dl, i) => {
-                    const sizeMB = parseSizeToMB(dl.size);
-                    const isTooBig = sizeMB > MAX_SIZE_MB;
-                    const statusTag = isTooBig ? " ⚠️ (Over 1GB)" : "";
-
                     cap += `┃ 🔥 *[${i + 1}]* Quality: \`${dl.quality || 'HD'}\`\n`;
-                    cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`${statusTag}\n`;
+                    cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`\n`;
                     if (i !== downloads.length - 1) cap += `┃─────────────────────┃\n`;
                 });
 
                 cap += `└─────────────────────────────┘\n\n`;
                 cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
-                cap += `> *© ${BOT_NAME}*`;
+                cap += `> *© JAWAD-MD ッ*`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -204,7 +179,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 const detailMsgId = sentDetail.key.id;
 
-                // ================= INTERACTIVE STEP 2: DOWNLOAD HANDLER =================
+                // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
                     try {
                         const dlMsg = up.messages[0];
@@ -220,21 +195,12 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         const selectedDl = downloads[dlNum - 1];
                         if (!selectedDl) return;
 
-                        // Check 1GB Limit
-                        const sizeMB = parseSizeToMB(selectedDl.size);
-                        if (sizeMB > MAX_SIZE_MB) {
-                            await react("🚫");
-                            return reply(
-                                `🚫 *File Exceeds 1GB Limit!*\n\n` +
-                                `This file is *${selectedDl.size}*. To prevent the bot from crashing, files larger than 1GB cannot be downloaded.`
-                            );
-                        }
-
                         client.ev.off("messages.upsert", downloadHandler);
                         clearTimeout(downloadTimeout);
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
+                        // Get direct download URL
                         let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
                         
                         if (!targetFileUrl) {
@@ -244,18 +210,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
 
-                        await reply(`🚀 *Downloading & Processing File...*\nPlease wait, sending document soon!`);
-
-                        // FIX: Axios ArrayBuffer for PixelDrain bypass
-                        const fileRes = await axios.get(targetFileUrl, {
-                            responseType: 'arraybuffer',
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
-                            },
-                            timeout: 180000
-                        });
-
-                        const fileBuffer = Buffer.from(fileRes.data);
+                        await reply(`🚀 *Processing Cineflura File...* \nUploading document. Please wait!`);
 
                         let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         finalCaption += `┃ 🎬 *${movieDetails.title || selected.title}*\n`;
@@ -263,12 +218,12 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
                         finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += `> *© ${BOT_NAME}*`;
+                        finalCaption += `> *© JAWAD-MD ッ*`;
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
                         let documentPayload = {
-                            document: fileBuffer,
+                            document: { url: targetFileUrl },
                             mimetype: "video/mp4",
                             fileName: cleanFileName,
                             caption: finalCaption
@@ -311,3 +266,5 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         return reply(`❌ *Error Processing Request:* ${e.message}`);
     }
 });
+
+ISKO LOCK KAR DO NAAM BHI LOCK KAR DO AUR API KI BHI LOCK KAR DO

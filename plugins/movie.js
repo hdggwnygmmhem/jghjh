@@ -31,13 +31,10 @@ cmd({
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
-    // API CONFIGURATION (BASE64 LOCKED)
-    const apiKey = Buffer.from("VmFqaXJhT2Zj", "base64").toString("utf-8");
-    const searchApiUrl = Buffer.from("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo", "base64").toString("utf-8");
-    const detailsApiUrl = Buffer.from("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw==", "base64").toString("utf-8");
-    
-    // UPDATED FOOTER WATERMARK (KAMRAN-MD - BASE64)
-    const devCredit = Buffer.from("PiAqwqkgS0FNUkFOLU1EIOfvgKA=", "base64").toString("utf-8");
+    // API CONFIGURATION
+    const apiKey = "VajiraOfc";
+    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/search`;
+    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/details`;
 
     try {
         await react("🎬");
@@ -92,7 +89,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         listText += `└─────────────────────┘\n\n`;
         listText += `⚡ *Reply with the item number* to view download options.\n\n`;
-        listText += devCredit;
+        listText += `> *© KAMRAN-MINI-BOT ッ*`;
 
         const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -171,7 +168,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 cap += `└─────────────────────────────┘\n\n`;
                 cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
-                cap += devCredit;
+                cap += `> *© KAMRAN-MINI-BOT ッ*`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -221,7 +218,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
                         finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += devCredit;
+                        finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         

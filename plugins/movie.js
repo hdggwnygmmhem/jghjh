@@ -10,25 +10,15 @@ const __dirname = path.dirname(__filename);
 // Helper function to decode Base64
 const _d = (str) => Buffer.from(str, 'base64').toString('utf-8');
 
-// ================= BASE64 LOCKED CONFIGURATION =================
-const BOT_CONFIG = Object.freeze({
-    BOT_NAME: _d("S0FNUkFOIE1EIOC4gA=="), // "KAMRAN MD ッ"
-    API_KEY: _d("VmFqaXJhT2Zj"), // "VajiraOfc"
-    SEARCH_API_URL: _d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo"),
-    DETAILS_API_URL: _d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw=="),
-    MAX_SIZE_MB: 1024 // Strict 1GB limit (1024 MB) to prevent bot crash
-});
+// ================= SIRF CONFIGURATION LOCKED =================
+const BOT_NAME = Object.freeze(_d("S0FNUkFOIE1EIOC4gA==")); // "KAMRAN MD ッ"
+const API_KEY = Object.freeze(_d("VmFqaXJhT2Zj")); // "VajiraOfc"
+const SEARCH_API_URL = Object.freeze(_d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo"));
+const DETAILS_API_URL = Object.freeze(_d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw=="));
+const MAX_SIZE_MB = Object.freeze(1024); // 1GB Limit
+// =============================================================
 
-// ================= BASE64 LOCKED COMMAND METADATA =================
-const CMD_METADATA = Object.freeze({
-    pattern: _d("Y2luZWZsdXJh"), 
-    alias: [_d("Y2Zs"), _d("Y2luZWZsdXJhZGw=")], 
-    desc: _d("U2VhcmNoIGFuZCBkb3dubG9hZCBtb3ZpZXMgZnJvbSBDaW5lZmx1cmEgdmlhIEFQSQ=="),
-    category: _d("ZG93bmxvYWRlcg=="), 
-    filename: __filename
-});
-
-// Function to convert size string (e.g., "750 MB", "1.5 GB") to Megabytes (MB)
+// Size parser to check 1GB limit
 function parseSizeToMB(sizeStr) {
     if (!sizeStr || typeof sizeStr !== 'string') return 0;
     const match = sizeStr.match(/([\d.]+)\s*(MB|GB|KB)/i);
@@ -57,13 +47,20 @@ async function getThumbnailBuffer(url) {
   }
 }
 
-cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
+cmd({
+    pattern: "cineflura",
+    alias: ["cfl", "cinefluradl"],
+    desc: "Search and download movies from Cineflura via API",
+    category: "downloader",
+    filename: __filename
+},
+async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
     try {
         await react("🎬");
 
-        if (!q || !q.trim()) {
+        if (!q) {
             return reply(
                 "❌ *Opps! Title Missing* ❌\n\n" +
                 "Please provide a movie name to search!\n" +
@@ -71,13 +68,12 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
             );
         }
 
-        const searchQuery = q.trim();
-        await reply(`🔍 _Searching for *"${searchQuery}"* on Cineflura servers..._`);
+        await reply(`🔍 _Searching for *"${q}"* on Cineflura servers..._`);
 
-        const response = await axios.get(BOT_CONFIG.SEARCH_API_URL, {
+        const response = await axios.get(SEARCH_API_URL, {
             params: { 
-                apikey: BOT_CONFIG.API_KEY, 
-                q: searchQuery
+                apikey: API_KEY, 
+                q: q
             },
             timeout: 30000
         });
@@ -94,13 +90,13 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
 
         if (!results || results.length === 0) {
             await react("❌");
-            return reply(`🛸 *No Results Found!*\nCineflura par *"${searchQuery}"* naam ki koi movie nahi mili.`);
+            return reply(`🛸 *No Results Found!*\nCineflura par *"${q}"* naam ki koi movie nahi mili.`);
         }
 
         let listText = `┏━━━━━━━━━━━━━━━━━━━━━━┓\n`;
         listText += `┃ 🎬  *CINEFLURA SEARCH*  🎬 ┃\n`;
         listText += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-        listText += `🔎 *Query:* \`${searchQuery.toUpperCase()}\`\n`;
+        listText += `🔎 *Query:* \`${q.toUpperCase()}\`\n`;
         listText += `✨ *Results Found:* ${results.length}\n\n`;
         listText += `┌─────────────────────┐\n`;
 
@@ -114,7 +110,7 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
 
         listText += `└─────────────────────┘\n\n`;
         listText += `⚡ *Reply with the item number* to view download options.\n\n`;
-        listText += `> *© ${BOT_CONFIG.BOT_NAME}*`;
+        listText += `> *© ${BOT_NAME}*`;
 
         const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -147,9 +143,9 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
 
                 await react("⏳");
 
-                const detailResponse = await axios.get(BOT_CONFIG.DETAILS_API_URL, {
+                const detailResponse = await axios.get(DETAILS_API_URL, {
                     params: { 
-                        apikey: BOT_CONFIG.API_KEY, 
+                        apikey: API_KEY, 
                         url: selected.url
                     },
                     timeout: 30000
@@ -173,24 +169,31 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
                 cap += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
                 cap += `📋 *Type:* \`${movieDetails.type || 'Movie'}\`\n`;
                 cap += `📅 *Year:* ${movieDetails.year || 'N/A'}\n`;
-                cap += `🗣️ *Language:* ${movieDetails.language || 'N/A'}\n\n`;
+                cap += `🌍 *Country:* ${movieDetails.country || 'N/A'}\n`;
+                cap += `🗣️ *Language:* ${movieDetails.language || 'N/A'}\n`;
+                cap += `🎭 *Genre:* ${movieDetails.genre || 'N/A'}\n`;
+                cap += `🎬 *Director:* ${movieDetails.director || 'N/A'}\n\n`;
+                
+                if (movieDetails.story) {
+                    const story = movieDetails.story.length > 200 ? movieDetails.story.substring(0, 200) + '...' : movieDetails.story;
+                    cap += `📝 *Story:* \n_${story}_\n\n`;
+                }
                 
                 cap += `┌───────── DOWNLOADS ─────────┐\n`;
                 
                 downloads.forEach((dl, i) => {
                     const sizeMB = parseSizeToMB(dl.size);
-                    const isTooBig = sizeMB > BOT_CONFIG.MAX_SIZE_MB;
-                    const statusTag = isTooBig ? " ⚠️ (Over 1GB - Blocked)" : "";
-                    
+                    const isTooBig = sizeMB > MAX_SIZE_MB;
+                    const statusTag = isTooBig ? " ⚠️ (Over 1GB)" : "";
+
                     cap += `┃ 🔥 *[${i + 1}]* Quality: \`${dl.quality || 'HD'}\`\n`;
                     cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`${statusTag}\n`;
                     if (i !== downloads.length - 1) cap += `┃─────────────────────┃\n`;
                 });
 
                 cap += `└─────────────────────────────┘\n\n`;
-                cap += `⚠️ *Note:* Files larger than 1GB will be blocked to prevent bot crash.\n`;
                 cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
-                cap += `> *© ${BOT_CONFIG.BOT_NAME}*`;
+                cap += `> *© ${BOT_NAME}*`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -210,21 +213,20 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
                         const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
                         if (dlCtx?.stanzaId !== detailMsgId) return;
 
-                        const pick = (dlMsg.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
+                        const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
                         const dlNum = parseInt(pick);
                         if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
 
                         const selectedDl = downloads[dlNum - 1];
                         if (!selectedDl) return;
 
-                        // Check File Size before attempting download
+                        // Check 1GB Limit to prevent bot crash
                         const sizeMB = parseSizeToMB(selectedDl.size);
-                        if (sizeMB > BOT_CONFIG.MAX_SIZE_MB) {
+                        if (sizeMB > MAX_SIZE_MB) {
                             await react("🚫");
                             return reply(
-                                `🚫 *File Size Limit Exceeded!*\n\n` +
-                                `This file is *${selectedDl.size}*, which exceeds the maximum allowed limit of *1GB (1024MB)*.\n` +
-                                `Please select a lower quality/smaller size to avoid crashing the bot.`
+                                `🚫 *File Exceeds 1GB Limit!*\n\n` +
+                                `This file is *${selectedDl.size}*. To prevent the bot from crashing, files larger than 1GB cannot be downloaded.`
                             );
                         }
 
@@ -242,7 +244,7 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
 
-                        await reply(`🚀 *Processing Cineflura File...*\nSize: *${selectedDl.size}* (Safe under 1GB)\nUploading document, please wait!`);
+                        await reply(`🚀 *Processing Cineflura File...* \nUploading document. Please wait!`);
 
                         let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         finalCaption += `┃ 🎬 *${movieDetails.title || selected.title}*\n`;
@@ -250,7 +252,7 @@ cmd(CMD_METADATA, async (conn, mek, m, { from, quoted, body, args, q, reply, rea
                         finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
                         finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += `> *© ${BOT_CONFIG.BOT_NAME}*`;
+                        finalCaption += `> *© ${BOT_NAME}*`;
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         

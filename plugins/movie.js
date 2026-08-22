@@ -267,4 +267,4 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
     }
 });
 
-ISKO LOCK KAR DO NAAM BHI LOCK KAR DO AUR API KI BHI LOCK KAR DO
+// ISKO LOCK KAR DO NAAM BHI LOCK KAR DO AUR API KI BHI LOCK KAR DO

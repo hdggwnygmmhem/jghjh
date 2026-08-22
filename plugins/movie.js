@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 async function getThumbnailBuffer(url) {
   if (!url) return null;
   try {
-    const { data } = await axios.get(url, { responseType: "arraybuffer", timeout: 10000 });
+    const { data } = await axios.get(url, { responseType: "arraybuffer" });
     return await sharp(data)
       .resize(300, 300)
       .jpeg({ quality: 80 })
@@ -181,9 +181,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
-                    let dlMsg = null;
                     try {
-                        dlMsg = up.messages[0];
+                        const dlMsg = up.messages[0];
                         if (!dlMsg?.message || dlMsg.key.remoteJid !== from) return;
 
                         const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
@@ -201,18 +200,12 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
-                        let rawUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
+                        // Get direct download URL
+                        let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
                         
-                        if (!rawUrl) {
+                        if (!targetFileUrl) {
                             await react("❌");
                             return reply("❌ *Error:* Direct download link could not be resolved.");
-                        }
-
-                        // Direct Pixeldrain File API endpoint
-                        let targetFileUrl = rawUrl;
-                        if (rawUrl.includes('pixeldrain.com/u/')) {
-                            const fileId = rawUrl.split('/u/')[1]?.trim().split('?')[0];
-                            if (fileId) targetFileUrl = `https://pixeldrain.com/api/file/${fileId}`;
                         }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
@@ -229,21 +222,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
-                        // Buffer Fetch instead of Stream to prevent ENOENT errors
-                        const fileBufferResponse = await axios.get(targetFileUrl, {
-                            responseType: 'arraybuffer',
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                                'Accept': '*/*',
-                                'Referer': 'https://pixeldrain.com/'
-                            },
-                            timeout: 300000
-                        });
-
-                        const fileBuffer = Buffer.from(fileBufferResponse.data);
-
                         let documentPayload = {
-                            document: fileBuffer,
+                            document: { url: targetFileUrl },
                             mimetype: "video/mp4",
                             fileName: cleanFileName,
                             caption: finalCaption
@@ -258,12 +238,6 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                     } catch (dlErr) {
                         console.error("Cineflura download failed:", dlErr.message);
-                        if (dlMsg?.key) {
-                            await client.sendMessage(from, { react: { text: "❌", key: dlMsg.key } });
-                        } else {
-                            await react("❌");
-                        }
-                        
                         reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
                     }
                 };

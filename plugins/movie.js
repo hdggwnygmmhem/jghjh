@@ -266,5 +266,3 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         return reply(`❌ *Error Processing Request:* ${e.message}`);
     }
 });
-
-// ISKO LOCK KAR DO NAAM BHI LOCK KAR DO AUR API KI BHI LOCK KAR DO

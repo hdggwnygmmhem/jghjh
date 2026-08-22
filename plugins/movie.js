@@ -181,8 +181,9 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
+                    let dlMsg = null;
                     try {
-                        const dlMsg = up.messages[0];
+                        dlMsg = up.messages[0];
                         if (!dlMsg?.message || dlMsg.key.remoteJid !== from) return;
 
                         const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
@@ -207,7 +208,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                             return reply("❌ *Error:* Direct download link could not be resolved.");
                         }
 
-                        // Fix Pixeldrain Web URL to direct stream API URL
+                        // Pixeldrain URL format fix
                         let targetFileUrl = rawUrl;
                         if (rawUrl.includes('pixeldrain.com/u/')) {
                             const fileId = rawUrl.split('/u/')[1]?.trim().split('?')[0];
@@ -228,12 +229,14 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
-                        // Fetch stream with headers to bypass cloud/Heroku restrictions
+                        // Added full browser headers to avoid 403 Forbidden on Pixeldrain
                         const streamResponse = await axios.get(targetFileUrl, {
                             responseType: 'stream',
                             headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                                'Accept': '*/*'
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                                'Accept-Language': 'en-US,en;q=0.5',
+                                'Referer': 'https://pixeldrain.com/'
                             },
                             timeout: 300000
                         });
@@ -254,8 +257,17 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                     } catch (dlErr) {
                         console.error("Cineflura download failed:", dlErr.message);
-                        await client.sendMessage(from, { react: { text: "❌", key: dlMsg.key } });
-                        reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
+                        if (dlMsg?.key) {
+                            await client.sendMessage(from, { react: { text: "❌", key: dlMsg.key } });
+                        } else {
+                            await react("❌");
+                        }
+                        
+                        if (dlErr.response && dlErr.response.status === 403) {
+                            reply("❌ *Download Blocked (403):* Pixeldrain has restricted direct server streaming for this file.");
+                        } else {
+                            reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
+                        }
                     }
                 };
 

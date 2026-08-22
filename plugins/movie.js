@@ -31,10 +31,10 @@ cmd({
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
-    // API CONFIGURATION
-    const apiKey = "VajiraOfc";
-    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/search`;
-    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/details`;
+    // API CONFIGURATION (BASE64 LOCKED)
+    const apiKey = Buffer.from("VmFqaXJhT2Zj", "base64").toString("utf-8");
+    const searchApiUrl = Buffer.from("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo", "base64").toString("utf-8");
+    const detailsApiUrl = Buffer.from("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw==", "base64").toString("utf-8");
 
     try {
         await react("🎬");

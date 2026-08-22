@@ -36,8 +36,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
     const searchApiUrl = Buffer.from("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo", "base64").toString("utf-8");
     const detailsApiUrl = Buffer.from("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw==", "base64").toString("utf-8");
     
-    // HIDDEN CREDIT (BASE64)
-    const devCredit = Buffer.from("PiAqwqkgSkFXQUQtTUQg47eAKg==", "base64").toString("utf-8");
+    // UPDATED FOOTER WATERMARK (KAMRAN-MD - BASE64)
+    const devCredit = Buffer.from("PiAqwqkgS0FNUkFOLU1EIOfvgKA=", "base64").toString("utf-8");
 
     try {
         await react("🎬");

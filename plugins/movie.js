@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const _d = (str) => Buffer.from(str, 'base64').toString('utf-8');
 
 // ================= SIRF CONFIGURATION LOCKED =================
-const BOT_NAME = Object.freeze(_d("S0FNUkFOIE1EIOC4gA==")); // "KAMRAN MD ッ"
+const BOT_NAME = Object.freeze(_d("SkFXQUQgTUQg44OD")); // "JAWAD MD ッ"
 const API_KEY = Object.freeze(_d("VmFqaXJhT2Zj")); // "VajiraOfc"
 const SEARCH_API_URL = Object.freeze(_d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo"));
 const DETAILS_API_URL = Object.freeze(_d("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw=="));
@@ -220,7 +220,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         const selectedDl = downloads[dlNum - 1];
                         if (!selectedDl) return;
 
-                        // Check 1GB Limit to prevent bot crash
+                        // Check 1GB Limit
                         const sizeMB = parseSizeToMB(selectedDl.size);
                         if (sizeMB > MAX_SIZE_MB) {
                             await react("🚫");
@@ -244,7 +244,18 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
 
-                        await reply(`🚀 *Processing Cineflura File...* \nUploading document. Please wait!`);
+                        await reply(`🚀 *Downloading & Processing File...*\nPlease wait, sending document soon!`);
+
+                        // FIX: Axios ArrayBuffer for PixelDrain bypass
+                        const fileRes = await axios.get(targetFileUrl, {
+                            responseType: 'arraybuffer',
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+                            },
+                            timeout: 180000
+                        });
+
+                        const fileBuffer = Buffer.from(fileRes.data);
 
                         let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         finalCaption += `┃ 🎬 *${movieDetails.title || selected.title}*\n`;
@@ -257,7 +268,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
                         let documentPayload = {
-                            document: { url: targetFileUrl },
+                            document: fileBuffer,
                             mimetype: "video/mp4",
                             fileName: cleanFileName,
                             caption: finalCaption

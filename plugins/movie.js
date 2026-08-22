@@ -208,7 +208,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                             return reply("❌ *Error:* Direct download link could not be resolved.");
                         }
 
-                        // Pixeldrain URL format fix
+                        // Direct Pixeldrain File API endpoint
                         let targetFileUrl = rawUrl;
                         if (rawUrl.includes('pixeldrain.com/u/')) {
                             const fileId = rawUrl.split('/u/')[1]?.trim().split('?')[0];
@@ -229,20 +229,21 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
-                        // Added full browser headers to avoid 403 Forbidden on Pixeldrain
-                        const streamResponse = await axios.get(targetFileUrl, {
-                            responseType: 'stream',
+                        // Buffer Fetch instead of Stream to prevent ENOENT errors
+                        const fileBufferResponse = await axios.get(targetFileUrl, {
+                            responseType: 'arraybuffer',
                             headers: {
                                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                                'Accept-Language': 'en-US,en;q=0.5',
+                                'Accept': '*/*',
                                 'Referer': 'https://pixeldrain.com/'
                             },
                             timeout: 300000
                         });
 
+                        const fileBuffer = Buffer.from(fileBufferResponse.data);
+
                         let documentPayload = {
-                            document: streamResponse.data,
+                            document: fileBuffer,
                             mimetype: "video/mp4",
                             fileName: cleanFileName,
                             caption: finalCaption
@@ -263,11 +264,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                             await react("❌");
                         }
                         
-                        if (dlErr.response && dlErr.response.status === 403) {
-                            reply("❌ *Download Blocked (403):* Pixeldrain has restricted direct server streaming for this file.");
-                        } else {
-                            reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
-                        }
+                        reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
                     }
                 };
 

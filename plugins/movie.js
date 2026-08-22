@@ -89,7 +89,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         listText += `└─────────────────────┘\n\n`;
         listText += `⚡ *Reply with the item number* to view download options.\n\n`;
-        listText += `> *© JAWAD-MM ッ*`;
+        listText += `> *© JAWAD-MD ッ*`;
 
         const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 

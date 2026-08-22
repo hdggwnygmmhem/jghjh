@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 async function getThumbnailBuffer(url) {
   if (!url) return null;
   try {
-    const { data } = await axios.get(url, { responseType: "arraybuffer" });
+    const { data } = await axios.get(url, { responseType: "arraybuffer", timeout: 10000 });
     return await sharp(data)
       .resize(300, 300)
       .jpeg({ quality: 80 })
@@ -200,12 +200,18 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
-                        // Get direct download URL
-                        let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
+                        let rawUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
                         
-                        if (!targetFileUrl) {
+                        if (!rawUrl) {
                             await react("❌");
                             return reply("❌ *Error:* Direct download link could not be resolved.");
+                        }
+
+                        // Fix Pixeldrain Web URL to direct stream API URL
+                        let targetFileUrl = rawUrl;
+                        if (rawUrl.includes('pixeldrain.com/u/')) {
+                            const fileId = rawUrl.split('/u/')[1]?.trim().split('?')[0];
+                            if (fileId) targetFileUrl = `https://pixeldrain.com/api/file/${fileId}`;
                         }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
@@ -222,8 +228,18 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
+                        // Fetch stream with headers to bypass cloud/Heroku restrictions
+                        const streamResponse = await axios.get(targetFileUrl, {
+                            responseType: 'stream',
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Accept': '*/*'
+                            },
+                            timeout: 300000
+                        });
+
                         let documentPayload = {
-                            document: { url: targetFileUrl },
+                            document: streamResponse.data,
                             mimetype: "video/mp4",
                             fileName: cleanFileName,
                             caption: finalCaption
@@ -238,6 +254,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                     } catch (dlErr) {
                         console.error("Cineflura download failed:", dlErr.message);
+                        await client.sendMessage(from, { react: { text: "❌", key: dlMsg.key } });
                         reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
                     }
                 };

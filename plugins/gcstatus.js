@@ -1,147 +1,110 @@
-import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "groupstatus",
-    alias: ["statusgc", "gcstatus", "swgc"],
-    desc: "Post group status with media or text (mentions all members)",
+    pattern: "gcstatus",
+    alias: ["gstatus", "groupstatus"],
+    desc: "Send status with mentions to current group or all groups.",
     category: "group",
-    react: "📢",
+    react: "📡",
     filename: __filename
-}, async (conn, mek, m, { from, text, reply, isCreator, isGroup }) => {
-    // Check if user is owner
-    if (!isCreator) return reply("❌ This command is only for owners!");
-    
-    // Check if in group
-    if (!isGroup) return reply("❌ This command can only be used in groups!");
-    
+}, async (conn, mek, m, { from, text, reply, isCreator }) => {
+
+    // ── Owner Check ──
+    if (!isCreator) return reply("❌ This command is only for the *bot owner*!");
+
     try {
-        // Get the quoted message
+        const args = text?.trim().split(" ") || [];
+        const isAll = args[0]?.toLowerCase() === "all";
+        const caption = isAll ? args.slice(1).join(" ") : text?.trim() || "";
+        
         const quotedMsg = m.quoted;
-        
-        // Get mime type properly
-        const mimeType = quotedMsg ? (quotedMsg.msg || quotedMsg).mimetype || '' : '';
-        
-        // Get caption/text
-        const caption = text?.trim() || "";
-        
-        // Check if there's content to send
-        if (!quotedMsg && !caption) {
+        const mimeType = quotedMsg ? (quotedMsg.msg || quotedMsg).mimetype || "" : "";
+
+        if (!quotedMsg && !caption && !isAll) {
             return reply(
-                `⚠️ Reply to media or provide text!\n\n` +
-                `Examples:\n` +
-                `• .gcstatus Hello everyone\n` +
-                `• Reply to an image with: .gcstatus`
+                `📡 *GC Status Usage:*\n\n` +
+                `*Single GC:* \`.gcstatus Hello\`\n` +
+                `*All GCs:* \`.gcstatus all Hello\`\n\n` +
+                `━━━━━━━━━━━━━━━━━━\n` +
+                `~ *KAMRAN-MD*`
             );
         }
-        
-        // Send loading reaction
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-        
-        // Get all group members for mention
-        const groupMetadata = await conn.groupMetadata(from);
-        const participants = groupMetadata.participants;
-        const mentionedJid = participants.map(p => p.id);
-        
-        let messageContent = {};
-        
-        // If there's quoted media
+
+        // ── Download Media Once ──
+        let mediaBuffer = null;
         if (quotedMsg) {
-            // Download media
-            const mediaBuffer = await quotedMsg.download();
-            if (!mediaBuffer) throw new Error("Failed to download media");
-            
-            // Add status context with mentions
-            const contextInfo = {
-                isGroupStatus: true,
-                mentionedJid: mentionedJid
-            };
-            
-            // Handle different media types based on mimeType
-            if (mimeType.startsWith('image/')) {
-                // Image message
-                messageContent = {
-                    image: mediaBuffer,
-                    caption: caption || "",
-                    mimetype: mimeType,
-                    contextInfo: contextInfo
-                };
-            } 
-            else if (mimeType.startsWith('video/')) {
-                // Video message
-                messageContent = {
-                    video: mediaBuffer,
-                    caption: caption || "",
-                    mimetype: mimeType,
-                    contextInfo: contextInfo
-                };
-            } 
-            else if (mimeType.startsWith('audio/')) {
-                // Check if it's a voice note
-                const isPTT = quotedMsg.message?.audioMessage?.ptt || false;
-                
-                messageContent = {
-                    audio: mediaBuffer,
-                    mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4',
-                    ptt: isPTT,
-                    contextInfo: contextInfo
-                };
-            }
-            else {
-                // Try to detect by message type as fallback
-                const msgType = Object.keys(quotedMsg.message || {})[0];
-                
-                if (msgType === 'imageMessage') {
-                    messageContent = {
-                        image: mediaBuffer,
-                        caption: caption || "",
-                        mimetype: 'image/jpeg',
-                        contextInfo: contextInfo
-                    };
-                }
-                else if (msgType === 'videoMessage') {
-                    messageContent = {
-                        video: mediaBuffer,
-                        caption: caption || "",
-                        mimetype: 'video/mp4',
-                        contextInfo: contextInfo
-                    };
-                }
-                else if (msgType === 'audioMessage' || msgType === 'pttMessage') {
-                    messageContent = {
-                        audio: mediaBuffer,
-                        mimetype: msgType === 'pttMessage' ? 'audio/ogg; codecs=opus' : 'audio/mp4',
-                        ptt: msgType === 'pttMessage',
-                        contextInfo: contextInfo
-                    };
-                }
-                else {
-                    return reply("❌ Unsupported media type! Please reply to an image, video, or audio file.");
-                }
-            }
-        } 
-        // If only text
-        else if (caption) {
-            messageContent = {
-                text: caption,
-                contextInfo: {
-                    isGroupStatus: true,
-                    mentionedJid: mentionedJid
-                }
-            };
+            mediaBuffer = await quotedMsg.download();
         }
-        
-        // Send the status with mentions
-        await conn.sendMessage(from, messageContent, { quoted: mek });
-        
-        // Success reaction only - no mention count message
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-        
+
+        const getMsgType = () => {
+            if (mimeType.startsWith("image/")) return "image";
+            if (mimeType.startsWith("video/")) return "video";
+            if (mimeType.startsWith("audio/")) return "audio";
+            return null;
+        };
+
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+
+        // ── LOOP 1: Single Group Logic ──────────────────────────────────
+        if (!isAll) {
+            const groupMetadata = await conn.groupMetadata(from);
+            const mentionedJid = (groupMetadata.participants || []).map(p => p.id);
+            const contextInfo = { mentionedJid, isGroupStatus: true };
+
+            let messageContent = {};
+            if (mediaBuffer) {
+                const type = getMsgType();
+                if (type === "image") messageContent = { image: mediaBuffer, caption, contextInfo };
+                else if (type === "video") messageContent = { video: mediaBuffer, caption, contextInfo };
+                else if (type === "audio") messageContent = { audio: mediaBuffer, mimetype: mimeType, ptt: mimeType.includes("ogg"), contextInfo };
+            } else {
+                messageContent = { text: caption, contextInfo };
+            }
+
+            await conn.sendMessage(from, messageContent);
+            await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+            return reply("✅ *Status sent to this group successfully!*");
+        }
+
+        // ── LOOP 2: All Groups (Broadcast) Logic ────────────────────────
+        if (isAll) {
+            const allChats = await conn.groupFetchAllParticipating();
+            const allGroups = Object.values(allChats);
+            let successCount = 0;
+
+            for (const group of allGroups) {
+                try {
+                    const mentionedJid = (group.participants || []).map(p => p.id);
+                    const contextInfo = { mentionedJid, isGroupStatus: true };
+
+                    let messageContent = {};
+                    if (mediaBuffer) {
+                        const type = getMsgType();
+                        if (type === "image") messageContent = { image: mediaBuffer, caption, contextInfo };
+                        else if (type === "video") messageContent = { video: mediaBuffer, caption, contextInfo };
+                        else if (type === "audio") messageContent = { audio: mediaBuffer, mimetype: mimeType, ptt: mimeType.includes("ogg"), contextInfo };
+                    } else {
+                        messageContent = { text: caption, contextInfo };
+                    }
+
+                    await conn.sendMessage(group.id, messageContent);
+                    successCount++;
+                    
+                    // Delay to avoid spam filters
+                    await new Promise(r => setTimeout(r, 1000)); 
+                } catch (err) {
+                    console.error(`Failed for ${group.id}:`, err.message);
+                }
+            }
+
+            await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+            return reply(`✅ *Broadcast Finished!*\n\n*Sent to:* ${successCount} groups.\n━━━━━━━━━━━━━━━━━━\n~ *KAMRAN-MD*`);
+        }
+
     } catch (error) {
-        console.error("Group Status Error:", error);
-        reply(`❌ Error: ${error.message}`);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        reply(`❌ *Error:* ${error.message}`);
     }
 });

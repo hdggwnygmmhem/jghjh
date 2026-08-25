@@ -31,7 +31,6 @@ cmd({
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
-    // API CONFIGURATION
     const apiKey = "VajiraOfc";
     const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxs`;
     const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxdl`;
@@ -100,7 +99,6 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         const searchMsgId = sentSearch.key.id;
         let detailsTimeout;
 
-        // ================= INTERACTIVE STEP: DETAILS & DOWNLOAD HANDLER =================
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages[0];
@@ -122,14 +120,14 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 await react("⏳");
                 await reply(`🚀 *Fetching MovieBox File...*\nProcessing download link. Please wait!`);
 
-                // Construct parameters dynamically based on API fields returned in search
                 const dlParams = {
                     apikey: apiKey,
                     subjectId: selected.subjectId || selected.id,
-                    detailPath: selected.detailPath || selected.path,
-                    season: selected.season || 1,
-                    episode: selected.episode || 1
+                    detailPath: selected.detailPath || selected.path
                 };
+
+                if (selected.season) dlParams.season = selected.season;
+                if (selected.episode) dlParams.episode = selected.episode;
 
                 const detailResponse = await axios.get(detailsApiUrl, {
                     params: dlParams,
@@ -141,12 +139,17 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                     return reply("❌ *Error:* Failed to fetch download details from MovieBox API.");
                 }
 
-                const dlData = detailResponse.data;
-                const downloadUrl = dlData.downloadUrl || dlData.url || dlData.link || dlData.data?.url || (Array.isArray(dlData.downloads) ? dlData.downloads[0]?.url : null);
+                const dlData = detailResponse.data.result || detailResponse.data.data || detailResponse.data;
+                
+                // Extract direct video file URL from multiple possible API structures
+                let targetUrl = dlData.downloadUrl || dlData.url || dlData.link || dlData.file;
+                if (!targetUrl && dlData.downloads && dlData.downloads.length > 0) {
+                    targetUrl = dlData.downloads[0].url || dlData.downloads[0].link || dlData.downloads[0].downloadUrl;
+                }
 
-                if (!downloadUrl) {
+                if (!targetUrl) {
                     await react("❌");
-                    return reply("❌ *Sorry:* Could not extract a direct download URL for this item.");
+                    return reply("❌ *Sorry:* Could not extract a direct file URL for this item.");
                 }
 
                 const itemTitle = selected.title || selected.name || "Movie";
@@ -160,11 +163,17 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
                 finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
 
+                // Stream video file directly to handle servers that reject Baileys' default user-agent
+                const mediaStream = await axios.get(targetUrl, { 
+                    responseType: 'stream',
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+
                 const posterUrl = selected.poster || selected.imageUrl || selected.cover;
                 const thumbBuffer = await getThumbnailBuffer(posterUrl);
                 
                 let documentPayload = {
-                    document: { url: downloadUrl },
+                    document: { stream: mediaStream.data },
                     mimetype: "video/mp4",
                     fileName: cleanFileName,
                     caption: finalCaption
@@ -179,7 +188,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
             } catch (detErr) {
                 console.error("MovieBox process failed:", detErr.message);
-                reply(`❌ An error occurred while processing download: ${detErr.message}`);
+                reply(`❌ An error occurred during file delivery: ${detErr.message}`);
             }
         };
 

@@ -1,7 +1,7 @@
 // KAMRAN-MD ALWAYS ON TOP 💜
 
 import { cmd } from '../command.js';
-import * as audioEditor from '../lib/audioeditor.js';
+import * as audioEditor from '../lib/audio-editr.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);

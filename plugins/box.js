@@ -63,7 +63,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             return reply("🛸 *API Error:* Server responded with an invalid status.");
         }
 
-        let results = response.data.results || response.data.result || (Array.isArray(response.data) ? response.data : []);
+        let results = response.data.results || response.data.result || response.data.data || (Array.isArray(response.data) ? response.data : []);
 
         if (!results || results.length === 0) {
             await react("❌");
@@ -120,10 +120,12 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 await react("⏳");
 
+                const targetDetailUrl = selected.url || selected.link || selected.href;
+
                 const detailResponse = await axios.get(detailsApiUrl, {
                     params: { 
                         apikey: apiKey, 
-                        url: selected.url || selected.link 
+                        url: targetDetailUrl 
                     },
                     timeout: 30000
                 });
@@ -133,8 +135,17 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                     return reply("❌ *Error:* Failed to load details for this item.");
                 }
 
-                const movieData = detailResponse.data.result || detailResponse.data.movie || detailResponse.data;
-                const downloads = movieData.downloads || movieData.links || [];
+                const resData = detailResponse.data;
+                const movieData = resData.result || resData.movie || resData.data || resData;
+                
+                // Deep extraction for all potential link array structures returned by API
+                const downloads = movieData.downloads || 
+                                  movieData.links || 
+                                  movieData.dl_links || 
+                                  movieData.downloadLinks || 
+                                  movieData.drive_links || 
+                                  resData.downloads || 
+                                  resData.links || [];
 
                 if (!downloads || downloads.length === 0) {
                     await react("❌");
@@ -145,8 +156,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 cap += `┃ 🎥 *${movieData.title || selected.title}*\n`;
                 cap += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
                 
-                if (movieData.synopsis || movieData.story) {
-                    const storyText = movieData.synopsis || movieData.story;
+                if (movieData.synopsis || movieData.story || movieData.description) {
+                    const storyText = movieData.synopsis || movieData.story || movieData.description;
                     const story = storyText.length > 200 ? storyText.substring(0, 200) + '...' : storyText;
                     cap += `📝 *Story:* \n_${story}_\n\n`;
                 }
@@ -154,8 +165,10 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 cap += `┌───────── DOWNLOADS ─────────┐\n`;
                 
                 downloads.forEach((dl, i) => {
-                    cap += `┃ 🔥 *[${i + 1}]* Quality: \`${dl.quality || dl.title || 'HD'}\`\n`;
-                    cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`\n`;
+                    const qName = dl.quality || dl.title || dl.name || dl.server || 'HD Stream';
+                    const qSize = dl.size || dl.fileSize || 'Unknown';
+                    cap += `┃ 🔥 *[${i + 1}]* Quality: \`${qName}\`\n`;
+                    cap += `┃ └─ 📦 Size: \`${qSize}\`\n`;
                     if (i !== downloads.length - 1) cap += `┃─────────────────────┃\n`;
                 });
 
@@ -163,7 +176,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
                 cap += `> *© KAMRAN-MINI-BOT ッ*`;
 
-                const detailImg = movieData.img || movieData.poster || selected.img || "https://placehold.co/600x400?text=No+Poster";
+                const detailImg = movieData.img || movieData.poster || movieData.image || selected.img || "https://placehold.co/600x400?text=No+Poster";
 
                 const sentDetail = await client.sendMessage(from, {
                     image: { url: detailImg },
@@ -194,34 +207,35 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         await reply(`🚀 *Resolving MovieDriveBD Link...*\nFetching binary stream. Please wait!`);
 
-                        // Query final download resolver endpoint
+                        const linkToResolve = selectedDl.url || selectedDl.link || selectedDl.href;
+
                         const finalDlRes = await axios.get(downloadApiUrl, {
                             params: {
                                 apikey: apiKey,
-                                url: selectedDl.url || selectedDl.link
+                                url: linkToResolve
                             },
                             timeout: 45000
                         });
 
                         const dlPayload = finalDlRes.data.result || finalDlRes.data || {};
-                        const directUrl = dlPayload.url || dlPayload.downloadUrl || dlPayload.link || dlPayload.directUrl;
+                        const directUrl = dlPayload.url || dlPayload.downloadUrl || dlPayload.link || dlPayload.directUrl || dlPayload.file;
 
                         if (!directUrl) {
                             await react("❌");
                             return reply("❌ *Error:* Direct file download link could not be generated.");
                         }
 
-                        const cleanFileName = `${(movieData.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
+                        const qualityLabel = selectedDl.quality || selectedDl.title || 'HD';
+                        const cleanFileName = `${(movieData.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${qualityLabel.replace(/[^a-zA-Z0-9]/g, "")}.mp4`;
 
                         let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         finalCaption += `┃ 🎬 *${movieData.title || selected.title}*\n`;
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
-                        finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
+                        finalCaption += `┃ 🌟 *Quality:* ${qualityLabel}\n`;
+                        finalCaption += `┃ 📦 *Size:* ${selectedDl.size || dlPayload.size || 'N/A'}\n`;
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
                         finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
 
-                        // Stream binary data directly to handle user-agent authentication requirements
                         const fileStream = await axios.get(directUrl, {
                             responseType: 'stream',
                             headers: { 'User-Agent': 'Mozilla/5.0' }

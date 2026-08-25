@@ -22,18 +22,20 @@ async function getThumbnailBuffer(url) {
 }
 
 cmd({
-    pattern: "moviebox",
-    alias: ["mbox", "movieboxdl"],
-    desc: "Search and download movies/series from MovieBox API",
+    pattern: "moviedrive",
+    alias: ["mdd", "moviedrivebd"],
+    desc: "Search and download movies from MovieDriveBD API",
     category: "downloader",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
+    // API CONFIGURATION
     const apiKey = "VajiraOfc";
-    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxs`;
-    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/movieboxdl`;
+    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/moviedrivebd/search`;
+    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/moviedrivebd/details`;
+    const downloadApiUrl = `https://vajiraofc-apis.vercel.app/api/moviedrivebd/download`;
 
     try {
         await react("🎬");
@@ -41,19 +43,17 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         if (!q) {
             return reply(
                 "❌ *Opps! Title Missing* ❌\n\n" +
-                "Please provide a movie or show name to search!\n" +
-                "📌 *Example:* `.moviebox Inception`"
+                "Please provide a movie name to search!\n" +
+                "📌 *Example:* `.moviedrive 2026`"
             );
         }
 
-        await reply(`🔍 _Searching for *"${q}"* on MovieBox servers..._`);
+        await reply(`🔍 _Searching for *"${q}"* on MovieDriveBD servers..._`);
 
         const response = await axios.get(searchApiUrl, {
             params: { 
                 apikey: apiKey, 
-                query: q,
-                page: 1,
-                perPage: 24
+                q: q 
             },
             timeout: 30000
         });
@@ -63,15 +63,15 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             return reply("🛸 *API Error:* Server responded with an invalid status.");
         }
 
-        let results = response.data.results || response.data.data || (Array.isArray(response.data) ? response.data : []);
+        let results = response.data.results || response.data.result || (Array.isArray(response.data) ? response.data : []);
 
         if (!results || results.length === 0) {
             await react("❌");
-            return reply(`🛸 *No Results Found!*\nMovieBox par *"${q}"* naam ki koi movie nahi mili.`);
+            return reply(`🛸 *No Results Found!*\nMovieDriveBD par *"${q}"* naam ki koi movie nahi mili.`);
         }
 
         let listText = `┏━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-        listText += `┃ 🎬  *MOVIEBOX SEARCH*  🎬 ┃\n`;
+        listText += `┃ 🎬  *MOVIEDRIVEBD SEARCH*  🎬 ┃\n`;
         listText += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
         listText += `🔎 *Query:* \`${q.toUpperCase()}\`\n`;
         listText += `✨ *Results Found:* ${results.length}\n\n`;
@@ -81,15 +81,15 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             const title = v.title || v.name || 'Unknown Title';
             const displayTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
             listText += `┃ 🎥 *[${i + 1}]* _${displayTitle}_\n`;
-            listText += `┃ └─ 📊 Rating: ${v.rating || v.score || 'N/A'} | ${v.type || 'Movie/Series'}\n`;
+            listText += `┃ └─ 📊 Type: ${v.type || 'Movie'}\n`;
             if (i !== results.length - 1) listText += `┃─────────────────────┃\n`;
         });
 
         listText += `└─────────────────────┘\n\n`;
-        listText += `⚡ *Reply with the item number* to download.\n\n`;
+        listText += `⚡ *Reply with the item number* to view options.\n\n`;
         listText += `> *© KAMRAN-MINI-BOT ッ*`;
 
-        const firstImage = results[0].poster || results[0].imageUrl || results[0].cover || "https://placehold.co/600x400?text=No+Poster";
+        const firstImage = results[0].img || results[0].image || results[0].poster || "https://placehold.co/600x400?text=No+Poster";
 
         const sentSearch = await client.sendMessage(from, {
             image: { url: firstImage },
@@ -97,8 +97,9 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         }, { quoted: mek });
 
         const searchMsgId = sentSearch.key.id;
-        let detailsTimeout;
+        let detailsTimeout, downloadTimeout;
 
+        // ================= INTERACTIVE STEP 1: DETAILS HANDLER =================
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages[0];
@@ -118,77 +119,145 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 clearTimeout(detailsTimeout);
 
                 await react("⏳");
-                await reply(`🚀 *Fetching MovieBox File...*\nProcessing download link. Please wait!`);
-
-                const dlParams = {
-                    apikey: apiKey,
-                    subjectId: selected.subjectId || selected.id,
-                    detailPath: selected.detailPath || selected.path
-                };
-
-                if (selected.season) dlParams.season = selected.season;
-                if (selected.episode) dlParams.episode = selected.episode;
 
                 const detailResponse = await axios.get(detailsApiUrl, {
-                    params: dlParams,
-                    timeout: 45000
+                    params: { 
+                        apikey: apiKey, 
+                        url: selected.url || selected.link 
+                    },
+                    timeout: 30000
                 });
 
                 if (detailResponse.status !== 200 || !detailResponse.data) {
                     await react("❌");
-                    return reply("❌ *Error:* Failed to fetch download details from MovieBox API.");
+                    return reply("❌ *Error:* Failed to load details for this item.");
                 }
 
-                const dlData = detailResponse.data.result || detailResponse.data.data || detailResponse.data;
-                
-                // Extract direct video file URL from multiple possible API structures
-                let targetUrl = dlData.downloadUrl || dlData.url || dlData.link || dlData.file;
-                if (!targetUrl && dlData.downloads && dlData.downloads.length > 0) {
-                    targetUrl = dlData.downloads[0].url || dlData.downloads[0].link || dlData.downloads[0].downloadUrl;
-                }
+                const movieData = detailResponse.data.result || detailResponse.data.movie || detailResponse.data;
+                const downloads = movieData.downloads || movieData.links || [];
 
-                if (!targetUrl) {
+                if (!downloads || downloads.length === 0) {
                     await react("❌");
-                    return reply("❌ *Sorry:* Could not extract a direct file URL for this item.");
+                    return reply("❌ *Sorry:* No download mirrors located for this item.");
                 }
 
-                const itemTitle = selected.title || selected.name || "Movie";
-                const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9 ]/g, "_")}_MovieBox.mp4`;
-
-                let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-                finalCaption += `┃ 🎬 *${itemTitle}*\n`;
-                finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                finalCaption += `┃ 🌟 *Type:* ${selected.type || 'Movie/Series'}\n`;
-                finalCaption += `┃ 📦 *Size:* ${dlData.size || selected.size || 'N/A'}\n`;
-                finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
-
-                // Stream video file directly to handle servers that reject Baileys' default user-agent
-                const mediaStream = await axios.get(targetUrl, { 
-                    responseType: 'stream',
-                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                let cap = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+                cap += `┃ 🎥 *${movieData.title || selected.title}*\n`;
+                cap += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                
+                if (movieData.synopsis || movieData.story) {
+                    const storyText = movieData.synopsis || movieData.story;
+                    const story = storyText.length > 200 ? storyText.substring(0, 200) + '...' : storyText;
+                    cap += `📝 *Story:* \n_${story}_\n\n`;
+                }
+                
+                cap += `┌───────── DOWNLOADS ─────────┐\n`;
+                
+                downloads.forEach((dl, i) => {
+                    cap += `┃ 🔥 *[${i + 1}]* Quality: \`${dl.quality || dl.title || 'HD'}\`\n`;
+                    cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`\n`;
+                    if (i !== downloads.length - 1) cap += `┃─────────────────────┃\n`;
                 });
 
-                const posterUrl = selected.poster || selected.imageUrl || selected.cover;
-                const thumbBuffer = await getThumbnailBuffer(posterUrl);
-                
-                let documentPayload = {
-                    document: { stream: mediaStream.data },
-                    mimetype: "video/mp4",
-                    fileName: cleanFileName,
-                    caption: finalCaption
+                cap += `└─────────────────────────────┘\n\n`;
+                cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
+                cap += `> *© KAMRAN-MINI-BOT ッ*`;
+
+                const detailImg = movieData.img || movieData.poster || selected.img || "https://placehold.co/600x400?text=No+Poster";
+
+                const sentDetail = await client.sendMessage(from, {
+                    image: { url: detailImg },
+                    caption: cap
+                }, { quoted: msg });
+
+                const detailMsgId = sentDetail.key.id;
+
+                // ================= INTERACTIVE STEP 2: DOWNLOAD HANDLER =================
+                const downloadHandler = async (up) => {
+                    try {
+                        const dlMsg = up.messages[0];
+                        if (!dlMsg?.message || dlMsg.key.remoteJid !== from) return;
+
+                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
+                        if (dlCtx?.stanzaId !== detailMsgId) return;
+
+                        const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
+                        const dlNum = parseInt(pick);
+                        if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
+
+                        const selectedDl = downloads[dlNum - 1];
+                        if (!selectedDl) return;
+
+                        client.ev.off("messages.upsert", downloadHandler);
+                        clearTimeout(downloadTimeout);
+
+                        await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
+                        await reply(`🚀 *Resolving MovieDriveBD Link...*\nFetching binary stream. Please wait!`);
+
+                        // Query final download resolver endpoint
+                        const finalDlRes = await axios.get(downloadApiUrl, {
+                            params: {
+                                apikey: apiKey,
+                                url: selectedDl.url || selectedDl.link
+                            },
+                            timeout: 45000
+                        });
+
+                        const dlPayload = finalDlRes.data.result || finalDlRes.data || {};
+                        const directUrl = dlPayload.url || dlPayload.downloadUrl || dlPayload.link || dlPayload.directUrl;
+
+                        if (!directUrl) {
+                            await react("❌");
+                            return reply("❌ *Error:* Direct file download link could not be generated.");
+                        }
+
+                        const cleanFileName = `${(movieData.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
+
+                        let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+                        finalCaption += `┃ 🎬 *${movieData.title || selected.title}*\n`;
+                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                        finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
+                        finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
+                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+                        finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
+
+                        // Stream binary data directly to handle user-agent authentication requirements
+                        const fileStream = await axios.get(directUrl, {
+                            responseType: 'stream',
+                            headers: { 'User-Agent': 'Mozilla/5.0' }
+                        });
+
+                        const thumbBuffer = await getThumbnailBuffer(movieData.img || selected.img);
+                        
+                        let documentPayload = {
+                            document: { stream: fileStream.data },
+                            mimetype: "video/mp4",
+                            fileName: cleanFileName,
+                            caption: finalCaption
+                        };
+
+                        if (thumbBuffer && Buffer.isBuffer(thumbBuffer)) {
+                            documentPayload.jpegThumbnail = thumbBuffer;
+                        }
+
+                        await client.sendMessage(from, documentPayload, { quoted: dlMsg });
+                        await client.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });
+
+                    } catch (dlErr) {
+                        console.error("MovieDriveBD download failed:", dlErr.message);
+                        reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
+                    }
                 };
 
-                if (thumbBuffer && Buffer.isBuffer(thumbBuffer)) {
-                    documentPayload.jpegThumbnail = thumbBuffer;
-                }
-
-                await client.sendMessage(from, documentPayload, { quoted: msg });
-                await client.sendMessage(from, { react: { text: "✅", key: msg.key } });
+                client.ev.on("messages.upsert", downloadHandler);
+                
+                downloadTimeout = setTimeout(() => {
+                    client.ev.off("messages.upsert", downloadHandler);
+                }, 300000);
 
             } catch (detErr) {
-                console.error("MovieBox process failed:", detErr.message);
-                reply(`❌ An error occurred during file delivery: ${detErr.message}`);
+                console.error("MovieDriveBD details failed:", detErr.message);
+                reply(`❌ An error occurred while loading details: ${detErr.message}`);
             }
         };
 
@@ -199,7 +268,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         }, 300000);
 
     } catch (e) {
-        console.error("MovieBox Downloader error:", e.message);
+        console.error("MovieDriveBD Downloader error:", e.message);
         await react("❌");
         return reply(`❌ *Error Processing Request:* ${e.message}`);
     }

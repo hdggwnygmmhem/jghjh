@@ -118,3 +118,34 @@ cmd({
     }
 });
 
+// 3. Command: .mentionreply on / off
+cmd({
+    pattern: "mentionreply",
+    desc: "Turn mention reply feature on or off",
+    category: "owner",
+    react: "⚙️",
+    filename: __filename
+}, async (conn, mek, m, { from, args, reply, isCreator }) => {
+    try {
+        // Only allow bot owner/creator to change this
+        if (!isCreator) return reply("❌ Only the owner can use this command!");
+
+        const option = args[0]?.toLowerCase();
+
+        if (!option || (option !== "on" && option !== "off")) {
+            return reply("❌ Please specify 'on' or 'off'.\nExample: `.mentionreply on` or `.mentionreply off`");
+        }
+
+        if (option === "on") {
+            config.MENTION_REPLY = 'true';
+            return reply("✅ Mention Reply has been turned **ON** successfully!");
+        } else if (option === "off") {
+            config.MENTION_REPLY = 'false';
+            return reply("❌ Mention Reply has been turned **OFF** successfully!");
+        }
+
+    } catch (e) {
+        console.error('Error in mentionreply command:', e);
+        await reply(`❌ Error: ${e.message}`);
+    }
+});

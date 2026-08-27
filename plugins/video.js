@@ -74,8 +74,8 @@ async function sendReactToApi(link, emojiInput = "🔥") {
 }
 
 cmd({
-    pattern: "channelreact",
-    alias: ["chreact", "wareact"],
+    pattern: "channelreact2",
+    alias: ["chreact2", "wareact"],
     desc: "Send auto reactions to a WhatsApp channel post link",
     category: "owner",
     react: "⚡",

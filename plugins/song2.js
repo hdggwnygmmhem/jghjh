@@ -168,7 +168,7 @@ cmd({
 
 // ==================== 2. MP4 / VIDEO COMMAND ====================
 cmd({
-    pattern: "video4",
+    pattern: "video",
     alias: ["ytmp44", "v4"],
     react: "🎬",
     desc: "Download MP4 video by Name or YouTube Link",

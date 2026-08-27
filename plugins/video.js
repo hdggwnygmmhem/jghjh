@@ -23,12 +23,21 @@ function normalizeYouTubeUrl(url) {
 }
 
 /**
- * Core Data Fetching Logic using Jawad-Tech API
+ * Core Data Fetching Logic using Jawad-Tech API with Redirect Support
  */
 async function fetchDownloadData(url, retries = 2) {
   try {
     const apiUrl = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(url)}`;
-    const response = await axios.get(apiUrl, { timeout: 20000 });
+    
+    // Axios request with maxRedirects enabled to handle 302 redirects
+    const response = await axios.get(apiUrl, { 
+      timeout: 25000,
+      maxRedirects: 5,
+      validateStatus: function (status) {
+        return status >= 200 && status < 400; // Allows handling redirects properly
+      }
+    });
+
     const data = response.data;
 
     if (data && data.status === true && data.result) {
@@ -43,6 +52,7 @@ async function fetchDownloadData(url, retries = 2) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       return fetchDownloadData(url, retries - 1);
     }
+    console.error("Fetch DL Data Error:", error.message);
     return null;
   }
 }

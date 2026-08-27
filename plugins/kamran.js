@@ -62,7 +62,7 @@ async function fetchAudioData(url, retries = 2) {
 
 cmd(
   {
-    pattern: "song80",
+    pattern: "song",
     alias: ["ytmp3", "audio76", "play87", "play"],
     react: "🎵",
     desc: "Search and download audio from YouTube.",

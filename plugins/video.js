@@ -1,7 +1,5 @@
 //---------------------------------------------------------------------------
-//           KAMRAN-MD - YOUTUBE VIDEO DOWNLOADER (AUTO-DL)
-//---------------------------------------------------------------------------
-//  🚀 SEARCH AND DOWNLOAD VIDEOS AUTOMATICALLY
+//           KAMRAN-MD - YOUTUBE AUDIO DOWNLOADER (AUTO-DL)
 //---------------------------------------------------------------------------
 
 import { fileURLToPath } from 'url';
@@ -10,9 +8,6 @@ import axios from 'axios';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
-
-// Simple In-memory cache
-const cache = new Map();
 
 /**
  * Normalizes YouTube URLs to a standard format
@@ -23,58 +18,53 @@ function normalizeYouTubeUrl(url) {
 }
 
 /**
- * Core Data Fetching Logic using Jawad-Tech API with Redirect Support
+ * Fetch Audio Download Link using Vajira API (ytmp3)
  */
-async function fetchDownloadData(url, retries = 2) {
+async function fetchAudioData(url, retries = 2) {
   try {
-    const apiUrl = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(url)}`;
-    
-    // Axios request with maxRedirects enabled to handle 302 redirects
-    const response = await axios.get(apiUrl, { 
-      timeout: 25000,
-      maxRedirects: 5,
-      validateStatus: function (status) {
-        return status >= 200 && status < 400; // Allows handling redirects properly
-      }
-    });
-
+    // Vajira API endpoint for YouTube Audio (ytmp3)
+    const apiUrl = `https://vajiraofc-apis.vercel.app/api/ytmp3?apikey=VajiraOfc&url=${encodeURIComponent(url)}&quality=128`;
+    const response = await axios.get(apiUrl, { timeout: 25000 });
     const data = response.data;
 
-    if (data && data.status === true && data.result) {
+    if (data && (data.status === true || data.status === 200) && (data.result || data.data)) {
+      const res = data.result || data.data;
       return {
-        video_url: data.result.mp4 || data.result.now,
-        title: data.result.title || "YouTube Video",
+        audio_url: res.download || res.dl || res.mp3 || res.url,
+        title: res.title || "YouTube Audio",
+        thumbnail: res.thumbnail || res.image
       };
     }
-    throw new Error("API failed to return download link.");
+    
+    throw new Error("Vajira API failed to return audio link.");
   } catch (error) {
     if (retries > 0) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      return fetchDownloadData(url, retries - 1);
+      return fetchAudioData(url, retries - 1);
     }
-    console.error("Fetch DL Data Error:", error.message);
+    console.error("Fetch Audio DL Error:", error.message);
     return null;
   }
 }
 
-// --- MAIN COMMAND: VIDEO ---
+// --- MAIN COMMAND: SONG / AUDIO ---
 
 cmd(
   {
-    pattern: "video",
-    alias: ["ytmp4", "vdl"],
-    react: "🎥",
-    desc: "Search and download high-quality videos from YouTube.",
+    pattern: "song80",
+    alias: ["ytmp334", "audio8", "play8"],
+    react: "🎵",
+    desc: "Search and download audio from YouTube.",
     category: "download",
     filename: __filename,
   },
   async (conn, mek, m, { from, q, reply, prefix, command }) => {
     try {
-      if (!q) return reply(`🎥 *Video Downloader*\n\nUsage: \`${prefix + command} <name or link>\`\nExample: \`${prefix + command} perfect ed sheeran\``);
+      if (!q) return reply(`🎵 *Audio Downloader*\n\nUsage: \`${prefix + command} <song name or link>\`\nExample: \`${prefix + command} faded alan walker\``);
 
       await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
 
-      // Step 1: Search for the video
+      // Step 1: Search for the audio/video
       let ytdata;
       const cleanUrl = normalizeYouTubeUrl(q);
 
@@ -89,54 +79,55 @@ cmd(
       if (!ytdata || !ytdata.url) {
         const searchResults = await yts(q);
         if (!searchResults || !searchResults.videos || searchResults.videos.length === 0) {
-          return reply("❌ No videos found for your query!");
+          return reply("❌ No audio found for your query!");
         }
         ytdata = searchResults.videos[0];
       }
 
       if (!ytdata || !ytdata.url) {
-        return reply("❌ Could not retrieve video details. Try searching with a direct link or different keywords.");
+        return reply("❌ Could not retrieve audio details. Try searching with a direct link or different keywords.");
       }
 
       // Step 2: Send info message
       const infoText = `
-🎥 *YT VIDEO DOWNLOADER* 🎥
+🎵 *YT AUDIO DOWNLOADER* 🎵
 
 📌 *Title:* ${ytdata.title || "N/A"}
 🎬 *Channel:* ${ytdata.author?.name || 'Unknown'}
 ⏱️ *Duration:* ${ytdata.timestamp || 'N/A'}
 👁️ *Views:* ${ytdata.views ? ytdata.views.toLocaleString() : 'N/A'}
 
-_📥 Processing your video file, please wait..._
+_📥 Downloading your audio file, please wait..._
 
 > © ᴘᴏᴡᴇʀᴇᴅ ʙʏ DR KAMRAN`;
 
       await conn.sendMessage(from, { image: { url: ytdata.thumbnail || ytdata.image }, caption: infoText }, { quoted: mek });
       await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-      // Step 3: Fetch download link from API
-      const dlData = await fetchDownloadData(ytdata.url);
+      // Step 3: Fetch audio download link from Vajira API
+      const dlData = await fetchAudioData(ytdata.url);
 
-      if (!dlData || !dlData.video_url) {
+      if (!dlData || !dlData.audio_url) {
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ Download link could not be generated by the API. Please try again later.");
+        return reply("❌ Audio link could not be generated by the API. Please try again later.");
       }
 
-      // Step 4: Send the Video file
+      // Step 4: Send the Audio file (as document/audio format)
       await conn.sendMessage(
         from,
         {
-          video: { url: dlData.video_url },
-          mimetype: "video/mp4",
+          audio: { url: dlData.audio_url },
+          mimetype: "audio/mpeg",
+          ptt: false, // true karne par voice note ban jayega, false se normal audio song jayega
           caption: `✅ *${dlData.title}*\n\n*🚀 Powered by DR KAMRAN*`,
           contextInfo: {
             externalAdReply: {
-              title: "YT VIDEO DOWNLOADER",
+              title: "YT AUDIO DOWNLOADER",
               body: dlData.title,
               thumbnailUrl: ytdata.thumbnail || ytdata.image,
               sourceUrl: ytdata.url,
               mediaType: 2,
-              renderLargerThumbnail: false
+              renderLargerThumbnail: true
             }
           }
         },
@@ -146,7 +137,7 @@ _📥 Processing your video file, please wait..._
       await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
-      console.error("Video DL Error:", e);
+      console.error("Audio DL Error:", e);
       await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
       reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
     }

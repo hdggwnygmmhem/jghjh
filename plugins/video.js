@@ -1,147 +1,116 @@
-//---------------------------------------------------------------------------
-//           KAMRAN-MD - CINESUBZ MOVIE & SUBTITLE DOWNLOADER
-//---------------------------------------------------------------------------
-
 import { fileURLToPath } from 'url';
-import axios from 'axios';
 import { cmd } from '../command.js';
+import axios from 'axios';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 
-const AUTHOR = "DR KAMRAN";
-const AUTH_TOKEN_PARTS = ["Vajira", "Ofc"];
-const STRICT_OWNER_LOCK = false;
+// Helper functions for reaction API signing
+const baseUrl = 'https://amba-react-pi.vercel.app';
+const CONFIG_API = `${baseUrl}/api/config`;
+const REACT_API = `${baseUrl}/api/react`;
 
-/**
- * Fetch CineSubz Search Results Safely
- */
-async function searchCineSubz(query) {
-  try {
-    const apiKey = AUTH_TOKEN_PARTS.join("");
-    const apiUrl = `https://vajiraofc-apis.vercel.app/api/cinesubz/search?apikey=${apiKey}&q=${encodeURIComponent(query)}`;
-    const response = await axios.get(apiUrl, { timeout: 25000 });
-    const data = response.data;
-
-    // Flexible response handling (agar data khud array ho ya result/data ke andar ho)
-    if (data) {
-      if (Array.isArray(data)) return data;
-      if (Array.isArray(data.result)) return data.result;
-      if (Array.isArray(data.data)) return data.data;
-      if (data.result && Array.isArray(data.result.results)) return data.result.results;
-    }
-    return [];
-  } catch (error) {
-    console.error(`[${AUTHOR} CINE SEARCH] Error:`, error.message);
-    return [];
-  }
-}
-
-/**
- * Fetch CineSubz Details Safely
- */
-async function fetchCineDetails(movieUrl) {
-  try {
-    const apiKey = AUTH_TOKEN_PARTS.join("");
-    const apiUrl = `https://vajiraofc-apis.vercel.app/api/cinesubz/details?apikey=${apiKey}&url=${encodeURIComponent(movieUrl)}`;
-    const response = await axios.get(apiUrl, { timeout: 25000 });
-    const data = response.data;
-
-    if (data) {
-      return data.result || data.data || data;
-    }
-    return null;
-  } catch (error) {
-    console.error(`[${AUTHOR} CINE DETAILS] Error:`, error.message);
-    return null;
-  }
-}
-
-// --- MAIN COMMAND: MOVIE / CINESUBZ ---
-
-cmd(
-  {
-    pattern: "cinesubz",
-    alias: ["movie", "film", "subtitles", "sinhala"],
-    react: "🍿",
-    desc: "Search movies and Sinhala subtitles from CineSubz.",
-    category: "download",
-    filename: __filename,
-  },
-  async (conn, mek, m, { from, q, reply, isOwner, prefix, command }) => {
+async function getSecretKey() {
     try {
-      if (STRICT_OWNER_LOCK && !isOwner) {
-        return reply(`❌ *Access Denied:* This protected module belongs exclusively to *${AUTHOR}*.`);
-      }
-
-      // Safe prefix fallback agar undefined ho
-      const usedPrefix = prefix || ".";
-      const usedCommand = command || "cinesubz";
-
-      if (!q) {
-        return reply(`🍿 *CineSubz Movie Search (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <movie name>\`\nExample: \`${usedPrefix + usedCommand} matrix\``);
-      }
-
-      await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
-
-      // Step 1: Search movies using API
-      const searchResults = await searchCineSubz(q);
-
-      if (!searchResults || searchResults.length === 0) {
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ No movies or subtitles found for your search query!");
-      }
-
-      // Pehli movie ka link lena
-      const firstMovie = searchResults[0];
-      const movieUrl = firstMovie.url || firstMovie.link || firstMovie.href;
-
-      if (!movieUrl) {
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ Invalid movie link returned from API search.");
-      }
-
-      // Step 2: Fetch detailed information
-      const details = await fetchCineDetails(movieUrl);
-
-      if (!details) {
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ Could not retrieve movie details from CineSubz.");
-      }
-
-      // Safe field mapping
-      const title = typeof details.title === 'string' ? details.title : (firstMovie.title || "Movie Subtitle");
-      const releaseDate = details.release_date || details.year || details.date || "N/A";
-      const quality = details.quality || details.resolution || "HD / Subtitled";
-      const posterUrl = details.image || details.thumbnail || details.poster || firstMovie.image || firstMovie.thumbnail;
-      const description = details.description || details.plot || "Sinhala Subtitled Movie / Series.";
-
-      // Step 3: Format caption text neatly
-      const captionText = `
-🍿 *CINESUBZ MOVIE & SUBTITLES* 🍿
-
-📌 *Title:* ${title}
-📅 *Release:* ${releaseDate}
-📺 *Quality:* ${quality}
-
-📝 *Description:* ${description.length > 150 ? description.substring(0, 150) + "..." : description}
-
-🔗 *Watch/Download Link:* ${movieUrl}
-
-> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${AUTHOR}`;
-
-      // Step 4: Send poster/image with info or text fallback
-      if (posterUrl) {
-        await conn.sendMessage(from, { image: { url: posterUrl }, caption: captionText }, { quoted: mek });
-      } else {
-        await reply(captionText);
-      }
-
-      await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
-    } catch (e) {
-      console.error("CineSubz Command Error:", e);
-      await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-      reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
+        const res = await axios.get(CONFIG_API, { timeout: 5000 });
+        if (res.data?.secret) return res.data.secret;
+        throw new Error('Secret key tidak ditemukan');
+    } catch (err) {
+        return 'AMBA_ULTRA_SECURE_KEY_2026_XYZ#!'; 
     }
-  }
-);
+}
+
+function generateSignature(payloadString, timestamp, secret) {
+    const message = timestamp + payloadString;
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(message);
+    return hmac.digest('hex');
+}
+
+async function sendReactToApi(link, emojiInput = "🔥") {
+    let emojis = [];
+    if (typeof emojiInput === 'string') {
+        emojis = emojiInput.split(',').map(e => e.trim()).filter(e => e.length > 0);
+    } else if (Array.isArray(emojiInput)) {
+        emojis = emojiInput;
+    }
+
+    if (emojis.length > 4) {
+        emojis = emojis.slice(0, 4);
+    }
+
+    const finalEmojiStr = emojis.join(',');
+    const secret = await getSecretKey();
+    
+    const payload = {
+        mode: "1",
+        link: link,
+        emoji: finalEmojiStr,
+        count: 1
+    };
+
+    const payloadString = JSON.stringify(payload);
+    const timestamp = Date.now().toString();
+    const signature = generateSignature(payloadString, timestamp, secret);
+
+    try {
+        const res = await axios.post(REACT_API, payloadString, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Timestamp': timestamp,
+                'X-Signature': signature,
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
+            },
+            timeout: 60000
+        });
+
+        return { success: true, data: res.data };
+    } catch (err) {
+        return { 
+            success: false, 
+            message: err.response?.data?.message || err.message 
+        };
+    }
+}
+
+cmd({
+    pattern: "channelreact",
+    alias: ["chreact", "wareact"],
+    desc: "Send auto reactions to a WhatsApp channel post link",
+    category: "owner",
+    react: "⚡",
+    filename: __filename
+}, async (conn, mek, m, { from, text, reply, isCreator }) => {
+    if (!isCreator) return reply("❌ This command is only for owners!");
+    
+    // Usage: .channelreact https://whatsapp.com/channel/.../363 😛,😭,😆
+    const args = text ? text.trim().split(' ') : [];
+    const channelLink = args[0] || (m.quoted ? m.quoted.text : null);
+    const customEmojis = args.slice(1).join(' ') || "😛,😭,😆,🤪";
+    
+    if (!channelLink || !channelLink.includes('whatsapp.com/channel/')) {
+        return reply(
+            `⚠️ Please provide a valid WhatsApp channel post link!\n\n` +
+            `Example:\n` +
+            `• .channelreact https://whatsapp.com/channel/0029Vb8hiKd0gcfQDpEDdf2n/363 😛,😭,😆`
+        );
+    }
+    
+    await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+    
+    try {
+        const result = await sendReactToApi(channelLink, customEmojis);
+        
+        if (result.success) {
+            await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+            reply(`✅ Successfully sent reactions to the channel post!\nEmojis: ${customEmojis}`);
+        } else {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            reply(`❌ Failed to send reactions: ${result.message}`);
+        }
+    } catch (error) {
+        console.error("Channel React Error:", error);
+        reply(`❌ Error: ${error.message}`);
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+    }
+});

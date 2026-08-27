@@ -22,8 +22,12 @@ async function searchCineSubz(query) {
     const response = await axios.get(apiUrl, { timeout: 25000 });
     const data = response.data;
 
-    if (data && (data.status === true || data.status === 200)) {
-      return data.result || data.data || [];
+    // Flexible response handling (agar data khud array ho ya result/data ke andar ho)
+    if (data) {
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data.result)) return data.result;
+      if (Array.isArray(data.data)) return data.data;
+      if (data.result && Array.isArray(data.result.results)) return data.result.results;
     }
     return [];
   } catch (error) {
@@ -42,8 +46,8 @@ async function fetchCineDetails(movieUrl) {
     const response = await axios.get(apiUrl, { timeout: 25000 });
     const data = response.data;
 
-    if (data && (data.status === true || data.status === 200)) {
-      return data.result || data.data || null;
+    if (data) {
+      return data.result || data.data || data;
     }
     return null;
   } catch (error) {
@@ -56,8 +60,8 @@ async function fetchCineDetails(movieUrl) {
 
 cmd(
   {
-    pattern: "movie",
-    alias: ["cinesubz", "film", "subtitles", "sinhala"],
+    pattern: "cinesubz",
+    alias: ["movie", "film", "subtitles", "sinhala"],
     react: "🍿",
     desc: "Search movies and Sinhala subtitles from CineSubz.",
     category: "download",
@@ -69,8 +73,12 @@ cmd(
         return reply(`❌ *Access Denied:* This protected module belongs exclusively to *${AUTHOR}*.`);
       }
 
+      // Safe prefix fallback agar undefined ho
+      const usedPrefix = prefix || ".";
+      const usedCommand = command || "cinesubz";
+
       if (!q) {
-        return reply(`🍿 *CineSubz Movie Search (${AUTHOR})*\n\nUsage: \`${prefix + command} <movie name>\`\nExample: \`${prefix + command} 2026\``);
+        return reply(`🍿 *CineSubz Movie Search (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <movie name>\`\nExample: \`${usedPrefix + usedCommand} matrix\``);
       }
 
       await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });

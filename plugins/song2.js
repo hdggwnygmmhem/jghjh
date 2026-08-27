@@ -153,7 +153,7 @@ cmd({
             audio: { url: data.downloadUrl },
             mimetype: 'audio/mp4',
             fileName: `${data.title || details?.title || 'audio'}.mp3`,
-            caption: `🎵 *Title:* ${data.title || details?.title}\n\n> *Powered By Bot*`
+            caption: `🎵 *Title:* ${data.title || details?.title}\n\n> *Powered By KAMRAN-MD*`
         }, { quoted: mek });
 
         await react('✅');
@@ -198,7 +198,7 @@ cmd({
         // Send Video File
         await conn.sendMessage(m.chat, {
             video: { url: data.downloadUrl },
-            caption: `🎬 *Title:* ${data.title || details?.title}\n\n> *Powered By Bot*`,
+            caption: `🎬 *Title:* ${data.title || details?.title}\n\n> *Powered By KAMRAN-MD*`,
             mimetype: 'video/mp4'
         }, { quoted: mek });
 

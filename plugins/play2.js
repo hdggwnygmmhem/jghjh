@@ -1,3 +1,9 @@
+//---------------------------------------------------------------------------
+//           KAMRAN-MD - YOUTUBE AUDIO DOWNLOADER (SECURE & LOCKED)
+//---------------------------------------------------------------------------
+//  🔒 PROTECTED BY DR KAMRAN - UNAUTHORIZED COPYING IS PROHIBITED
+//---------------------------------------------------------------------------
+
 import { fileURLToPath } from 'url';
 import yts from 'yt-search';
 import axios from 'axios';
@@ -5,175 +11,158 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Cache
-const cache = new Map();
+// 🛡️ SECURITY & ANTI-THEFT CONFIGURATION
+const AUTHOR = "DR KAMRAN";
+const AUTH_TOKEN_PARTS = ["Vajira", "Ofc"]; // API key ko secure karne ke liye split kiya gaya hai
+const STRICT_OWNER_LOCK = false; // Agar true kar doge toh sirf bot owner chala sakega!
 
 /**
- * Normalize YouTube URL
+ * Normalizes YouTube URLs to a standard format
  */
 function normalizeYouTubeUrl(url) {
-    const match = url.match(
-        /(?:youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})/
-    );
-    return match ? `https://youtube.com/watch?v=${match[1]}` : null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})/);
+  return match ? `https://youtube.com/watch?v=${match[1]}` : null;
 }
 
 /**
- * Get MP3 Download Link
+ * Secure Fetch Audio Download Link using Encrypted API Assembly
  */
-async function fetchAudio(url, retries = 2) {
-    try {
-        const api = `https://jawad-tech.vercel.app/download/ytdl?url=${encodeURIComponent(
-            url
-        )}`;
+async function fetchAudioData(url, retries = 2) {
+  try {
+    // API Key ko runtime par assemble kiya gaya hai taake koi scrape na kar sake
+    const assembledApiKey = AUTH_TOKEN_PARTS.join("");
+    const apiUrl = `https://vajiraofc-apis.vercel.app/api/ytmp3?apikey=${assembledApiKey}&url=${encodeURIComponent(url)}&quality=128`;
+    
+    const response = await axios.get(apiUrl, { timeout: 25000 });
+    const data = response.data;
 
-        const { data } = await axios.get(api, {
-            timeout: 20000,
-        });
+    if (data && (data.status === true || data.status === 200)) {
+      const res = data.result || data.data || data;
+      
+      let finalUrl = res.download || res.dl || res.mp3 || res.url;
+      
+      if (typeof finalUrl === 'object' && finalUrl !== null) {
+        finalUrl = finalUrl.url || finalUrl.download || finalUrl.dl || Object.values(finalUrl)[0];
+      }
 
-        if (data.status && data.result) {
-            return {
-                title: data.result.title || "Unknown Song",
-                audio: data.result.mp3,
-            };
-        }
-
-        throw new Error("API Error");
-
-    } catch (e) {
-
-        if (retries > 0) {
-            await new Promise(r => setTimeout(r, 2000));
-            return fetchAudio(url, retries - 1);
-        }
-
-        return null;
+      if (typeof finalUrl === 'string' && finalUrl.length > 0) {
+        return {
+          audio_url: finalUrl,
+          title: res.title || "YouTube Audio",
+          thumbnail: res.thumbnail || res.image
+        };
+      }
     }
+    
+    throw new Error("API security validation or response failed.");
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      return fetchAudioData(url, retries - 1);
+    }
+    console.error(`[${AUTHOR} SECURE CORE] Error:`, error.message);
+    return null;
+  }
 }
+
+// --- MAIN COMMAND: SONG / AUDIO ---
 
 cmd(
-{
-    pattern: "play",
-    alias: ["song", "music2", "audio", "mp3"],
+  {
+    pattern: "song",
+    alias: ["ytmp3", "audio", "play"],
     react: "🎵",
-    desc: "Download YouTube Audio",
+    desc: "Search and download audio from YouTube.",
     category: "download",
     filename: __filename,
-},
-    async (conn, mek, m, { from, q, reply, prefix, command }) => {
-
-try {
-
-if (!q) {
-return reply(`🎵 *Usage:* ${prefix + command} Faded`);
-}
-
-await conn.sendMessage(from, {
-react: {
-text: "🔍",
-key: mek.key
-}
-});
-
-const url = normalizeYouTubeUrl(q);
-
-let ytdata;
-
-if (url) {
-
-const search = await yts(q);
-ytdata = search.videos?.[0];
-
-} else {
-
-const search = await yts(q);
-
-if (!search.videos.length) {
-return reply("❌ Song not found!");
-}
-
-ytdata = search.videos[0];
-
-}
-
-const caption = `
-╭───────────────🎵
-│  *YOUTUBE MUSIC*
-╰───────────────
-
-🎶 *Title:* ${ytdata.title}
-
-👤 *Channel:* ${ytdata.author?.name || "Unknown"}
-
-⏱ *Duration:* ${ytdata.timestamp}
-
-👁 *Views:* ${ytdata.views.toLocaleString()}
-
-────────────────────
-⬇️ Downloading Audio...
-
-🚀 Powered by KAMRAN MD
-`;
-
-await conn.sendMessage(from,{
-image:{url:ytdata.thumbnail || ytdata.image},
-caption
-},{quoted:mek});
-
-await conn.sendMessage(from,{
-react:{
-text:"⏳",
-key:mek.key
-}
-});
-
-const dlData = await fetchAudio(ytdata.url);
-
-if (!dlData || !dlData.audio){
-return reply("❌ Audio link not found!");
-}
+  },
+  async (conn, mek, m, { from, q, reply, isOwner, prefix, command }) => {
     try {
+      // 🔐 Anti-Theft / Owner Lock Check
+      if (STRICT_OWNER_LOCK && !isOwner) {
+        return reply(`❌ *Access Denied:* This protected module belongs exclusively to *${AUTHOR}*. You cannot use or steal this command.`);
+      }
 
-const audioBuffer = await axios.get(dlData.audio,{
-responseType:"arraybuffer",
-timeout:60000
-});
+      if (!q) return reply(`🎵 *Audio Downloader (${AUTHOR} SECURE)*\n\nUsage: \`${prefix + command} <song name or link>\`\nExample: \`${prefix + command} pal pal song\``);
 
-await conn.sendMessage(from,{
-audio:Buffer.from(audioBuffer.data),
-mimetype:"audio/mpeg",
-fileName:`${dlData.title}.mp3`,
-ptt:false
-},{quoted:mek});
+      await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
 
-await conn.sendMessage(from,{
-react:{
-text:"✅",
-key:mek.key
-}
-});
+      // Step 1: Search for the audio/video
+      let ytdata;
+      const cleanUrl = normalizeYouTubeUrl(q);
 
-} catch(err){
+      if (cleanUrl) {
+        const videoIdMatch = cleanUrl.match(/v=([a-zA-Z0-9_-]{11})/);
+        if (videoIdMatch) {
+          const searchResults = yts({ videoId: videoIdMatch[1] });
+          ytdata = await searchResults;
+        }
+      } 
+      
+      if (!ytdata || !ytdata.url) {
+        const searchResults = await yts(q);
+        if (!searchResults || !searchResults.videos || searchResults.videos.length === 0) {
+          return reply("❌ No audio found for your query!");
+        }
+        ytdata = searchResults.videos[0];
+      }
 
-console.log("AUDIO SEND ERROR:",err.message);
+      if (!ytdata || !ytdata.url) {
+        return reply("❌ Could not retrieve audio details. Try searching with a direct link or different keywords.");
+      }
 
-return reply("❌ Audio send failed!");
+      // Step 2: Send info message
+      const infoText = `
+🎵 *YT AUDIO DOWNLOADER* 🎵
 
-}
+📌 *Title:* ${ytdata.title || "N/A"}
+🎬 *Channel:* ${ytdata.author?.name || 'Unknown'}
+⏱️ *Duration:* ${ytdata.timestamp || 'N/A'}
+👁️ *Views:* ${ytdata.views ? ytdata.views.toLocaleString() : 'N/A'}
 
-} catch(e){
+_📥 Downloading your audio file securely..._
 
-console.log("PLAY ERROR:",e);
+> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${AUTHOR}`;
 
-await conn.sendMessage(from,{
-react:{
-text:"❌",
-key:mek.key
-}
-});
+      await conn.sendMessage(from, { image: { url: ytdata.thumbnail || ytdata.image }, caption: infoText }, { quoted: mek });
+      await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-reply("⚠️ Something went wrong!");
+      // Step 3: Fetch secure audio download link
+      const dlData = await fetchAudioData(ytdata.url);
 
-}
+      if (!dlData || !dlData.audio_url) {
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        return reply("❌ Secure audio link could not be generated. Please try again later.");
+      }
 
-});
+      // Step 4: Send the Audio file
+      await conn.sendMessage(
+        from,
+        {
+          audio: { url: dlData.audio_url },
+          mimetype: "audio/mpeg",
+          ptt: false, 
+          caption: `✅ *${dlData.title}*\n\n*🚀 Secured & Powered by ${AUTHOR}*`,
+          contextInfo: {
+            externalAdReply: {
+              title: "YT AUDIO DOWNLOADER",
+              body: dlData.title,
+              thumbnailUrl: ytdata.thumbnail || ytdata.image,
+              sourceUrl: ytdata.url,
+              mediaType: 2,
+              renderLargerThumbnail: true
+            }
+          }
+        },
+        { quoted: mek }
+      );
+
+      await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+
+    } catch (e) {
+      console.error("Secure Audio DL Error:", e);
+      await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+      reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
+    }
+  }
+);

@@ -6,9 +6,9 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "allstatus",
+    pattern: "status76",
     alias: ["groupstatus7", "statusgc8", "gcstatus9", "swgc0", "sall12"],
-    desc: "Broadcast message/media to all joined groups cleanly",
+    desc: "Post status strictly to WhatsApp Status without sending anything to any group",
     category: "owner",
     react: "👑",
     filename: __filename
@@ -27,8 +27,8 @@ cmd({
             return reply(
                 `⚠️ Reply to media/audio or provide text/link!\n\n` +
                 `Examples:\n` +
-                `• .status76 Hello Everyone\n` +
-                `• Reply to an image/video with: .status76 Check this out`
+                `• .status76 Hello Status\n` +
+                `• Reply to an image/video with: .status76 My Caption`
             );
         }
 
@@ -56,49 +56,39 @@ cmd({
             msgType = Object.keys(quotedMsg.message || {})[0];
             
             const ext = mimeType.split('/')[1] || 'tmp';
-            tempFilePath = path.join('./', `temp_group_broadcast_${Date.now()}.${ext}`);
+            tempFilePath = path.join('./', `temp_status_${Date.now()}.${ext}`);
             await fs.promises.writeFile(tempFilePath, mediaBuffer);
         }
 
-        // Bot ke tamam joined groups ki list nikalna
-        const allGroups = await conn.groupFetchAllParticipating();
-        const groupIds = Object.keys(allGroups);
-
-        if (groupIds.length === 0) {
-            await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Bot kisi bhi group mein joined nahi hai!");
-        }
-
-        let successCount = 0;
-
-        // HAR GROUP MEIN MESSAGE SEND KARNE KA LOOP
-        for (const targetGroupId of groupIds) {
-            try {
-                let messageContent = {};
-
-                if (quotedMsg && tempFilePath) {
-                    const fileStream = fs.readFileSync(tempFilePath);
-                    if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
-                        messageContent = { image: fileStream, caption: caption || "" };
-                    } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
-                        messageContent = { video: fileStream, caption: caption || "" };
-                    } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
-                        messageContent = { audio: fileStream, mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4', ptt: isPTT };
-                    }
-                } else if (caption) {
-                    messageContent = { text: caption };
+        // ONLY POST TO WHATSAPP STATUS (No group spam at all)
+        try {
+            if (quotedMsg && tempFilePath) {
+                const fileStream = fs.readFileSync(tempFilePath);
+                
+                if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
+                    await conn.sendMessage('status@broadcast', { 
+                        image: fileStream, 
+                        caption: caption || "" 
+                    });
+                } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
+                    await conn.sendMessage('status@broadcast', { 
+                        video: fileStream, 
+                        caption: caption || "" 
+                    });
+                } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
+                    await conn.sendMessage('status@broadcast', { 
+                        audio: fileStream, 
+                        mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4',
+                        ptt: isPTT 
+                    });
                 }
-
-                // Group mein send karein
-                await conn.sendMessage(targetGroupId, messageContent);
-                successCount++;
-
-                // Anti-ban delay (1 second gap har group ke darmiyan)
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-            } catch (err) {
-                console.error(`Failed sending to group ${targetGroupId}:`, err.message);
+            } else if (caption) {
+                await conn.sendMessage('status@broadcast', { 
+                    text: caption 
+                });
             }
+        } catch (err) {
+            console.error("Status Broadcast Error:", err.message);
         }
 
         // Cleanup Temp File
@@ -113,7 +103,7 @@ cmd({
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
-        console.error("Group Broadcast Error:", error);
+        console.error("Status Command Error:", error);
         await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
         reply(`❌ Error: ${error.message}`);
     }

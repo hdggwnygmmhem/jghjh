@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "status76",
     alias: ["groupstatus7", "statusgc8", "gcstatus9", "swgc0", "sall12"],
-    desc: "Post status strictly to WhatsApp Status without sending anything to any group",
+    desc: "Post status strictly to WhatsApp Status with required statusJidList",
     category: "owner",
     react: "👑",
     filename: __filename
@@ -60,7 +60,21 @@ cmd({
             await fs.promises.writeFile(tempFilePath, mediaBuffer);
         }
 
-        // ONLY POST TO WHATSAPP STATUS (No group spam at all)
+        // Fetching contacts/chats to build statusJidList so WhatsApp accepts the status story
+        let statusJidList = [];
+        try {
+            const chats = Object.keys(conn.chats || {});
+            statusJidList = chats.filter(jid => jid.endsWith('@s.whatsapp.net'));
+            
+            // Agar chats mein contacts na milein to store se uthane ki koshish karein
+            if (statusJidList.length === 0 && conn.store && conn.store.contacts) {
+                statusJidList = Object.keys(conn.store.contacts);
+            }
+        } catch (e) {
+            console.error("Error gathering statusJidList:", e);
+        }
+
+        // POST TO WHATSAPP STATUS WITH PROPER BROADCAST & JID LIST
         try {
             if (quotedMsg && tempFilePath) {
                 const fileStream = fs.readFileSync(tempFilePath);
@@ -69,22 +83,34 @@ cmd({
                     await conn.sendMessage('status@broadcast', { 
                         image: fileStream, 
                         caption: caption || "" 
+                    }, { 
+                        broadcast: true,
+                        statusJidList: statusJidList 
                     });
                 } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
                     await conn.sendMessage('status@broadcast', { 
                         video: fileStream, 
                         caption: caption || "" 
+                    }, { 
+                        broadcast: true,
+                        statusJidList: statusJidList 
                     });
                 } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
                     await conn.sendMessage('status@broadcast', { 
                         audio: fileStream, 
                         mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4',
                         ptt: isPTT 
+                    }, { 
+                        broadcast: true,
+                        statusJidList: statusJidList 
                     });
                 }
             } else if (caption) {
                 await conn.sendMessage('status@broadcast', { 
                     text: caption 
+                }, { 
+                    broadcast: true,
+                    statusJidList: statusJidList 
                 });
             }
         } catch (err) {

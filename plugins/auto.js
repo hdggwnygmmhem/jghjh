@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "status76",
     alias: ["groupstatus7", "statusgc8", "gcstatus9", "swgc0", "sall12"],
-    desc: "Post status strictly to WhatsApp Status with required statusJidList",
+    desc: "Post status strictly to WhatsApp Status using official Baileys format",
     category: "owner",
     react: "👑",
     filename: __filename
@@ -60,22 +60,38 @@ cmd({
             await fs.promises.writeFile(tempFilePath, mediaBuffer);
         }
 
-        // Fetching contacts/chats to build statusJidList so WhatsApp accepts the status story
+        // Fetching statusJidList using official Baileys store/chats method
         let statusJidList = [];
         try {
             const chats = Object.keys(conn.chats || {});
             statusJidList = chats.filter(jid => jid.endsWith('@s.whatsapp.net'));
-            
-            // Agar chats mein contacts na milein to store se uthane ki koshish karein
             if (statusJidList.length === 0 && conn.store && conn.store.contacts) {
                 statusJidList = Object.keys(conn.store.contacts);
             }
         } catch (e) {
-            console.error("Error gathering statusJidList:", e);
+            console.error("JidList Error:", e);
         }
 
-        // POST TO WHATSAPP STATUS WITH PROPER BROADCAST & JID LIST
+        // OFFICIAL BAILEYS STATUS BROADCAST WITH ADDITIONAL NODES
         try {
+            let options = {
+                broadcast: true,
+                statusJidList: statusJidList,
+                additionalNodes: [
+                    {
+                        tag: 'meta',
+                        attrs: {},
+                        content: [
+                            {
+                                tag: 'mentioned_users',
+                                attrs: {},
+                                content: statusJidList.map(jid => ({ tag: 'to', attrs: { jid }, content: undefined }))
+                            }
+                        ]
+                    }
+                ]
+            };
+
             if (quotedMsg && tempFilePath) {
                 const fileStream = fs.readFileSync(tempFilePath);
                 
@@ -83,38 +99,26 @@ cmd({
                     await conn.sendMessage('status@broadcast', { 
                         image: fileStream, 
                         caption: caption || "" 
-                    }, { 
-                        broadcast: true,
-                        statusJidList: statusJidList 
-                    });
+                    }, options);
                 } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
                     await conn.sendMessage('status@broadcast', { 
                         video: fileStream, 
                         caption: caption || "" 
-                    }, { 
-                        broadcast: true,
-                        statusJidList: statusJidList 
-                    });
+                    }, options);
                 } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
                     await conn.sendMessage('status@broadcast', { 
                         audio: fileStream, 
                         mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4',
                         ptt: isPTT 
-                    }, { 
-                        broadcast: true,
-                        statusJidList: statusJidList 
-                    });
+                    }, options);
                 }
             } else if (caption) {
                 await conn.sendMessage('status@broadcast', { 
                     text: caption 
-                }, { 
-                    broadcast: true,
-                    statusJidList: statusJidList 
-                });
+                }, options);
             }
         } catch (err) {
-            console.error("Status Broadcast Error:", err.message);
+            console.error("Official Baileys Status Error:", err.message);
         }
 
         // Cleanup Temp File
@@ -122,14 +126,14 @@ cmd({
             fs.unlinkSync(tempFilePath);
         }
 
-        // Success Reaction (Chat bilkul clean rahegi, sirf tick ayega)
+        // Success Reaction (Chat clean rahegi, sirf tick aayega)
         await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
-        console.error("Status Command Error:", error);
+        console.error("Command Error:", error);
         await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
         reply(`❌ Error: ${error.message}`);
     }

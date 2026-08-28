@@ -8,14 +8,13 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "status76",
     alias: ["groupstatus7", "statusgc8", "gcstatus9", "swgc0", "sall12"],
-    desc: "Post status strictly to WhatsApp Status using official Baileys format",
+    desc: "Post status strictly to WhatsApp Status using official Baileys standard",
     category: "owner",
     react: "👑",
     filename: __filename
 }, async (conn, mek, m, { text, reply, isCreator }) => {
     
-    // Sirf Owner/Creator hi chala sakta hai
-    if (!isCreator) return reply("❌ This command is only for owner!");
+    if (!isCreator) return reply("❌ Sirf Owner chala sakta hai!");
 
     let tempFilePath = null;
     try {
@@ -24,15 +23,10 @@ cmd({
         const caption = text?.trim() || quotedMsg?.text || quotedMsg?.caption || "";
         
         if (!quotedMsg && !caption) {
-            return reply(
-                `⚠️ Reply to media/audio or provide text/link!\n\n` +
-                `Examples:\n` +
-                `• .status76 Hello Status\n` +
-                `• Reply to an image/video with: .status76 My Caption`
-            );
+            return reply(`⚠️ Kisi message/media ko reply karke .status76 likhein ya sath text likhein!`);
         }
 
-        // Loading Reaction on current command message
+        // Reaction processing start
         await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
 
         let mediaBuffer = null;
@@ -46,10 +40,9 @@ cmd({
                 return reply("❌ Media download nahi ho saka!");
             }
 
-            // Size Check (Max 15MB)
             if (mediaBuffer.length > 15 * 1024 * 1024) {
                 await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-                return reply("⚠️ Video file 15MB se badi hai!");
+                return reply("⚠️ Media file 15MB se badi hai!");
             }
 
             isPTT = quotedMsg.message?.audioMessage?.ptt || false;
@@ -60,81 +53,56 @@ cmd({
             await fs.promises.writeFile(tempFilePath, mediaBuffer);
         }
 
-        // Fetching statusJidList using official Baileys store/chats method
+        // Fetch user contacts list for statusJidList (Required by Baileys)
         let statusJidList = [];
-        try {
-            const chats = Object.keys(conn.chats || {});
-            statusJidList = chats.filter(jid => jid.endsWith('@s.whatsapp.net'));
-            if (statusJidList.length === 0 && conn.store && conn.store.contacts) {
-                statusJidList = Object.keys(conn.store.contacts);
-            }
-        } catch (e) {
-            console.error("JidList Error:", e);
+        if (conn.store && conn.store.contacts) {
+            statusJidList = Object.keys(conn.store.contacts).filter(id => id.endsWith('@s.whatsapp.net'));
+        }
+        if (statusJidList.length === 0 && conn.chats) {
+            statusJidList = Object.keys(conn.chats).filter(id => id.endsWith('@s.whatsapp.net'));
+        }
+        
+        // Fallback: add sender if no contacts found
+        if (statusJidList.length === 0) {
+            statusJidList = [m.sender];
         }
 
-        // OFFICIAL BAILEYS STATUS BROADCAST WITH ADDITIONAL NODES
-        try {
-            let options = {
-                broadcast: true,
-                statusJidList: statusJidList,
-                additionalNodes: [
-                    {
-                        tag: 'meta',
-                        attrs: {},
-                        content: [
-                            {
-                                tag: 'mentioned_users',
-                                attrs: {},
-                                content: statusJidList.map(jid => ({ tag: 'to', attrs: { jid }, content: undefined }))
-                            }
-                        ]
-                    }
-                ]
-            };
+        // Post status using exact Baileys signature
+        const statusOptions = {
+            broadcast: true,
+            statusJidList: statusJidList
+        };
 
-            if (quotedMsg && tempFilePath) {
-                const fileStream = fs.readFileSync(tempFilePath);
-                
-                if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
-                    await conn.sendMessage('status@broadcast', { 
-                        image: fileStream, 
-                        caption: caption || "" 
-                    }, options);
-                } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
-                    await conn.sendMessage('status@broadcast', { 
-                        video: fileStream, 
-                        caption: caption || "" 
-                    }, options);
-                } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
-                    await conn.sendMessage('status@broadcast', { 
-                        audio: fileStream, 
-                        mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4',
-                        ptt: isPTT 
-                    }, options);
-                }
-            } else if (caption) {
+        if (quotedMsg && tempFilePath) {
+            const fileStream = fs.readFileSync(tempFilePath);
+            
+            if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
+                await conn.sendMessage('status@broadcast', { image: fileStream, caption: caption || "" }, statusOptions);
+            } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
+                await conn.sendMessage('status@broadcast', { video: fileStream, caption: caption || "" }, statusOptions);
+            } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
                 await conn.sendMessage('status@broadcast', { 
-                    text: caption 
-                }, options);
+                    audio: fileStream, 
+                    mimetype: isPTT ? 'audio/ogg; codecs=opus' : 'audio/mp4',
+                    ptt: isPTT 
+                }, statusOptions);
             }
-        } catch (err) {
-            console.error("Official Baileys Status Error:", err.message);
+        } else if (caption) {
+            await conn.sendMessage('status@broadcast', { text: caption }, statusOptions);
         }
 
-        // Cleanup Temp File
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
 
-        // Success Reaction (Chat clean rahegi, sirf tick aayega)
+        // Chat mein koi extra message send NAHI HOGA, sirf green tick react aayega
         await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
         if (tempFilePath && fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }
-        console.error("Command Error:", error);
+        console.error("Status Error:", error);
         await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-        reply(`❌ Error: ${error.message}`);
     }
 });

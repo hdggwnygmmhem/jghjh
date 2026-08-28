@@ -4,9 +4,9 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "channelstatus",
-    alias: ["statuschannel", "gcstatus", "chstatus"],
-    desc: "Post update to WhatsApp Channel with media or text",
+    pattern: "groupstatus200",
+    alias: ["statusgc900", "gcstatus900", "swgc900"],
+    desc: "Post status directly from IB or chat without sending messages to chat",
     category: "owner",
     react: "📢",
     filename: __filename
@@ -15,10 +15,6 @@ cmd({
     if (!isCreator) return reply("❌ This command is only for owners!");
     
     try {
-        // Define your target WhatsApp Channel JID here (Must end with @newsletter)
-        // Ensure your bot account is an admin/owner of this channel.
-        const channelJid = "120363418144382782@newsletter"; // Replace with your actual channel JID
-        
         // Get the quoted message
         const quotedMsg = m.quoted;
         
@@ -31,10 +27,10 @@ cmd({
         // Check if there's content to send
         if (!quotedMsg && !caption) {
             return reply(
-                `⚠️ Reply to media or provide text for the channel update!\n\n` +
+                `⚠️ Reply to media or provide text!\n\n` +
                 `Examples:\n` +
-                `• .channelstatus Hello channel followers!\n` +
-                `• Reply to an image with: .channelstatus`
+                `• .gcstatus Hello status\n` +
+                `• Reply to an image with: .gcstatus`
             );
         }
         
@@ -49,7 +45,6 @@ cmd({
             const mediaBuffer = await quotedMsg.download();
             if (!mediaBuffer) throw new Error("Failed to download media");
             
-            // Handle different media types based on mimeType
             if (mimeType.startsWith('image/')) {
                 messageContent = {
                     image: mediaBuffer,
@@ -71,20 +66,25 @@ cmd({
                 };
             }
             else {
-                // Fallback check by message type keys
                 const msgType = Object.keys(quotedMsg.message || {})[0];
                 
                 if (msgType === 'imageMessage') {
-                    messageContent = { image: mediaBuffer, caption: caption || "" };
+                    messageContent = {
+                        image: mediaBuffer,
+                        caption: caption || ""
+                    };
                 }
                 else if (msgType === 'videoMessage') {
-                    messageContent = { video: mediaBuffer, caption: caption || "" };
+                    messageContent = {
+                        video: mediaBuffer,
+                        caption: caption || ""
+                    };
                 }
                 else if (msgType === 'audioMessage' || msgType === 'pttMessage') {
-                    messageContent = { 
-                        audio: mediaBuffer, 
+                    messageContent = {
+                        audio: mediaBuffer,
                         mimetype: msgType === 'pttMessage' ? 'audio/ogg; codecs=opus' : 'audio/mp4',
-                        ptt: msgType === 'pttMessage' 
+                        ptt: msgType === 'pttMessage'
                     };
                 }
                 else {
@@ -92,21 +92,22 @@ cmd({
                 }
             }
         } 
-        // If it's only a text update
+        // If only text status
         else if (caption) {
             messageContent = {
                 text: caption
             };
         }
         
-        // Send the post directly to the Channel JID instead of the command chat source (`from`)
-        await conn.sendMessage(channelJid, messageContent);
+        // **YEH STATUS LAGANE WALA CODE HAI**: IB ya kahin se bhi command lagane par seedha status@broadcast par chalajayega
+        // Aur agar sabhi ko status dikhana ho toh contacts list fetch karne ki zaroorat nahi, status@broadcast khud handle karta hai
+        await conn.sendMessage('status@broadcast', messageContent);
         
-        // Success reaction back to the command sender
+        // Sirf success reaction aayega, chat mein koi message repeat nahi hoga
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
         
     } catch (error) {
-        console.error("Channel Status Error:", error);
+        console.error("Status Post Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }

@@ -1,8 +1,6 @@
 //---------------------------------------------------------------------------
 //           KAMRAN-MD - YOUTUBE AUDIO DOWNLOADER (SECURE & LOCKED)
 //---------------------------------------------------------------------------
-//  🔒 PROTECTED BY DR KAMRAN - UNAUTHORIZED COPYING IS PROHIBITED
-//---------------------------------------------------------------------------
 
 import { fileURLToPath } from 'url';
 import yts from 'yt-search';
@@ -37,21 +35,14 @@ async function fetchAudioData(url, retries = 2) {
         finalUrl = finalUrl.url || finalUrl.download || finalUrl.dl || Object.values(finalUrl)[0];
       }
 
-      let apiTitle = "YouTube Audio";
-      if (res.title) {
-        if (typeof res.title === 'string') {
-          apiTitle = res.title;
-        } else if (typeof res.title.text === 'string') {
-          apiTitle = res.title.text;
-        } else {
-          apiTitle = String(res.title);
-        }
-      }
+      // Safe Title Handling
+      let rawTitle = res.title || (typeof res === 'object' ? res.name : null) || "YouTube Audio";
+      let apiTitle = typeof rawTitle === 'string' ? rawTitle : (rawTitle.text || String(rawTitle));
 
       if (typeof finalUrl === 'string' && finalUrl.length > 0) {
         return {
           audio_url: finalUrl,
-          title: apiTitle,
+          title: String(apiTitle).trim(),
           thumbnail: res.thumbnail || res.image || ""
         };
       }
@@ -63,15 +54,15 @@ async function fetchAudioData(url, retries = 2) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       return fetchAudioData(url, retries - 1);
     }
-    console.error(`[${AUTHOR} PLAY CORE] Error:`, error.message);
+    console.error(`[${AUTHOR} AUDIO CORE] Error:`, error.message);
     return null;
   }
 }
 
 cmd(
   {
-    pattern: "play",
-    alias: ["song", "ytmp3", "audio"],
+    pattern: "song",
+    alias: ["play", "ytmp3", "audio"],
     react: "🎵",
     desc: "Search and download audio from YouTube.",
     category: "download",
@@ -84,10 +75,10 @@ cmd(
       }
 
       const usedPrefix = prefix || ".";
-      const usedCommand = command || "play";
+      const usedCommand = command || "song";
 
       if (!q) {
-        return reply(`🎵 *Audio Downloader (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <song name or link>\`\nExample: \`${usedPrefix + usedCommand} karan aujla song\``);
+        return reply(`🎵 *Audio Downloader (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <song name or link>\`\nExample: \`${usedPrefix + usedCommand} pal pal song\``);
       }
 
       await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
@@ -115,7 +106,8 @@ cmd(
         return reply("❌ Could not retrieve audio details. Try searching with a direct link or different keywords.");
       }
 
-      const videoTitle = typeof ytdata.title === 'string' ? ytdata.title : "YouTube Audio";
+      const rawYTTitle = ytdata.title || "YouTube Audio";
+      const videoTitle = typeof rawYTTitle === 'string' ? rawYTTitle.trim() : String(rawYTTitle);
       const channelName = ytdata.author?.name || ytdata.author || 'Unknown';
       const videoDuration = ytdata.timestamp || ytdata.duration || 'N/A';
       const videoViews = ytdata.views ? ytdata.views.toLocaleString() : 'N/A';
@@ -172,7 +164,7 @@ _📥 Downloading your audio file securely..._
       await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
-      console.error("Play Command Error:", e);
+      console.error("Song Command Error:", e);
       await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
       reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
     }

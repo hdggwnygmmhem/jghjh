@@ -29,7 +29,6 @@ function normalizeYouTubeUrl(url) {
  */
 async function fetchAudioData(url, retries = 2) {
   try {
-    // API Key ko runtime par assemble kiya gaya hai taake koi scrape na kar sake
     const assembledApiKey = AUTH_TOKEN_PARTS.join("");
     const apiUrl = `https://vajiraofc-apis.vercel.app/api/ytmp3?apikey=${assembledApiKey}&url=${encodeURIComponent(url)}&quality=128`;
     
@@ -45,11 +44,23 @@ async function fetchAudioData(url, retries = 2) {
         finalUrl = finalUrl.url || finalUrl.download || finalUrl.dl || Object.values(finalUrl)[0];
       }
 
+      // Safe Title Extraction to prevent trim errors
+      let apiTitle = "YouTube Audio";
+      if (res.title) {
+        if (typeof res.title === 'string') {
+          apiTitle = res.title;
+        } else if (typeof res.title.text === 'string') {
+          apiTitle = res.title.text;
+        } else {
+          apiTitle = String(res.title);
+        }
+      }
+
       if (typeof finalUrl === 'string' && finalUrl.length > 0) {
         return {
           audio_url: finalUrl,
-          title: res.title || "YouTube Audio",
-          thumbnail: res.thumbnail || res.image
+          title: apiTitle,
+          thumbnail: res.thumbnail || res.image || ""
         };
       }
     }
@@ -69,8 +80,8 @@ async function fetchAudioData(url, retries = 2) {
 
 cmd(
   {
-    pattern: "song64",
-    alias: ["ytmp3", "audio", "play75"],
+    pattern: "song",
+    alias: ["ytmp3", "audio", "play", "song64"],
     react: "🎵",
     desc: "Search and download audio from YouTube.",
     category: "download",
@@ -94,8 +105,8 @@ cmd(
       if (cleanUrl) {
         const videoIdMatch = cleanUrl.match(/v=([a-zA-Z0-9_-]{11})/);
         if (videoIdMatch) {
-          const searchResults = yts({ videoId: videoIdMatch[1] });
-          ytdata = await searchResults;
+          const searchResults = await yts({ videoId: videoIdMatch[1] });
+          ytdata = searchResults;
         }
       } 
       
@@ -111,20 +122,32 @@ cmd(
         return reply("❌ Could not retrieve audio details. Try searching with a direct link or different keywords.");
       }
 
+      // Safe parsing for YouTube search results title
+      const videoTitle = typeof ytdata.title === 'string' ? ytdata.title : "YouTube Audio";
+      const channelName = ytdata.author?.name || ytdata.author || 'Unknown';
+      const videoDuration = ytdata.timestamp || ytdata.duration || 'N/A';
+      const videoViews = ytdata.views ? ytdata.views.toLocaleString() : 'N/A';
+      const videoThumb = ytdata.thumbnail || ytdata.image || "";
+
       // Step 2: Send info message
       const infoText = `
 🎵 *YT AUDIO DOWNLOADER* 🎵
 
-📌 *Title:* ${ytdata.title || "N/A"}
-🎬 *Channel:* ${ytdata.author?.name || 'Unknown'}
-⏱️ *Duration:* ${ytdata.timestamp || 'N/A'}
-👁️ *Views:* ${ytdata.views ? ytdata.views.toLocaleString() : 'N/A'}
+📌 *Title:* ${videoTitle}
+🎬 *Channel:* ${channelName}
+⏱️ *Duration:* ${videoDuration}
+👁️ *Views:* ${videoViews}
 
 _📥 Downloading your audio file securely..._
 
 > © ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${AUTHOR}`;
 
-      await conn.sendMessage(from, { image: { url: ytdata.thumbnail || ytdata.image }, caption: infoText }, { quoted: mek });
+      if (videoThumb) {
+        await conn.sendMessage(from, { image: { url: videoThumb }, caption: infoText }, { quoted: mek });
+      } else {
+        await reply(infoText);
+      }
+
       await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
       // Step 3: Fetch secure audio download link
@@ -147,7 +170,7 @@ _📥 Downloading your audio file securely..._
             externalAdReply: {
               title: "YT AUDIO DOWNLOADER",
               body: dlData.title,
-              thumbnailUrl: ytdata.thumbnail || ytdata.image,
+              thumbnailUrl: videoThumb,
               sourceUrl: ytdata.url,
               mediaType: 2,
               renderLargerThumbnail: true
@@ -159,7 +182,7 @@ _📥 Downloading your audio file securely..._
 
       await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
-    } catch (e) {
+    }なか (e) {
       console.error("Secure Audio DL Error:", e);
       await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
       reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);

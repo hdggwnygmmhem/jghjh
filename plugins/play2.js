@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-//           KAMRAN-MD - YOUTUBE AUDIO DOWNLOADER (SECURE & LOCKED)
+//           KAMRAN-MD - YOUTUBE AUDIO DOWNLOADER (CRASH PROOF)
 //---------------------------------------------------------------------------
 
 import { fileURLToPath } from 'url';
@@ -35,14 +35,13 @@ async function fetchAudioData(url, retries = 2) {
         finalUrl = finalUrl.url || finalUrl.download || finalUrl.dl || Object.values(finalUrl)[0];
       }
 
-      // Safe Title Handling
-      let rawTitle = res.title || (typeof res === 'object' ? res.name : null) || "YouTube Audio";
+      let rawTitle = res.title || "YouTube Audio";
       let apiTitle = typeof rawTitle === 'string' ? rawTitle : (rawTitle.text || String(rawTitle));
 
       if (typeof finalUrl === 'string' && finalUrl.length > 0) {
         return {
           audio_url: finalUrl,
-          title: String(apiTitle).trim(),
+          title: apiTitle,
           thumbnail: res.thumbnail || res.image || ""
         };
       }
@@ -78,40 +77,43 @@ cmd(
       const usedCommand = command || "song";
 
       if (!q) {
-        return reply(`🎵 *Audio Downloader (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <song name or link>\`\nExample: \`${usedPrefix + usedCommand} pal pal song\``);
+        return reply(`🎵 *Audio Downloader (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <song name or link>\`\nExample: \`${usedPrefix + usedCommand} karan aujla song\``);
       }
 
       await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
 
-      let ytdata;
+      let ytdata = null;
       const cleanUrl = normalizeYouTubeUrl(q);
 
-      if (cleanUrl) {
-        const videoIdMatch = cleanUrl.match(/v=([a-zA-Z0-9_-]{11})/);
-        if (videoIdMatch) {
-          const searchResults = await yts({ videoId: videoIdMatch[1] });
-          ytdata = searchResults;
+      try {
+        if (cleanUrl) {
+          const videoIdMatch = cleanUrl.match(/v=([a-zA-Z0-9_-]{11})/);
+          if (videoIdMatch) {
+            const searchResults = await yts({ videoId: videoIdMatch[1] });
+            ytdata = searchResults;
+          }
+        } else {
+          const searchResults = await yts(q);
+          if (searchResults && searchResults.videos && searchResults.videos.length > 0) {
+            ytdata = searchResults.videos[0];
+          }
         }
-      } 
-      
-      if (!ytdata || !ytdata.url) {
-        const searchResults = await yts(q);
-        if (!searchResults || !searchResults.videos || searchResults.videos.length === 0) {
-          return reply("❌ No audio found for your query!");
-        }
-        ytdata = searchResults.videos[0];
+      } catch (err) {
+        console.warn("yts search warning:", err.message);
       }
 
-      if (!ytdata || !ytdata.url) {
-        return reply("❌ Could not retrieve audio details. Try searching with a direct link or different keywords.");
+      // Fallbackagar yt-search fail ho jaye ya object na mile
+      const targetUrl = cleanUrl || (ytdata && ytdata.url);
+      if (!targetUrl) {
+        return reply("❌ No audio found or search query failed. Try using a direct YouTube link!");
       }
 
-      const rawYTTitle = ytdata.title || "YouTube Audio";
-      const videoTitle = typeof rawYTTitle === 'string' ? rawYTTitle.trim() : String(rawYTTitle);
-      const channelName = ytdata.author?.name || ytdata.author || 'Unknown';
-      const videoDuration = ytdata.timestamp || ytdata.duration || 'N/A';
-      const videoViews = ytdata.views ? ytdata.views.toLocaleString() : 'N/A';
-      const videoThumb = ytdata.thumbnail || ytdata.image || "";
+      const rawYTTitle = (ytdata && ytdata.title) ? ytdata.title : "YouTube Audio";
+      const videoTitle = typeof rawYTTitle === 'string' ? rawYTTitle : String(rawYTTitle);
+      const channelName = ytdata?.author?.name || ytdata?.author || 'Unknown';
+      const videoDuration = ytdata?.timestamp || ytdata?.duration || 'N/A';
+      const videoViews = ytdata?.views ? ytdata.views.toLocaleString() : 'N/A';
+      const videoThumb = ytdata?.thumbnail || ytdata?.image || "";
 
       const infoText = `
 🎵 *YT AUDIO DOWNLOADER* 🎵
@@ -133,7 +135,7 @@ _📥 Downloading your audio file securely..._
 
       await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-      const dlData = await fetchAudioData(ytdata.url);
+      const dlData = await fetchAudioData(targetUrl);
 
       if (!dlData || !dlData.audio_url) {
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
@@ -152,7 +154,7 @@ _📥 Downloading your audio file securely..._
               title: "YT AUDIO DOWNLOADER",
               body: dlData.title,
               thumbnailUrl: videoThumb,
-              sourceUrl: ytdata.url,
+              sourceUrl: targetUrl,
               mediaType: 2,
               renderLargerThumbnail: true
             }
@@ -164,7 +166,7 @@ _📥 Downloading your audio file securely..._
       await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
-      console.error("Song Command Error:", e);
+      console.error("Song Command Fatal Error:", e);
       await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
       reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
     }

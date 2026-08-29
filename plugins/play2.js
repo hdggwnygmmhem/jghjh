@@ -1,5 +1,7 @@
 //---------------------------------------------------------------------------
-//           KAMRAN-MD - PLAY / YOUTUBE AUDIO DOWNLOADER
+//           KAMRAN-MD - YOUTUBE AUDIO DOWNLOADER (SECURE & LOCKED)
+//---------------------------------------------------------------------------
+//  🔒 PROTECTED BY DR KAMRAN - UNAUTHORIZED COPYING IS PROHIBITED
 //---------------------------------------------------------------------------
 
 import { fileURLToPath } from 'url';
@@ -61,17 +63,17 @@ async function fetchAudioData(url, retries = 2) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       return fetchAudioData(url, retries - 1);
     }
-    console.error(`[${AUTHOR} PLAY2 CORE] Error:`, error.message);
+    console.error(`[${AUTHOR} PLAY CORE] Error:`, error.message);
     return null;
   }
 }
 
 cmd(
   {
-    pattern: "play2",
-    alias: ["ytplay2", "audio2", "song2"],
+    pattern: "play",
+    alias: ["song", "ytmp3", "audio"],
     react: "🎵",
-    desc: "Search and download audio from YouTube using play2.",
+    desc: "Search and download audio from YouTube.",
     category: "download",
     filename: __filename,
   },
@@ -82,10 +84,10 @@ cmd(
       }
 
       const usedPrefix = prefix || ".";
-      const usedCommand = command || "play2";
+      const usedCommand = command || "play";
 
       if (!q) {
-        return reply(`🎵 *Play Audio Downloader (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <song name or link>\`\nExample: \`${usedPrefix + usedCommand} karan aujla song\``);
+        return reply(`🎵 *Audio Downloader (${AUTHOR})*\n\nUsage: \`${usedPrefix + usedCommand} <song name or link>\`\nExample: \`${usedPrefix + usedCommand} karan aujla song\``);
       }
 
       await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
@@ -159,7 +161,7 @@ _📥 Downloading your audio file securely..._
               body: dlData.title,
               thumbnailUrl: videoThumb,
               sourceUrl: ytdata.url,
-.mediaType: 2,
+              mediaType: 2,
               renderLargerThumbnail: true
             }
           }
@@ -170,7 +172,7 @@ _📥 Downloading your audio file securely..._
       await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
-      console.error("Play2 Error:", e);
+      console.error("Play Command Error:", e);
       await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
       reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
     }

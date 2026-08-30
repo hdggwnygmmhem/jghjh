@@ -110,7 +110,7 @@ ${menuSections}
 > 💡 _${DESCRIPTION || 'Powered by WhatsApp Bot'}_`;
 
         let imageToUse;
-        const localImagePath = path.join(__dirname, '../lib/jawadmd.jpg');
+        const localImagePath = path.join(__dirname, '../lib/kamranmd.jpg');
         
         if (isValidImageUrl(BOT_IMAGE)) {
             try {

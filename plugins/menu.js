@@ -2,7 +2,6 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-import axios from 'axios';
 import { cmd, commands } from '../command.js';
 import config from '../config.js';
 import { runtime } from '../lib/functions.js';
@@ -32,20 +31,11 @@ const formatCategory = (category, cmds) => {
     
     let title = `\n╭━━━〔 *${toStylistUpper(category.toUpperCase())}* 〕━━━┈⊷\n`;
     let body = validCmds.map(cmd => {
-        // Command ka naam Badi ABC Stylist font me transform hoga
         const commandName = toStylistUpper(cmd.pattern || '');
         return `┃ ⚡ \`${commandName}\``;
     }).join('\n');
     let footer = `\n╰━━━━━━━━━━━━━━━━━━━┈⊷`;
     return `${title}${body}${footer}`;
-};
-
-// Function to validate image URL
-const isValidImageUrl = (url) => {
-    if (!url || typeof url !== 'string' || url.trim() === '') return false;
-    const urlLower = url.toLowerCase();
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    return imageExtensions.some(ext => urlLower.endsWith(ext));
 };
 
 cmd({
@@ -93,7 +83,8 @@ async (conn, mek, m, { from, reply, userConfig }) => {
         const VERSION = userConfig?.VERSION || config.VERSION || "10.0.0";
         const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
         
-        const BOT_IMAGE = userConfig?.BOT_IMAGE || userConfig?.BOT_MEDIA_URL || config.BOT_IMAGE || config.BOT_MEDIA_URL;
+        // Direct image URL set kar diya gaya hai
+        const imageToUse = 'https://i.ibb.co/RTWD9M32/jawadmd.jpg';
         
         let dec = `✨ *${toStylistUpper(BOT_NAME)} ᴍᴜʟᴛɪ-ᴅᴇᴠɪᴄᴇ* ✨
 
@@ -101,27 +92,13 @@ async (conn, mek, m, { from, reply, userConfig }) => {
 ┃ 👑 *${toStylistUpper('Owner')}:* ${OWNER_NAME}
 ┃ 📊 *${toStylistUpper('Commands')}:* ${totalCommands}
 ┃ ⏳ *${toStylistUpper('Runtime')}:* ${runtime(process.uptime())}
-┃ 📡 *${toStylistUpper('Prefix')}:*  [  ${PREFIX}  ]
+┃ 📡 *${toStylistUpper('Prefix')}:* [  ${PREFIX}  ]
 ┃ ⚙️ *${toStylistUpper('Mode')}:* ${MODE}
 ┃ 🏷️ *${toStylistUpper('Version')}:* ${VERSION}
 ╰━━━━━━━━━━━━━━━━━━━┈⊷
 ${menuSections}
 
 > 💡 _${DESCRIPTION || 'Powered by WhatsApp Bot'}_`;
-
-        let imageToUse;
-        const localImagePath = path.join(__dirname, '../lib/kamranmd.jpg');
-        
-        if (isValidImageUrl(BOT_IMAGE)) {
-            try {
-                await axios.head(BOT_IMAGE, { timeout: 3000 });
-                imageToUse = BOT_IMAGE;
-            } catch (serverError) {
-                imageToUse = localImagePath;
-            }
-        } else {
-            imageToUse = localImagePath;
-        }
 
         await conn.sendMessage(from, { 
             image: { url: imageToUse },

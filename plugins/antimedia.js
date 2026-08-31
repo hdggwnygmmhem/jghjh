@@ -3,9 +3,7 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// جن گروپوں میں anti-media ON ہے
 let antiMediaGroups = new Set();
-// Warning count save karne ke liye: "groupid_userid" : 1
 let antiMediaWarns = {};
 
 cmd({
@@ -15,22 +13,25 @@ cmd({
     category: "group",
     react: "🚫",
     filename: __filename
-}, async (conn, mek, m, { from, reply, isGroup, isAdmins, isBotAdmins }) => {
+}, async (conn, mek, m, { from, reply, isGroup, isGroupAdmins, isBotAdmins, sender }) => {
 
     if (!isGroup) return reply("❌ *Sirf Group me chalta hai*");
-    if (!isAdmins) return reply("❌ *Sirf Admin*");
+    
+    // FIX: Admin check 2 tarike se
+    const isAdmin = isGroupAdmins || m.key.participant === sender;
+    if (!isAdmin) return reply("❌ *Sirf Admin*");
+    
     if (!isBotAdmins) return reply("❌ *Mujhe Admin banao pehle*");
 
     try {
         if (antiMediaGroups.has(from)) {
             antiMediaGroups.delete(from);
+            delete antiMediaWarns[from]; // reset warns
             return reply(`✅ *Anti-Media OFF kar diya*\n\nAb media allowed hai`);
         } else {
             antiMediaGroups.add(from);
-            return reply(`🚫 *Anti-Media ON ho gaya*\n\n*Rule:*
-1. 1st Media = Warning 1/3
-2. 2nd Media = Warning 2/3
-3. 3rd Media = Direct Kick`);
+            if(!antiMediaWarns[from]) antiMediaWarns[from] = {};
+            return reply(`🚫 *Anti-Media ON ho gaya*\n\n*Rule:*\n1. 1st Media = Warning 1/3\n2. 2nd Media = Warning 2/3\n3. 3rd Media = Direct Kick`);
         }
 
     } catch (e) {
@@ -47,44 +48,36 @@ export const handler = async (conn, m) => {
         const type = Object.keys(m.message || {})[0];
         const mediaTypes = ["imageMessage", "videoMessage", "audioMessage", "pttMessage", "documentMessage", "stickerMessage"];
 
-        // Agar media nahi hai to return
         if (!mediaTypes.includes(type)) return;
 
         const groupId = m.chat;
-        const userId = m.sender;
-        const key = `${groupId}_${userId}`;
+        const userId = m.key.participant; // FIX: participant lena hai
+        const senderNum = userId.split('@')[0];
+        const key = `${groupId}_${senderNum}`;
 
-        // Warning count badhao
-        antiMediaWarns[key] = (antiMediaWarns[key] || 0) + 1;
-        const warns = antiMediaWarns[key];
-        const maxWarns = 3;
+        // Get group metadata to check if sender is admin
+        const metadata = await conn.groupMetadata(groupId);
+        const admins = metadata.participants.filter(p => p.admin).map(p => p.id);
+        if(admins.includes(userId)) return; // Skip admins
 
-        // Media delete karo
+        // Warning count
+        if(!antiMediaWarns[groupId]) antiMediaWarns[groupId] = {};
+        antiMediaWarns[groupId][senderNum] = (antiMediaWarns[groupId][senderNum] || 0) + 1;
+        const warns = antiMediaWarns[groupId][senderNum];
+
+        // Delete
         await conn.sendMessage(groupId, { delete: m.key });
 
         if (warns === 1) {
-            await conn.sendMessage(groupId, {
-                text: `⚠️ *WARNING 1/3* @${userId.split('@')[0]}\n\n🚫 Group me Media bhejna mana hai!`,
-                mentions: [userId]
-            });
+            await conn.sendMessage(groupId, { text: `⚠️ *WARNING 1/3* @${senderNum}\n\n🚫 Group me Media mana hai!`, mentions: [userId] });
         }
         else if (warns === 2) {
-            await conn.sendMessage(groupId, {
-                text: `⚠️ *WARNING 2/3* @${userId.split('@')[0]}\n\n🚫 Last Warning! Agli baar Kick`,
-                mentions: [userId]
-            });
+            await conn.sendMessage(groupId, { text: `⚠️ *WARNING 2/3* @${senderNum}\n\n🚫 Last Warning! Agli baar Kick`, mentions: [userId] });
         }
         else if (warns >= 3) {
-            await conn.sendMessage(groupId, {
-                text: `👢 *KICKED* @${userId.split('@')[0]}\n\n📌 Reason: 3 Baar Media bheja`,
-                mentions: [userId]
-            });
-
-            // Kick karo
+            await conn.sendMessage(groupId, { text: `👢 *KICKED* @${senderNum}\n\n📌 3 Baar Media bheja`, mentions: [userId] });
             await conn.groupParticipantsUpdate(groupId, [userId], "remove");
-
-            // Warn reset kar do
-            delete antiMediaWarns[key];
+            delete antiMediaWarns[groupId][senderNum];
         }
 
     } catch (e) {

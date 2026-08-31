@@ -1,64 +1,63 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
-
 const __filename = fileURLToPath(import.meta.url);
+
+// ✅ FINAL JID JO AAPNE DIYA HAI
+const CHANNEL_JID = "120363426641229472@newsletter";
 
 cmd({
     pattern: "ch",
-    alias: ["channel", "chstatus", "postch"],
+    alias: ["channel", "postch", "chstatus"],
     desc: "Post to WhatsApp Channel",
     category: "owner",
     react: "📢",
     filename: __filename
 }, async (conn, mek, m, { q, reply, isCreator }) => {
+    
+    if (!isCreator) return reply("❌ Sirf Owner command use kar sakta hai!");
 
-    if (!isCreator) return reply("❌ Sirf Owner ye command chala sakta hai!");
+    const quoted = m.quoted;
+    const caption = q?.trim() || "";
 
-    try {
-        const quoted = m.quoted;
-        const caption = q?.trim() || "";
-        const mime = quoted ? (quoted.msg || quoted).mimetype || '' : '';
-
-        if (!quoted && !caption) {
-            return reply(
-`⚠️ *Channel pe post karne ka tareeqa:*
+    if (!quoted && !caption) {
+        return reply(`*Channel me post kaise kare:*
 
 1. Text: *.ch* Aapka message
-2. Media: Media ko reply karke *.ch* Caption
+2. Photo/Video: Media ko reply karke *.ch* Caption
 
-*Example:* .ch ✨ NEW UPDATE ✨`
-            );
-        }
+Example: .ch NEW UPDATE 🔥`);
+    }
 
+    try {
         await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
-
-        // ✅✅✅ FINAL CHANNEL JID - ISKO CHANGE MAT KARNA
-        const channelJid = "120363426641229472@newsletter";
 
         let content = {};
         if (quoted) {
             const buffer = await quoted.download();
-            if (!buffer) throw new Error("Media download failed");
+            const mime = (quoted.msg || quoted).mimetype || '';
             
-            if (mime.startsWith('image/')) {
+            if (mime.startsWith("image")) {
                 content = { image: buffer, caption: caption };
-            } else if (mime.startsWith('video/')) {
+            } else if (mime.startsWith("video")) {
                 content = { video: buffer, caption: caption };
-            } else if (mime.startsWith('audio/')) {
-                content = { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+            } else if (mime.startsWith("audio")) {
+                content = { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: false };
+            } else {
+                content = { text: caption };
             }
         } else {
             content = { text: caption };
         }
 
-        await conn.sendMessage(channelJid, content);
+        // ✅ YAHIN POST HOGI AAPKE CHANNEL PE
+        await conn.sendMessage(CHANNEL_JID, content);
+        
         await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
+        return reply(`✅ *CHANNEL POST SUCCESS!*\n\n📢 Channel JID: ${CHANNEL_JID}\n📝 Message: ${caption || "Media Posted"}\n\n2 min me channel pe show ho jayega`);
 
-        return reply(`✅ *CHANNEL POST SUCCESSFUL!*\n\n📢 Channel: 120363426641229472@newsletter\n📝 ${caption || "Media Posted"}\n\n> 2-3 minute me channel pe show ho jayega`);
-
-    } catch (e) {
-        console.error("Channel Error:", e);
+    } catch (err) {
+        console.error(err);
         await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-        return reply(`❌ Error: ${e.message}\n\nNote: Bot ko channel ka Admin hona zaroori hai`);
+        return reply(`❌ Post nahi lagi.\n\nError: ${err.message}\n\n*Solution:* 1. Bot ko channel ka Admin banao  2. JID theek hai: ${CHANNEL_JID}`);
     }
 });

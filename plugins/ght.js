@@ -2,104 +2,91 @@ import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
-const CHANNEL_JID = "120363426641229472@newsletter"; // 👈 اپنا Channel ID یہاں لگاؤ
-const CHANNEL_NAME = "DOCTOR MD SUPPORT";
+
+const CHANNEL_JID = "120363426641229472@newsletter"; // 👈 اپنا Channel ID
+const CHANNEL_NAME = "DOCTOR MD SUPPORT"; // 👈 اپنا Channel Name
 
 cmd({
     pattern: "cstatus",
-    alias: ["chstatus", "postch", "ch"],
-    desc: "Broadcast status/media/links to Channel",
+    alias: ["ch", "postch", "channel"],
+    desc: "Post Anything to Channel",
     category: "owner",
     react: "📢",
     filename: __filename
-}, async (conn, mek, m, { from, text, reply, isCreator }) => {
+}, async (conn, mek, m, { text, reply, isCreator }) => {
 
-    // Sirf Owner/Creator hi chala sakta hai
-    if (!isCreator) return reply("❌ This command is only for owner!");
+    if (!isCreator) return reply("❌ *Sirf Owner*");
+
+    const quoted = m.quoted;
+    const caption = text?.trim() || "";
+
+    if (!quoted &&!caption) {
+        return reply(
+`*📢 CHANNEL POST COMMAND*
+
+*استعمال:*
+1. Image/Video/Audio/Sticker/Doc کو Reply کرو +.cstatus کیپشن
+2. صرف Text کے لیے:.cstatus اپنا میسج
+
+*مثال:* Image reply +.cstatus NEW UPDATE`
+        );
+    }
 
     try {
-        // Quoted (Reply kiya hua) message nikalna
-        const quotedMsg = m.quoted;
+        await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
 
-        // Mime type check karna
-        const mimeType = quotedMsg? (quotedMsg.msg || quotedMsg).mimetype || '' : '';
+        let sendMsg = {};
 
-        // Caption ya link text extract karna
-        const caption = text?.trim() || "";
+        if (quoted) {
+            const type = Object.keys(quoted.message)[0];
+            const media = await conn.downloadMediaMessage(quoted);
 
-        // Agar na media par reply hai na hi koi text/link likha hai
-        if (!quotedMsg &&!caption) {
-            return reply(
-                `⚠️ Reply to media/audio or provide text/link!\n\n` +
-                `Examples:\n` +
-                `•.cstatus https://whatsapp.com/channel/xxx\n` +
-                `• Reply to an image/video/audio with:.cstatus NEW UPDATE`
-            );
-        }
-
-        // Loading Reaction
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-
-        // Media Buffer Download karna
-        let mediaBuffer = null;
-        let isPTT = false;
-        let msgType = '';
-
-        if (quotedMsg) {
-            mediaBuffer = await quotedMsg.download();
-            if (!mediaBuffer) throw new Error("Failed to download media!");
-
-            isPTT = quotedMsg.message?.audioMessage?.ptt || false;
-            msgType = Object.keys(quotedMsg.message || {})[0];
-        }
-
-        let messageContent = {};
-
-        // Media Broadcast Logic
-        if (quotedMsg) {
-            if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
-                messageContent = {
-                    image: mediaBuffer,
-                    caption: caption || "",
-                    mimetype: mimeType || 'image/jpeg',
-                };
-            } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
-                messageContent = {
-                    video: mediaBuffer,
-                    caption: caption || "",
-                    mimetype: mimeType || 'video/mp4',
-                };
-            } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage' || msgType === 'pttMessage') {
-                messageContent = {
-                    audio: mediaBuffer,
-                    mimetype: isPTT? 'audio/ogg; codecs=opus' : 'audio/mp4',
-                    ptt: isPTT,
-                };
-            } else if (msgType === 'stickerMessage') {
-                messageContent = { sticker: mediaBuffer };
+            if (type === "imageMessage") {
+                sendMsg = { image: media, caption: caption || quoted.message.imageMessage.caption || "" };
             }
+            else if (type === "videoMessage") {
+                sendMsg = { video: media, caption: caption || quoted.message.videoMessage.caption || "" };
+            }
+            else if (type === "audioMessage" || type === "pttMessage") {
+                sendMsg = { audio: media, mimetype: 'audio/ogg; codecs=opus', ptt: quoted.message.pttMessage?.ptt || false };
+            }
+            else if (type === "stickerMessage") {
+                sendMsg = { sticker: media };
+            }
+            else if (type === "documentMessage") {
+                sendMsg = {
+                    document: media,
+                    mimetype: quoted.message.documentMessage.mimetype,
+                    fileName: quoted.message.documentMessage.fileName,
+                    caption: caption
+                };
+            }
+            else {
+                return reply("❌ یہ میڈیا سپورٹ نہیں ہے");
+            }
+        } else {
+            sendMsg = { text: caption };
         }
-        // Simple Text / Link Broadcast Logic
-        else if (caption) {
-            messageContent = { text: caption };
-        }
 
-        // ✅ CHANNEL MEIN SEND KAREIN - YAHI FARQ HAI
-        await conn.sendMessage(CHANNEL_JID, messageContent);
+        // ✅ CHANNEL POST KA ASLI CODE
+        await conn.sendMessage(CHANNEL_JID, {
+          ...sendMsg,
+            contextInfo: {
+                isForwarded: true,
+                forwardingScore: 1,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: CHANNEL_JID,
+                    newsletterName: CHANNEL_NAME
+                }
+            }
+        });
 
-        // Broadcast Complete Reaction & Summary
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+        await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
+        return reply(`📢 *CHANNEL ME POST HO GAYI!*\n\n*Type:* ${quoted? Object.keys(quoted.message)[0] : 'Text'}\n2 min me Green Ring check karo`);
 
-        return reply(
-            `📢 *CHANNEL STATUS POSTED!*\n\n` +
-            `📍 *Channel:* ${CHANNEL_NAME}\n` +
-            `✅ *Status Successfully Sent!*\n\n` +
-            `> *2 min me DP par Green Ring aa jayegi*`
-        );
-
-    } catch (error) {
-        console.error("Channel Status Error:", error);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        reply(`❌ Error: ${error.message}`);
+    } catch (e) {
+        console.log(e);
+        await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
+        return reply(`❌ *Error:* ${e.message}`);
     }
 });

@@ -9,7 +9,7 @@ const CHANNEL_NAME = "DOCTOR MD SUPPORT";
 cmd({
     pattern: "ch",
     alias: ["channel", "postch", "cstatus"],
-    desc: "Post to Channel - Fixed v14",
+    desc: "Post Media to Channel",
     category: "owner",
     react: "📢",
     filename: __filename
@@ -20,70 +20,57 @@ cmd({
     const quoted = m.quoted;
     let caption = q?.trim() || "";
 
-    if (!quoted && !caption) {
-        return reply(`*استعمال:* Image reply + \`${prefix}ch کیپشن\``);
+    // ✅ FIX: Pehle check karo reply kiya hai ya nahi
+    if (!quoted) {
+        return reply(`*❌ غلط طریقہ*\n\n*صحیح طریقہ:*\n1. Image/Video/Voice بھیجو\n2. اسے Reply کرو\n3. \`${prefix}ch اپنا کیپشن\` لکھو\n\n*مثال:* Image reply + .ch NEW UPDATE`);
     }
 
     try {
         await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
 
-        let sendContent = {};
-
-        if (quoted) {
-            // ✅ FIX 1: dono jagah check karo message ya msg
-            const msg = quoted.message || quoted.msg;
-            const type = quoted.mtype || Object.keys(msg)[0];
-
-            // ✅ FIX 2: downloadMediaMessage se buffer lo - ye sabse stable hai
-            const mediaBuffer = await downloadMediaMessage(quoted, 'buffer', {}, {
-                logger: conn.logger,
-                reuploadRequest: conn.updateMediaMessage
-            });
-
-            if (!mediaBuffer) throw new Error("Media download nahi hua");
-
-            if (type.includes('image')) {
-                sendContent = { image: mediaBuffer, caption: caption };
-            }
-            else if (type.includes('video')) {
-                sendContent = { video: mediaBuffer, caption: caption };
-            }
-            else if (type.includes('audio') || type.includes('ptt')) {
-                sendContent = { audio: mediaBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
-            }
-            else if (type.includes('sticker')) {
-                sendContent = { sticker: mediaBuffer };
-            }
-            else if (type.includes('document')) {
-                sendContent = {
-                    document: mediaBuffer,
-                    mimetype: msg.documentMessage?.mimetype || 'application/octet-stream',
-                    fileName: msg.documentMessage?.fileName || 'file',
-                    caption: caption
-                };
-            }
-        } else {
-            sendContent = { text: caption };
-        }
-
-        // ✅ Doctor MD ka asli tarika
-        await conn.sendMessage(CHANNEL_JID, {
-           ...sendContent,
-            contextInfo: {
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: CHANNEL_JID,
-                    newsletterName: CHANNEL_NAME,
-                }
-            }
+        // ✅ rc14 ka 100% working download
+        const mediaBuffer = await downloadMediaMessage(quoted, 'buffer', {}, {
+            logger: conn.logger,
+            reuploadRequest: conn.updateMediaMessage
         });
 
+        if (!mediaBuffer) throw new Error("Media download failed");
+
+        const type = quoted.mtype;
+        let sendContent = {};
+
+        if (type === 'imageMessage') {
+            sendContent = { image: mediaBuffer, caption: caption };
+        }
+        else if (type === 'videoMessage') {
+            sendContent = { video: mediaBuffer, caption: caption };
+        }
+        else if (type === 'audioMessage' || type === 'pttMessage') {
+            sendContent = { audio: mediaBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+        }
+        else if (type === 'stickerMessage') {
+            sendContent = { sticker: mediaBuffer };
+        }
+        else if (type === 'documentMessage') {
+            sendContent = {
+                document: mediaBuffer,
+                mimetype: quoted.msg.mimetype,
+                fileName: quoted.msg.fileName,
+                caption: caption
+            };
+        } else {
+            return reply("❌ Ye media type support nahi hai");
+        }
+
+        // ✅ Channel me bhejne ka sahi tarika
+        await conn.sendMessage(CHANNEL_JID, sendContent);
+
         await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
-        return reply(`✅ *IMAGE KE SATH POST HO GAYI!*\n\n2 min me Green Ring check karo`);
+        return reply(`✅ *POSTED SUCCESSFULLY!*\n\n*Channel:* ${CHANNEL_NAME}\n2 min me Green Ring aa jayegi`);
 
     } catch (err) {
         console.error(err);
         await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-        return reply(`❌ *ERROR:* ${err.message}`);
+        return reply(`❌ *ERROR:* ${err.message}\n\nBot restart karo: node .`);
     }
 });

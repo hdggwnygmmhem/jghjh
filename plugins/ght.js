@@ -2,62 +2,82 @@ import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
-// ✅ FINAL JID JO AAPNE DIYA HAI
-const CHANNEL_JID = "120363426641229472@newsletter";
+const CHANNEL_JID = "120363426641229472@newsletter"; // آپ کا channel ID
 
 cmd({
     pattern: "ch",
-    alias: ["channel", "postch", "chstatus"],
-    desc: "Post to WhatsApp Channel",
+    alias: ["channel", "postch", "cstatus"],
+    desc: "Post Image, Video, Audio, Text to Channel with Status Style",
     category: "owner",
     react: "📢",
     filename: __filename
 }, async (conn, mek, m, { q, reply, isCreator }) => {
     
-    if (!isCreator) return reply("❌ Sirf Owner command use kar sakta hai!");
+    if (!isCreator) return reply("❌ Sirf Owner!");
 
     const quoted = m.quoted;
-    const caption = q?.trim() || "";
+    let caption = q?.trim() || "";
 
     if (!quoted && !caption) {
-        return reply(`*Channel me post kaise kare:*
-
-1. Text: *.ch* Aapka message
-2. Photo/Video: Media ko reply karke *.ch* Caption
-
-Example: .ch NEW UPDATE 🔥`);
+        return reply(`*استعمال:*
+1. Text: *.ch* آپ کا میسج
+2. Image/Video: Media کو reply کر کے *.ch* کیپشن
+3. Voice: Voice کو reply کر کے *.ch*`);
     }
 
     try {
         await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
 
-        let content = {};
+        let contentToSend = {};
+        let messageType = 'text';
+        
         if (quoted) {
-            const buffer = await quoted.download();
-            const mime = (quoted.msg || quoted).mimetype || '';
+            const type = quoted.mtype;
+            const mediaBuffer = await quoted.download();
             
-            if (mime.startsWith("image")) {
-                content = { image: buffer, caption: caption };
-            } else if (mime.startsWith("video")) {
-                content = { video: buffer, caption: caption };
-            } else if (mime.startsWith("audio")) {
-                content = { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: false };
-            } else {
-                content = { text: caption };
+            if (type === 'imageMessage') {
+                messageType = 'image';
+                contentToSend = { image: mediaBuffer, caption: caption };
+            } 
+            else if (type === 'videoMessage') {
+                messageType = 'video';
+                contentToSend = { video: mediaBuffer, caption: caption };
+            }
+            else if (type === 'audioMessage' || type === 'pttMessage') {
+                messageType = 'audio';
+                contentToSend = { audio: mediaBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+            }
+            else {
+                contentToSend = { text: caption || quoted.text };
             }
         } else {
-            content = { text: caption };
+            contentToSend = { text: caption };
         }
 
-        // ✅ YAHIN POST HOGI AAPKE CHANNEL PE
-        await conn.sendMessage(CHANNEL_JID, content);
+        // ✅ یہاں WhatsApp کی مکمل چیزیں add کر دیں
+        // تاکہ channel میں "Status" کی طرح show ہو + Green Ring آئے
+        await conn.sendMessage(CHANNEL_JID, {
+            ...contentToSend,
+            contextInfo: {
+                forwardingScore: 1,
+                isForwarded: false,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: CHANNEL_JID,
+                    newsletterName: "DOCTOR MD SUPPORT",
+                    serverMessageId: 1
+                }
+            }
+        }, { 
+            messageId: mek.key.id,
+            statusJidList: [CHANNEL_JID] // ✅ یہ سب سے اہم ہے Status Style کے لیے
+        });
         
         await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
-        return reply(`✅ *CHANNEL POST SUCCESS!*\n\n📢 Channel JID: ${CHANNEL_JID}\n📝 Message: ${caption || "Media Posted"}\n\n2 min me channel pe show ho jayega`);
+        return reply(`✅ *CHANNEL STATUS POSTED!*\n\nاب Green Ring ضرور آئے گی 🔥\nType: ${messageType}`);
 
     } catch (err) {
         console.error(err);
         await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
-        return reply(`❌ Post nahi lagi.\n\nError: ${err.message}\n\n*Solution:* 1. Bot ko channel ka Admin banao  2. JID theek hai: ${CHANNEL_JID}`);
+        return reply(`❌ Error: ${err.message}`);
     }
 });

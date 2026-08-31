@@ -37,24 +37,24 @@ cmd({
 });
 
 // ==================== ANTI-MEDIA HANDLER ====================
-export const handler = async (conn, m) => {
+export default async function antiMediaHandler(conn, m) {
     try {
         if (!m.isGroup) return;
         if (!antiMediaGroups.has(m.chat)) return;
 
-        const type = Object.keys(m.message || {})[0];
+        const messageType = Object.keys(m.message || {})[0];
         const mediaTypes = ["imageMessage", "videoMessage", "audioMessage", "pttMessage", "documentMessage", "stickerMessage"];
 
-        if (!mediaTypes.includes(type)) return;
+        if (!mediaTypes.includes(messageType)) return;
 
         const groupId = m.chat;
         const userId = m.key.participant;
         const senderNum = userId.split('@')[0];
 
-        const self = conn.user.id.split(":")[0] + '@s.whatsapp.net'; // ✅ آپ والی line
-        if(userId === self) return; // Bot ko skip
+        const self = conn.user.id.split(":")[0] + '@s.whatsapp.net';
+        if(userId === self) return;
 
-        // Check if user is admin - skip
+        // Admin skip
         const metadata = await conn.groupMetadata(groupId);
         const admins = metadata.participants.filter(p => p.admin).map(p => p.id);
         if(admins.includes(userId)) return;

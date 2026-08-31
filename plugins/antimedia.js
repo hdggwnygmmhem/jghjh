@@ -6,40 +6,37 @@ const __filename = fileURLToPath(import.meta.url);
 let antiMediaGroups = new Set();
 let antiMediaWarns = {};
 
+// ==================== ANTI-MEDIA COMMAND ====================
 cmd({
     pattern: "antimedia",
-    alias: ["anti-media", "nomedia"],
-    desc: "Delete media + 3 warning + Kick",
+    alias: ["anti-media", "nomedia", "am"],
+    desc: "Enable/Disable Anti-Media with 3 warning system",
     category: "group",
     react: "🚫",
     filename: __filename
-}, async (conn, mek, m, { from, reply, isGroup, isGroupAdmins, isBotAdmins, sender }) => {
-
-    if (!isGroup) return reply("❌ *Sirf Group me chalta hai*");
-    
-    // FIX: Admin check 2 tarike se
-    const isAdmin = isGroupAdmins || m.key.participant === sender;
-    if (!isAdmin) return reply("❌ *Sirf Admin*");
-    
-    if (!isBotAdmins) return reply("❌ *Mujhe Admin banao pehle*");
-
+}, async (conn, mek, m, { from, isCreator, isBotAdmins, isAdmins, isGroup, reply }) => {
     try {
+        if (!isGroup) return await reply("⚠️ This command only works in groups.");
+        if (!isBotAdmins) return await reply("❌ I must be admin to delete media.");
+        if (!isCreator &&!isAdmins) return await reply("🔐 Only bot owner or group admins can use this command.");
+
         if (antiMediaGroups.has(from)) {
             antiMediaGroups.delete(from);
-            delete antiMediaWarns[from]; // reset warns
-            return reply(`✅ *Anti-Media OFF kar diya*\n\nAb media allowed hai`);
+            delete antiMediaWarns[from];
+            return await reply(`✅ *Anti-Media OFF*\n\nAb group me media allowed hai.`);
         } else {
             antiMediaGroups.add(from);
             if(!antiMediaWarns[from]) antiMediaWarns[from] = {};
-            return reply(`🚫 *Anti-Media ON ho gaya*\n\n*Rule:*\n1. 1st Media = Warning 1/3\n2. 2nd Media = Warning 2/3\n3. 3rd Media = Direct Kick`);
+            return await reply(`🚫 *Anti-Media ON*\n\n*Rule:*\n1️⃣ 1st Media = Warning 1/3\n2️⃣ 2nd Media = Warning 2/3\n3️⃣ 3rd Media = Kick`);
         }
 
-    } catch (e) {
-        reply(`❌ Error: ${e.message}`);
+    } catch (err) {
+        console.error(err);
+        await reply("❌ Failed to toggle anti-media.");
     }
 });
 
-// YE EVENT HAR MESSAGE PAR CHECK KAREGA
+// ==================== ANTI-MEDIA HANDLER ====================
 export const handler = async (conn, m) => {
     try {
         if (!m.isGroup) return;
@@ -51,36 +48,47 @@ export const handler = async (conn, m) => {
         if (!mediaTypes.includes(type)) return;
 
         const groupId = m.chat;
-        const userId = m.key.participant; // FIX: participant lena hai
+        const userId = m.key.participant;
         const senderNum = userId.split('@')[0];
-        const key = `${groupId}_${senderNum}`;
 
-        // Get group metadata to check if sender is admin
+        const self = conn.user.id.split(":")[0] + '@s.whatsapp.net'; // ✅ آپ والی line
+        if(userId === self) return; // Bot ko skip
+
+        // Check if user is admin - skip
         const metadata = await conn.groupMetadata(groupId);
         const admins = metadata.participants.filter(p => p.admin).map(p => p.id);
-        if(admins.includes(userId)) return; // Skip admins
+        if(admins.includes(userId)) return;
 
         // Warning count
         if(!antiMediaWarns[groupId]) antiMediaWarns[groupId] = {};
         antiMediaWarns[groupId][senderNum] = (antiMediaWarns[groupId][senderNum] || 0) + 1;
         const warns = antiMediaWarns[groupId][senderNum];
 
-        // Delete
+        // Delete media
         await conn.sendMessage(groupId, { delete: m.key });
 
         if (warns === 1) {
-            await conn.sendMessage(groupId, { text: `⚠️ *WARNING 1/3* @${senderNum}\n\n🚫 Group me Media mana hai!`, mentions: [userId] });
+            await conn.sendMessage(groupId, {
+                text: `⚠️ *WARNING 1/3* @${senderNum}\n\n🚫 Group me Media bhejna mana hai!`,
+                mentions: [userId]
+            });
         }
         else if (warns === 2) {
-            await conn.sendMessage(groupId, { text: `⚠️ *WARNING 2/3* @${senderNum}\n\n🚫 Last Warning! Agli baar Kick`, mentions: [userId] });
+            await conn.sendMessage(groupId, {
+                text: `⚠️ *WARNING 2/3* @${senderNum}\n\n🚫 Last Warning! Agli baar Kick ho jaoge`,
+                mentions: [userId]
+            });
         }
         else if (warns >= 3) {
-            await conn.sendMessage(groupId, { text: `👢 *KICKED* @${senderNum}\n\n📌 3 Baar Media bheja`, mentions: [userId] });
+            await conn.sendMessage(groupId, {
+                text: `*💀 Successfully removed from group.*\n\n📌 Reason: 3 Baar Media bheja\n👤 User: @${senderNum}`,
+                mentions: [userId]
+            });
             await conn.groupParticipantsUpdate(groupId, [userId], "remove");
             delete antiMediaWarns[groupId][senderNum];
         }
 
-    } catch (e) {
-        console.log("AntiMedia Error:", e);
+    } catch (err) {
+        console.error("AntiMedia Error:", err);
     }
 }

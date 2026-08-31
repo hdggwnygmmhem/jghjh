@@ -4,76 +4,61 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "channel",
-    alias: ["ch", "chstatus", "postch"],
-    desc: "Post media/text/link to your WhatsApp Channel",
+    pattern: "ch",
+    alias: ["channel", "chstatus", "postch"],
+    desc: "Post to WhatsApp Channel",
     category: "owner",
     react: "📢",
     filename: __filename
-}, async (conn, mek, m, { from, text, reply, isCreator, q }) => {
+}, async (conn, mek, m, { q, reply, isCreator }) => {
 
     if (!isCreator) return reply("❌ Sirf Owner ye command chala sakta hai!");
 
     try {
-        const quotedMsg = m.quoted;
-        const mimeType = quotedMsg? (quotedMsg.msg || quotedMsg).mimetype || '' : '';
+        const quoted = m.quoted;
         const caption = q?.trim() || "";
+        const mime = quoted ? (quoted.msg || quoted).mimetype || '' : '';
 
-        if (!quotedMsg &&!caption) {
+        if (!quoted && !caption) {
             return reply(
-                `⚠️ Channel pe post karne ka tareeqa:\n\n` +
-                `1. Text:.channel Aapka message\n` +
-                `2. Media: Media ko reply karke.channel Caption\n\n` +
-                `Example:.channel ✨ NEW UPDATE ✨`
+`⚠️ *Channel pe post karne ka tareeqa:*
+
+1. Text: *.ch* Aapka message
+2. Media: Media ko reply karke *.ch* Caption
+
+*Example:* .ch ✨ NEW UPDATE ✨`
             );
         }
 
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+        await conn.sendMessage(m.chat, { react: { text: "⏳", key: mek.key } });
 
-        let mediaBuffer = null;
-        let msgType = '';
+        // ✅✅✅ FINAL CHANNEL JID - ISKO CHANGE MAT KARNA
+        const channelJid = "120363426641229472@newsletter";
 
-        if (quotedMsg) {
-            mediaBuffer = await quotedMsg.download();
-            if (!mediaBuffer) throw new Error("Media download nahi hui!");
-            msgType = Object.keys(quotedMsg.message || {})[0];
-        }
-
-        // Yahan apna CHANNEL ID dalo
-        const channelJid = "1203631xxxxx@newsletter"; // ← apna channel ka JID yahan
-
-        let messageContent = {};
-
-        if (quotedMsg) {
-            if (mimeType.startsWith('image/') || msgType === 'imageMessage') {
-                messageContent = {
-                    image: mediaBuffer,
-                    caption: caption || "",
-                };
-            } else if (mimeType.startsWith('video/') || msgType === 'videoMessage') {
-                messageContent = {
-                    video: mediaBuffer,
-                    caption: caption || "",
-                };
-            } else if (mimeType.startsWith('audio/') || msgType === 'audioMessage') {
-                messageContent = {
-                    audio: mediaBuffer,
-                    mimetype: 'audio/ogg; codecs=opus',
-                    ptt: true
-                };
+        let content = {};
+        if (quoted) {
+            const buffer = await quoted.download();
+            if (!buffer) throw new Error("Media download failed");
+            
+            if (mime.startsWith('image/')) {
+                content = { image: buffer, caption: caption };
+            } else if (mime.startsWith('video/')) {
+                content = { video: buffer, caption: caption };
+            } else if (mime.startsWith('audio/')) {
+                content = { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
             }
-        } else if (caption) {
-            messageContent = { text: caption };
+        } else {
+            content = { text: caption };
         }
 
-        await conn.sendMessage(channelJid, messageContent);
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+        await conn.sendMessage(channelJid, content);
+        await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
 
-        return reply(`✅ *CHANNEL POST HO GAYA!*\n\nChannel: KAMRAN MD SUPPORT\nMessage: ${caption || "Media Posted"}`);
+        return reply(`✅ *CHANNEL POST SUCCESSFUL!*\n\n📢 Channel: 120363426641229472@newsletter\n📝 ${caption || "Media Posted"}\n\n> 2-3 minute me channel pe show ho jayega`);
 
-    } catch (error) {
-        console.error("Channel Post Error:", error);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        reply(`❌ Error: ${error.message}`);
+    } catch (e) {
+        console.error("Channel Error:", e);
+        await conn.sendMessage(m.chat, { react: { text: "❌", key: mek.key } });
+        return reply(`❌ Error: ${e.message}\n\nNote: Bot ko channel ka Admin hona zaroori hai`);
     }
 });

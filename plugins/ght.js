@@ -1,27 +1,36 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
-import { downloadMediaMessage } from '@whiskeysockets/baileys';
+import { downloadContentFromMessage } from '@whiskeysockets/baileys';
 const __filename = fileURLToPath(import.meta.url);
 
-const CHANNEL_JID = "120363426641229472@newsletter"; // اپنا ID
+const CHANNEL_JID = "120363426641229472@newsletter"; // اپنا channel
 const CHANNEL_NAME = "DOCTOR MD SUPPORT";
+
+// Buffer download karne ka function
+const getBuffer = async (quoted, conn) => {
+    const type = Object.keys(quoted.message)[0];
+    const stream = await downloadContentFromMessage(quoted.message[type], type.replace('Message', ''));
+    let buffer = Buffer.from([]);
+    for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+    return { buffer, type };
+}
 
 cmd({
     pattern: "ch",
-    alias: ["channel", "postch", "cstatus", "post"],
-    desc: "Post to Channel - Fixed for rc14",
+    alias: ["channel", "postch", "cstatus"],
+    desc: "Post anything to Channel - Working 100%",
     category: "owner",
     react: "📢",
     filename: __filename
 }, async (conn, mek, m, { q, reply, isCreator, prefix }) => {
 
-    if (!isCreator) return reply("❌ *Sirf Owner!*");
+    if (!isCreator) return reply("❌ *Sirf Owner*");
 
     const quoted = m.quoted;
     let caption = q?.trim() || "";
 
-    if (!quoted && !caption) {
-        return reply(`*استعمال:*\nImage/Video reply + \`${prefix}ch کیپشن\``);
+    if (!quoted &&!caption) {
+        return reply(`*استعمال:*\nImage/Video/Voice reply + \`${prefix}ch کیپشن\``);
     }
 
     try {
@@ -30,49 +39,48 @@ cmd({
         let sendContent = {};
 
         if (quoted) {
-            // ✅ FIX: quoted.msg use karo, quoted.message nahi
-            const msg = quoted.msg || quoted.message;
-            const type = quoted.mtype;
-            
-            const mediaBuffer = await downloadMediaMessage(quoted, 'buffer', {}, {
-                logger: console,
-                reuploadRequest: conn.updateMediaMessage
-            });
-
-            if (!mediaBuffer) throw new Error("Media download failed");
+            const { buffer, type } = await getBuffer(quoted, conn);
 
             if (type === 'imageMessage') {
-                sendContent = { image: mediaBuffer, caption: caption };
-            } 
+                sendContent = { image: buffer, caption: caption };
+            }
             else if (type === 'videoMessage') {
-                sendContent = { video: mediaBuffer, caption: caption };
+                sendContent = { video: buffer, caption: caption, mimetype: 'video/mp4' };
             }
             else if (type === 'audioMessage' || type === 'pttMessage') {
-                sendContent = { audio: mediaBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
+                sendContent = { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true };
             }
             else if (type === 'stickerMessage') {
-                sendContent = { sticker: mediaBuffer };
+                sendContent = { sticker: buffer };
             }
             else if (type === 'documentMessage') {
-                sendContent = { 
-                    document: mediaBuffer, 
-                    mimetype: msg.mimetype || 'application/octet-stream', // ✅ FIX
-                    fileName: msg.fileName || 'file.pdf',
-                    caption: caption 
+                sendContent = {
+                    document: buffer,
+                    mimetype: quoted.message.documentMessage.mimetype,
+                    fileName: quoted.message.documentMessage.fileName,
+                    caption: caption
                 };
-            }
-            else {
-                throw new Error("Ye media support nahi hai");
             }
         } else {
             sendContent = { text: caption };
         }
 
-        // ✅ Seedha channel me bhejo
-        await conn.sendMessage(CHANNEL_JID, sendContent);
-        
+        // ✅ YEHI DOCTOR MD KA ASLI TARIKA HAI - contextInfo ke sath
+        await conn.sendMessage(CHANNEL_JID, {
+           ...sendContent,
+            contextInfo: {
+                isForwarded: true,
+                forwardingScore: 1,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: CHANNEL_JID,
+                    newsletterName: CHANNEL_NAME,
+                    serverMessageId: m.key.id
+                }
+            }
+        });
+
         await conn.sendMessage(m.chat, { react: { text: "✅", key: mek.key } });
-        return reply(`✅ *POSTED!*\n\n*Channel:* ${CHANNEL_NAME}\n2 min me Green Ring aa jayegi`);
+        return reply(`✅ *POSTED WITH MEDIA!*\n\n*Channel:* ${CHANNEL_NAME}\n2 min me Green Ring aa jayegi`);
 
     } catch (err) {
         console.error(err);

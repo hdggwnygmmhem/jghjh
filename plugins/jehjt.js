@@ -1,3 +1,5 @@
+Isko hide kar do base64
+
 import { fileURLToPath } from 'url';
 import path from 'path';
 import axios from 'axios';
@@ -6,9 +8,6 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Base64 decode function
-const b64 = (s) => Buffer.from(s, 'base64').toString('utf-8');
 
 async function getThumbnailBuffer(url) {
   if (!url) return null;
@@ -19,36 +18,38 @@ async function getThumbnailBuffer(url) {
       .jpeg({ quality: 80 })
       .toBuffer();
   } catch (err) {
-    console.error(b64("RXJyb3IgcHJvY2Vzc2luZyB0aHVtYm5haWw6"), err.message || err);
+    console.error("Error processing thumbnail:", err.message || err);
     return null;
   }
 }
 
 cmd({
-    pattern: b64("Y2luZWZsdXJh"),
-    alias: [b64("Y2Zs"), b64("Y2luZWZsdXJhZGw=")],
-    desc: b64("U2VhcmNoIGFuZCBkb3dubG9hZCBtb3ZpZXM="),
-    category: b64("ZG93bmxvYWRlcg=="),
+    pattern: "cineflura",
+    alias: ["cfl", "cinefluradl"],
+    desc: "Search and download movies from Cineflura via API",
+    category: "downloader",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
     const client = socket || sock || conn;
 
-    // HIDDEN API CONFIG
-    const apiKey = b64("VmFqaXJhT2Zj");
-    const searchApiUrl = b64("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvc2VhcmNo");
-    const detailsApiUrl = b64("aHR0cHM6Ly92YWppcmFvZmMtYXBpcy52ZXJjZWwuYXBwL2FwaS9jaW5lZmx1cmEvZGV0YWlscw==");
+    // API CONFIGURATION
+    const apiKey = "VajiraOfc";
+    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/search`;
+    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/details`;
 
     try {
         await react("🎬");
 
         if (!q) {
             return reply(
-                b64("4pCcIE9wcHMhIFRpdGxlIE1pc3Npbmcg4pCcCgoKUGxlYXNlIHByb3ZpZGUgYSBtb3ZpZSBuYW1lIHRvIHNlYXJjaCEKIArigKIgRXhhbXBsZTogLmNpbmVmbHVyYSBJbnRlcnN0ZWxsYXI=")
+                "❌ *Opps! Title Missing* ❌\n\n" +
+                "Please provide a movie name to search!\n" +
+                "📌 *Example:* `.cineflura Interstellar`"
             );
         }
 
-        await reply(b64("8J+SiCAgU2VhcmNoaW5nIGZvciAi") + q + b64("IiBvbiBDbmVmUHJ1cGxlIHNlcnZlcnMuLi4="));
+        await reply(`🔍 _Searching for *"${q}"* on Cineflura servers..._`);
 
         const response = await axios.get(searchApiUrl, {
             params: { 
@@ -60,7 +61,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         if (response.status !== 200 || !response.data) {
             await react("❌");
-            return reply(b64("8J+NgCAqQVBJIEVycm9yKjogU2VydmVyIHJlc3BvbmRlZCB3aXRoIGFuIGludmFsaWQgc3RhdHVzLg=="));
+            return reply("🛸 *API Error:* Server responded with an invalid status.");
         }
 
         let results = null;
@@ -70,13 +71,15 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
         if (!results || results.length === 0) {
             await react("❌");
-            return reply(b64("8J+NgCAqTm8gUmVzdWx0cyBGb3VuZCEqCgpDaW5lZmx1cmEgcGFyICI") + q + b64("IiBuYW0ga2kgY29pIG1vdmllIG5haGkgbWlsaS4="));
+            return reply(`🛸 *No Results Found!*\nCineflura par *"${q}"* naam ki koi movie nahi mili.`);
         }
 
-        let listText = b64("4pKQ4pCUIO+4j+KAnCBfIENJTkVGTFVQQSBTQUVSRCAgXyAi4pKQ4pCU4pCcCg==") + "\n\n";
-        listText += b64("8J+UpSBRdWVyeTogYA==") + q.toUpperCase() + "`\n";
-        listText += b64("4oKqIFJlc3VsdHMgRm91bmQ6IA==") + results.length + "\n\n";
-        listText += b64("4pKQ4pCUIO+4j+CAnQ==") + "\n";
+        let listText = `┏━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+        listText += `┃ 🎬  *CINEFLURA SEARCH*  🎬 ┃\n`;
+        listText += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+        listText += `🔎 *Query:* \`${q.toUpperCase()}\`\n`;
+        listText += `✨ *Results Found:* ${results.length}\n\n`;
+        listText += `┌─────────────────────┐\n`;
 
         results.forEach((v, i) => {
             const title = v.title || 'Unknown Title';
@@ -86,8 +89,10 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
             if (i !== results.length - 1) listText += `┃─────────────────────┃\n`;
         });
 
-        listText += b64("4pKQ4pCUIO+4j+CAnQ==") + "\n\n";
-        listText += b64("4pW1IFJlcGx5IHdpdGggdGhlIGl0ZW0gbnVtYmVyIHRvIHZpZXcgZG93bmxvYWQgb3B0aW9ucy4KCj4gKiDDikFNUkFOLU1JTkktQk9UICDimIs=");
+        listText += `└─────────────────────┘\n\n`;
+        listText += `⚡ *Reply with the item number* to view download options.\n\n`;
+        listText += `> *© KAMRAN-MINI-BOT ッ*`;
+
         const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
         const sentSearch = await client.sendMessage(from, {
@@ -98,6 +103,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         const searchMsgId = sentSearch.key.id;
         let detailsTimeout, downloadTimeout;
 
+        // ================= INTERACTIVE STEP: DETAILS HANDLER =================
         const detailsHandler = async (update) => {
             try {
                 const msg = update.messages[0];
@@ -128,7 +134,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 if (detailResponse.status !== 200 || !detailResponse.data || !detailResponse.data.success) {
                     await react("❌");
-                    return reply(b64("4pCcIEVycm9yOiBGYWlsZWQgdG8gcHVsbCBkZXRhaWxzIGZvciB0aGlzIGl0ZW0u4pCc"));
+                    return reply("❌ *Error:* Failed to pull details for this item.");
                 }
 
                 const movieDetails = detailResponse.data.movie || {};
@@ -136,7 +142,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 if (downloads.length === 0) {
                     await react("❌");
-                    return reply(b64("4pCcIFNvcnJ5OiBObyBkb3dubG9hZGFibGUgbGlua3Mgd2VyZSBsb2NhdGVkIGZvciB0aGlzIHNlbGVjdGlvbi7igJw="));
+                    return reply("❌ *Sorry:* No downloadable links were located for this selection.");
                 }
 
                 let cap = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
@@ -163,7 +169,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 });
 
                 cap += `└─────────────────────────────┘\n\n`;
-                cap += b64("4pW1IFJlcGx5IHdpdGggYSBkb3dubG9hZCBudW1iZXIgdG8gc3RhcnQgZG93bmxvYWRpbmcuCgo+ICog4IMgS0FNUkFOLU1JTkktQk9UICDimIs=");
+                cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
+                cap += `> *© KAMRAN-MINI-BOT ッ*`;
 
                 const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
 
@@ -174,6 +181,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                 const detailMsgId = sentDetail.key.id;
 
+                // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
                 const downloadHandler = async (up) => {
                     try {
                         const dlMsg = up.messages[0];
@@ -194,16 +202,17 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
 
                         await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
                         
+                        // Get direct download URL
                         let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
                         
                         if (!targetFileUrl) {
                             await react("❌");
-                            return reply(b64("4pCcIEVycm9yOiBEaXJlY3QgZG93bmxvYWQgbGluayBjb3VsZCBub3QgYmUgcmVzb2x2ZWQu4pCc"));
+                            return reply("❌ *Error:* Direct download link could not be resolved.");
                         }
 
                         const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
 
-                        await reply(b64("8J+agCBQcm9jZXNzaW5nIENpbmVmTHVyYSBGaWxlLi4uIAoKVXBsb2FkaW5nIGRvY3VtZW50LiBQbGVhc2Ugd2FpdCE="));
+                        await reply(`🚀 *Processing Cineflura File...* \nUploading document. Please wait!`);
 
                         let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
                         finalCaption += `┃ 🎬 *${movieDetails.title || selected.title}*\n`;
@@ -211,7 +220,7 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
                         finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
                         finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += b64("PiAqIMCBSEFNUkFOLU1JTkktQk9UIOKYiw==");
+                        finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
 
                         const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
                         
@@ -230,8 +239,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                         await client.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });
 
                     } catch (dlErr) {
-                        console.error(b64("Q2luZWZsdXJhIGRvd25sb2FkIGZhaWxlZDo="), dlErr.message);
-                        reply(b64("4pCcIEFuIGVycm9yIG9jY3VycmVkIGR1cmluZyBmaWxlIGRlbGl2ZXJ5OiAi") + dlErr.message + '"');
+                        console.error("Cineflura download failed:", dlErr.message);
+                        reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
                     }
                 };
 
@@ -242,8 +251,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
                 }, 300000);
 
             } catch (detErr) {
-                console.error(b64("Q2luZWZsdXJhIGRldGFpbHMgZmFpbGVkOiA="), detErr.message);
-                reply(b64("4pCcIEFuIGVycm9yIG9jY3VycmVkIHdoaWxlIGxvYWRpbmcgZGV0YWlsczog") + detErr.message);
+                console.error("Cineflura details failed:", detErr.message);
+                reply(`❌ An error occurred while loading details: ${detErr.message}`);
             }
         };
 
@@ -254,8 +263,8 @@ async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }
         }, 300000);
 
     } catch (e) {
-        console.error(b64("Q2luZWZsdXJhIERvd25sb2FkZXIgZXJyb3I6IA=="), e.message);
+        console.error("Cineflura Downloader error:", e.message);
         await react("❌");
-        return reply(b64("4pCcIEVycm9yIFByb2Nlc3NpbmcgUmVxdWVzdDog") + e.message);
+        return reply(`❌ *Error Processing Request:* ${e.message}`);
     }
 });

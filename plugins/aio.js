@@ -31,36 +31,43 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Debugging log to check API structure if needed
-        console.log("AIO API Response:", JSON.stringify(resData, null, 2));
-
-        if (!resData || !resData.status || !resData.result) {
+        if (!resData || !resData.status || !resData.result || !Array.isArray(resData.result) || resData.result.length === 0) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Could not retrieve media from the provided URL.");
         }
 
-        const info = resData.result;
-        const downloadUrl = info.download_url || info.url || info.dl || info.link;
-        const title = info.title || info.searched_title || "Media Download";
+        const info = resData.result[0]; // Accessing the first item of the result array
+        const downloadUrl = info.url || info.download_url;
+        const title = info.title || "Media Download";
+        const thumbnail = info.thumb || '';
 
         if (!downloadUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Failed to extract the download link from the API response.");
         }
 
-        // Send info text first
-        await reply(`🎬 *Title:* ${title}\n🤖 *Bot:* KAMRAN-MD\n📁 *Status:* Downloading media...`);
+        // Send info caption first
+        let caption = `🎬 *Title:* ${title}\n`;
+        caption += `🤖 *Bot:* KAMRAN-MD\n`;
+        caption += `📁 *Status:* Downloading media buffer...`;
 
-        // Download and send media buffer to avoid streaming blocks
+        if (thumbnail) {
+            await conn.sendMessage(from, { image: { url: thumbnail }, caption: caption }, { quoted: mek });
+        } else {
+            await reply(caption);
+        }
+
+        // Download media as arraybuffer with proper headers to bypass streaming blocks
         const mediaBufferRes = await axios.get(downloadUrl, {
             responseType: 'arraybuffer',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.youtube.com/'
             },
             timeout: 60000
         });
 
-        // Send as video/document depending on size or type (defaulting to video/mp4 for AIO videos)
+        // Send the media file
         await conn.sendMessage(from, {
             video: Buffer.from(mediaBufferRes.data),
             mimetype: 'video/mp4',

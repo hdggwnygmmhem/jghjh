@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "playz",
-    alias: ["ytplays", "songs", "plays"],
+    alias: ["ytplayx", "songs", "plays"],
     desc: "Search and download songs from YouTube via FAA API",
     category: "downloader",
     react: "🎵",

@@ -5,8 +5,8 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "videoz",
-    alias: ["ytmp4", "ytvideo", "playvidz"],
+    pattern: "videod",
+    alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
     desc: "Search and download videos from YouTube via FAA API",
     category: "downloader",
     react: "📥",
@@ -17,36 +17,41 @@ cmd({
             return reply(
                 `⚠️ Please provide a video name or search query!\n\n` +
                 `Example:\n` +
-                `• .video faded`
+                `• .video song pal`
             );
         }
 
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the FAA API endpoint with encoded query
+        // Call the API endpoint
         const encodedQuery = encodeURIComponent(text.trim());
         const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodedQuery}`;
         
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
+        // Debugging ke liye console mein response print karein
+        console.log("API Response Data:", JSON.stringify(resData, null, 2));
+
         // Check if API returned valid data
-        if (!resData || !resData.status || !resData.result) {
+        if (!resData) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not find any video results for that query.");
+            return reply("❌ Empty response received from the API.");
         }
 
-        const info = resData.result;
-        const videoUrl = info.dl_link || info.video || info.url || info.mp4; 
+        const info = resData.result || resData;
+
+        // Sabhi possible video link keys ko check karna
+        const videoUrl = info.download || info.dl_link || info.mp4 || info.url || info.link || info.video;
         const title = info.title || text;
-        const thumbnail = info.thumbnail || '';
-        const duration = info.duration || '';
-        const author = info.author || '';
+        const thumbnail = info.thumbnail || info.image || '';
+        const duration = info.duration || info.timestamp || '';
+        const author = info.author || info.channel || '';
 
         if (!videoUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Failed to retrieve the video download link from the API response.");
+            return reply("❌ Failed to retrieve the video download link from the API response. Check console logs for details.");
         }
 
         // Prepare info caption with KAMRAN-MD branding

@@ -1,82 +1,76 @@
-import { cmd } from "../command.js";
-import yts from "yt-search";
-import axios from "axios";
 import { fileURLToPath } from 'url';
+import { cmd } from '../command.js';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-const API_CONFIG = {
-    AUDIO_API: Buffer.from("aHR0cHM6Ly9hcGkubmV4cmF5LmV1LmNjL2Rvd25sb2FkZXIvc2F2ZXR1YmU/dXJsPQ==", "base64").toString()
-};
-
-/**
- * Normalizes YouTube URLs to a standard format
- */
-function normalizeYouTubeUrl(url) {
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})/);
-  return match ? `https://youtube.com/watch?v=${match[1]}` : null;
-}
-
-// --- SONG COMMAND ---
-
 cmd({
-    pattern: "song9",
-    alias: ["play9", "ytmp39"],
-    desc: "Download songs via name or link.",
-    category: "download",
-    react: "🎧",
+    pattern: "songs",
+    alias: ["ytplays", "plays"],
+    desc: "Search and download songs from YouTube via FAA API",
+    category: "downloader",
+    react: "🎵",
     filename: __filename
-},
-async (conn, mek, m, { from, args, q, reply }) => {
+}, async (conn, mek, m, { from, text, reply }) => {
     try {
-        if (!q) return reply("❌ Please provide a song name or YouTube link!");
+        if (!text) {
+            return reply(
+                `⚠️ Please provide a song name or search query!\n\n` +
+                `Example:\n` +
+                `• .song Song pal`
+            );
+        }
 
-        // Search Reaction
-        await conn.sendMessage(from, { react: { text: "🔎", key: mek.key } });
+        // Loading reaction
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        let videoUrl = q;
-        let vid;
+        // Call the API endpoint
+        const encodedQuery = encodeURIComponent(text.trim());
+        const apiUrl = `https://api-faa.my.id/faa/ytplay?query=${encodedQuery}`;
+        
+        const response = await axios.get(apiUrl, { timeout: 30000 });
+        const resData = response.data;
 
-        // Check agar input link hai ya name
-        const isUrl = q.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=)?(.+)/g);
+        // Ensure the API returned valid data (adjust keys based on actual JSON response structure)
+        if (!resData || (!resData.url && !resData.data)) {
+            return reply("❌ Could not find any results for that song.");
+        }
 
-        if (isUrl) {
-            // Agar link hai to details fetch karo
-            const search = await yts({ videoId: q.split('v=')[1] || q.split('/').pop() });
-            vid = search;
-            videoUrl = q;
+        // Extract result properties (handling common API response structures)
+        const songInfo = resData.data || resData;
+        const audioUrl = songInfo.url || songInfo.downloadUrl || songInfo.audio;
+        const title = songInfo.title || text;
+        const thumbnail = songInfo.thumbnail || songInfo.image;
+
+        if (!audioUrl) {
+            return reply("❌ Failed to retrieve the audio download link from the API.");
+        }
+
+        // Send thumbnail/details if available first, or directly send the audio buffer
+        let caption = `🎶 *Title:* ${title}\n📁 *Status:* Downloaded successfully!`;
+        
+        if (thumbnail) {
+            await conn.sendMessage(from, { 
+                image: { url: thumbnail }, 
+                caption: caption 
+            }, { quoted: mek });
         } else {
-            // Agar naam hai to search karo
-            const search = await yts(q);
-            if (!search || !search.videos.length) return reply("❌ No results found.");
-            vid = search.videos[0];
-            videoUrl = vid.url;
+            await reply(caption);
         }
 
-        // Preview Message
+        // Send the audio file
         await conn.sendMessage(from, {
-            image: { url: vid.thumbnail || vid.image },
-            caption: `╭━━〔 🎵 𝗠𝗨𝗦𝗜𝗖 𝗙𝗢𝗨𝗡𝗗 〕━━━╮\n┃ 🎧 *Title* : ${vid.title}\n┃ ⏱️ *Duration* : ${vid.timestamp || 'N/A'}\n╰━━━━━━━━━━━━━━━━━╯\n\n⏳ *Downloading audio...*`
+            audio: { url: audioUrl },
+            mimetype: 'audio/mp4',
+            ptt: false // Set to true if you want it as a voice note (PTT)
         }, { quoted: mek });
 
-        // API Download (Using updated audio API)
-        const apiUrl = `${API_CONFIG.AUDIO_API}${encodeURIComponent(videoUrl)}&quality=mp3`;
-        const { data } = await axios.get(apiUrl);
-
-        if (!data || !data.status || !data.result || !data.result.url) {
-            return reply("❌ API error! Try again later.");
-        }
-
-        // Sending Audio only
-        await conn.sendMessage(from, {
-            audio: { url: data.result.url },
-            mimetype: "audio/mpeg"
-        }, { quoted: mek });
-
+        // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
-    } catch (err) {
-        console.error(err);
-        reply("❌ Error: " + err.message);
+    } catch (error) {
+        console.error("YTPlay Error:", error);
+        reply(`❌ Error: ${error.message}`);
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 });

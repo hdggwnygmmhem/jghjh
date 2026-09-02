@@ -5,7 +5,7 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "waifu",
+    pattern: "waifu2",
     alias: ["randomwaifu", "animegirl"],
     desc: "Get a random anime waifu image via FAA API",
     category: "anime",
@@ -16,26 +16,42 @@ cmd({
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the API endpoint
         const apiUrl = `https://api-faa.my.id/faa/waifu`;
         
-        const response = await axios.get(apiUrl, { timeout: 30000 });
+        // Agar API binary image bhej rahi hai, toh responseType 'arraybuffer' ya 'json' manage karna hoga
+        const response = await axios.get(apiUrl, { 
+            responseType: 'json',
+            validateStatus: false 
+        });
+
         const resData = response.data;
 
-        // Check response (adjusting based on general API patterns)
-        // Agar API direct URL ya object bhejti hai toh uske mutabiq handle kiya hai
-        const imageUrl = resData.result || resData.url || resData;
-
-        if (!imageUrl || typeof imageUrl !== 'string') {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not retrieve a valid waifu image link from the API.");
+        // Check karein ki kya data ek valid URL string hai ya nahi
+        let imageUrl = '';
+        if (typeof resData === 'string' && resData.startsWith('http')) {
+            imageUrl = resData;
+        } else if (resData && resData.url) {
+            imageUrl = resData.url;
+        } else if (resData && resData.result) {
+            imageUrl = resData.result;
         }
 
-        // Send the waifu image
-        await conn.sendMessage(from, { 
-            image: { url: imageUrl }, 
-            caption: `✨ *Random Waifu*` 
-        }, { quoted: mek });
+        // Agar API direct image buffer/binary bhej rahi hai, toh usko direct buffer se send karenge
+        if (!imageUrl) {
+            // Fallback: Agar direct image bytes aa gaye hain toh use buffer bna kar bhej do
+            const imageBufferResponse = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+            
+            await conn.sendMessage(from, { 
+                image: imageBufferResponse.data, 
+                caption: `✨ *Random Waifu*` 
+            }, { quoted: mek });
+        } else {
+            // Agar URL mil gaya hai toh URL se send karein
+            await conn.sendMessage(from, { 
+                image: { url: imageUrl }, 
+                caption: `✨ *Random Waifu*` 
+            }, { quoted: mek });
+        }
 
         // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });

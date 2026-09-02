@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "meme",
     alias: ["randommeme", "memes"],
-    desc: "Fetch random memes using FAA API",
+    desc: "Fetch random memes using api",
     category: "fun",
     react: "😂",
     filename: __filename
@@ -21,7 +21,7 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Flexible data extraction (handles different JSON response structures)
+        // Flexible data extraction
         const memeInfo = resData.result || resData.data || resData;
         const memeUrl = memeInfo.url || memeInfo.image || memeInfo.media || (typeof memeInfo === 'string' ? memeInfo : '');
         const memeTitle = memeInfo.title || "Random Meme 😂";
@@ -31,9 +31,13 @@ cmd({
             return reply("❌ Failed to retrieve a meme image link from the API.");
         }
 
-        // Send the meme image with title caption
+        // Download image as arraybuffer to avoid file path errors in Baileys
+        const imageResponse = await axios.get(memeUrl, { responseType: 'arraybuffer', timeout: 30000 });
+        const imageBuffer = Buffer.from(imageResponse.data);
+
+        // Send the meme image buffer with title caption
         await conn.sendMessage(from, {
-            image: { url: memeUrl },
+            image: imageBuffer,
             caption: `😂 *${memeTitle}*`
         }, { quoted: mek });
 

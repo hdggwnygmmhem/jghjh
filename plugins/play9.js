@@ -5,8 +5,8 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "songs",
-    alias: ["ytplays", "plays"],
+    pattern: "playz",
+    alias: ["ytplays", "songs", "plays"],
     desc: "Search and download songs from YouTube via FAA API",
     category: "downloader",
     react: "🎵",
@@ -17,7 +17,7 @@ cmd({
             return reply(
                 `⚠️ Please provide a song name or search query!\n\n` +
                 `Example:\n` +
-                `• .song Song pal`
+                `• .play Song pal`
             );
         }
 
@@ -31,22 +31,21 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Ensure the API returned valid data (adjust keys based on actual JSON response structure)
-        if (!resData || (!resData.url && !resData.data)) {
-            return reply("❌ Could not find any results for that song.");
-        }
+        // DEBUG: Terminal/Console par pura response print karega taake structure pata chale
+        console.log("API RAW RESPONSE:", JSON.stringify(resData, null, 2));
 
-        // Extract result properties (handling common API response structures)
-        const songInfo = resData.data || resData;
-        const audioUrl = songInfo.url || songInfo.downloadUrl || songInfo.audio;
-        const title = songInfo.title || text;
-        const thumbnail = songInfo.thumbnail || songInfo.image;
+        // Flexible data extraction (checks multiple common keys)
+        const resultObj = resData.result || resData.data || resData;
+        const audioUrl = resultObj.url || resultObj.download || resultObj.audio || resultObj.downloadUrl;
+        const title = resultObj.title || text;
+        const thumbnail = resultObj.thumbnail || resultObj.image || '';
 
         if (!audioUrl) {
-            return reply("❌ Failed to retrieve the audio download link from the API.");
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply(`❌ API response mein audio link nahi mila!\nCheck your terminal console logs to see the raw API structure.`);
         }
 
-        // Send thumbnail/details if available first, or directly send the audio buffer
+        // Send thumbnail/details if available
         let caption = `🎶 *Title:* ${title}\n📁 *Status:* Downloaded successfully!`;
         
         if (thumbnail) {
@@ -62,7 +61,7 @@ cmd({
         await conn.sendMessage(from, {
             audio: { url: audioUrl },
             mimetype: 'audio/mp4',
-            ptt: false // Set to true if you want it as a voice note (PTT)
+            ptt: false
         }, { quoted: mek });
 
         // Success reaction

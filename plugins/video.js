@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "videod",
     alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
-    desc: "Search and download videos from YouTube via FAA API",
+    desc: "Search and download videos from YouTube via DR",
     category: "downloader",
     react: "📥",
     filename: __filename
@@ -31,15 +31,12 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Check if API returned valid data
         if (!resData || !resData.status || !resData.result) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Could not find any video results for that query.");
         }
 
         const info = resData.result;
-
-        // Exact keys from your console logs
         const videoUrl = info.download_url;
         const title = info.searched_title || text;
         const videoPageUrl = info.searched_url || '';
@@ -49,18 +46,26 @@ cmd({
             return reply("❌ Failed to retrieve the video download link from the API response.");
         }
 
-        // Prepare info caption with KAMRAN-MD branding
+        // Send caption info first
         let caption = `🎬 *Title:* ${title}\n`;
         if (videoPageUrl) caption += `🔗 *YouTube:* ${videoPageUrl}\n`;
         caption += `🤖 *Bot:* KAMRAN-MD\n`;
-        caption += `📁 *Status:* Sending video...`;
-
-        // Send info text first
+        caption += `📁 *Status:* Downloading video buffer...`;
         await reply(caption);
 
-        // Send the video file using direct download_url
+        // Download video as arraybuffer with proper headers to bypass streaming block
+        const videoBufferRes = await axios.get(videoUrl, {
+            responseType: 'arraybuffer',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.youtube.com/'
+            },
+            timeout: 60000 // 60 seconds for large files
+        });
+
+        // Send the video buffer directly
         await conn.sendMessage(from, {
-            video: { url: videoUrl },
+            video: Buffer.from(videoBufferRes.data),
             mimetype: 'video/mp4',
             caption: `🎥 ${title}\n> Powered by KAMRAN-MD`
         }, { quoted: mek });

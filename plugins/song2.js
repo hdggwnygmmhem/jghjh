@@ -122,7 +122,7 @@ async function getYouTubeUrl(query) {
 // ==================== 1. MP3 / SONG COMMAND ====================
 cmd({
     pattern: "songs",
-    alias: ["s", "song6", "yta"],
+    alias: ["ssss", "song6", "ytas"],
     react: "🎵",
     desc: "Download MP3 audio by Name or YouTube Link",
     category: "download",
@@ -168,8 +168,8 @@ cmd({
 
 // ==================== 2. MP4 / VIDEO COMMAND ====================
 cmd({
-    pattern: "video",
-    alias: ["ytmp44", "v4"],
+    pattern: "videoss",
+    alias: ["ytmp44", "vs4"],
     react: "🎬",
     desc: "Download MP4 video by Name or YouTube Link",
     category: "download",

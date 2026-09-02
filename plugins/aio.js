@@ -24,7 +24,6 @@ cmd({
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the AIO API endpoint
         const encodedUrl = encodeURIComponent(text.trim());
         const apiUrl = `https://api-faa.my.id/faa/aio?url=${encodedUrl}`;
         
@@ -46,23 +45,16 @@ cmd({
             return reply("❌ Failed to extract the download link from the API response.");
         }
 
-        // Send info caption first
-        let caption = `🎬 *Title:* ${title}\n`;
-        caption += `🤖 *Bot:* KAMRAN-MD\n`;
-        caption += `📁 *Status:* Sending media...`;
+        // Send direct downloadable link text to avoid server-side 403 streaming blocks
+        let msg = `🎬 *Title:* ${title}\n\n`;
+        msg += `🔗 *Download Link:* ${downloadUrl}\n\n`;
+        msg += `> Powered by KAMRAN-MD`;
 
         if (thumbnail) {
-            await conn.sendMessage(from, { image: { url: thumbnail }, caption: caption }, { quoted: mek });
+            await conn.sendMessage(from, { image: { url: thumbnail }, caption: msg }, { quoted: mek });
         } else {
-            await reply(caption);
+            await reply(msg);
         }
-
-        // Send the video URL directly to avoid Heroku/Axios 403 server block
-        await conn.sendMessage(from, {
-            video: { url: downloadUrl },
-            mimetype: 'video/mp4',
-            caption: `🎥 ${title}\n> Powered by KAMRAN-MD`
-        }, { quoted: mek });
 
         // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });

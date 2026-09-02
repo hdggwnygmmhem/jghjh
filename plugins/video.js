@@ -5,7 +5,7 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "videod",
+    pattern: "video",
     alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
     desc: "Search and download videos from YouTube via DR",
     category: "downloader",

@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "fancy",
     alias: ["stylish", "font", "fancytext"],
-    desc: "Generate fancy/stylish fonts with names and numbers",
+    desc: "Generate fancy/stylish fonts easily copyable",
     category: "tools",
     react: "✨",
     filename: __filename
@@ -24,7 +24,6 @@ cmd({
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the Fancy Text API endpoint
         const encodedText = encodeURIComponent(text.trim());
         const apiUrl = `https://api.princetechn.com/api/tools/fancy?apikey=prince&text=${encodedText}`;
         
@@ -45,7 +44,8 @@ cmd({
                 const styleName = item.name || `Style ${count}`;
                 const stylized = item.result || '';
                 if (stylized) {
-                    formattedText += `*${count}. ${styleName}*\n${stylized}\n\n`;
+                    // Clean format with spacing for easy selection and copying
+                    formattedText += `*${count}. ${styleName}*\n\`\`\`${stylized}\`\`\`\n\n`;
                     count++;
                 }
             });
@@ -53,7 +53,7 @@ cmd({
 
         formattedText += `> Powered by KAMRAN-MD`;
 
-        // Send the numbered and named fancy text list
+        // Send the message
         await reply(formattedText);
 
         // Success reaction

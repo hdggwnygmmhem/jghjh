@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "playz",
-    alias: ["ytplayx", "songs", "plays"],
+    alias: ["ytplay", "songz", "plays"],
     desc: "Search and download songs from YouTube via FAA API",
     category: "downloader",
     react: "🎵",
@@ -31,23 +31,31 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // DEBUG: Terminal/Console par pura response print karega taake structure pata chale
-        console.log("API RAW RESPONSE:", JSON.stringify(resData, null, 2));
+        // Check if API returned success and result object
+        if (!resData || !resData.status || !resData.result) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Could not find any results for that song.");
+        }
 
-        // Flexible data extraction (checks multiple common keys)
-        const resultObj = resData.result || resData.data || resData;
-        const audioUrl = resultObj.url || resultObj.download || resultObj.audio || resultObj.downloadUrl;
-        const title = resultObj.title || text;
-        const thumbnail = resultObj.thumbnail || resultObj.image || '';
+        const info = resData.result;
+        const audioUrl = info.mp3; // Exact key from your API log
+        const title = info.title || text;
+        const thumbnail = info.thumbnail || '';
+        const duration = info.duration_timestamp || '';
+        const author = info.author || '';
 
         if (!audioUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply(`❌ API response mein audio link nahi mila!\nCheck your terminal console logs to see the raw API structure.`);
+            return reply("❌ Failed to retrieve the MP3 download link from the API response.");
         }
 
-        // Send thumbnail/details if available
-        let caption = `🎶 *Title:* ${title}\n📁 *Status:* Downloaded successfully!`;
-        
+        // Prepare info caption
+        let caption = `🎶 *Title:* ${title}\n`;
+        if (author) caption += `👤 *Artist/Channel:* ${author}\n`;
+        if (duration) caption += `⏱️ *Duration:* ${duration}\n`;
+        caption += `📁 *Status:* Downloading audio...`;
+
+        // Send thumbnail and details first
         if (thumbnail) {
             await conn.sendMessage(from, { 
                 image: { url: thumbnail }, 
@@ -57,11 +65,11 @@ cmd({
             await reply(caption);
         }
 
-        // Send the audio file
+        // Send the audio file using direct mp3 link
         await conn.sendMessage(from, {
             audio: { url: audioUrl },
             mimetype: 'audio/mp4',
-            ptt: false
+            ptt: false // Set true if you want voice note style
         }, { quoted: mek });
 
         // Success reaction

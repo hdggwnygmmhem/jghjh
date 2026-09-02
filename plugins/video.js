@@ -1,115 +1,83 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 import axios from 'axios';
-import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Helper functions for reaction API signing
-const baseUrl = 'https://amba-react-pi.vercel.app';
-const CONFIG_API = `${baseUrl}/api/config`;
-const REACT_API = `${baseUrl}/api/react`;
-
-async function getSecretKey() {
-    try {
-        const res = await axios.get(CONFIG_API, { timeout: 5000 });
-        if (res.data?.secret) return res.data.secret;
-        throw new Error('Secret key tidak ditemukan');
-    } catch (err) {
-        return 'AMBA_ULTRA_SECURE_KEY_2026_XYZ#!'; 
-    }
-}
-
-function generateSignature(payloadString, timestamp, secret) {
-    const message = timestamp + payloadString;
-    const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(message);
-    return hmac.digest('hex');
-}
-
-async function sendReactToApi(link, emojiInput = "🔥") {
-    let emojis = [];
-    if (typeof emojiInput === 'string') {
-        emojis = emojiInput.split(',').map(e => e.trim()).filter(e => e.length > 0);
-    } else if (Array.isArray(emojiInput)) {
-        emojis = emojiInput;
-    }
-
-    if (emojis.length > 4) {
-        emojis = emojis.slice(0, 4);
-    }
-
-    const finalEmojiStr = emojis.join(',');
-    const secret = await getSecretKey();
-    
-    const payload = {
-        mode: "1",
-        link: link,
-        emoji: finalEmojiStr,
-        count: 1
-    };
-
-    const payloadString = JSON.stringify(payload);
-    const timestamp = Date.now().toString();
-    const signature = generateSignature(payloadString, timestamp, secret);
-
-    try {
-        const res = await axios.post(REACT_API, payloadString, {
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Timestamp': timestamp,
-                'X-Signature': signature,
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
-            },
-            timeout: 60000
-        });
-
-        return { success: true, data: res.data };
-    } catch (err) {
-        return { 
-            success: false, 
-            message: err.response?.data?.message || err.message 
-        };
-    }
-}
-
 cmd({
-    pattern: "channelreact2",
-    alias: ["chreact2", "wareact"],
-    desc: "Send auto reactions to a WhatsApp channel post link",
-    category: "owner",
-    react: "⚡",
+    pattern: "videoz",
+    alias: ["ytmp4", "ytvideo", "playvidz"],
+    desc: "Search and download videos from YouTube via FAA API",
+    category: "downloader",
+    react: "📥",
     filename: __filename
-}, async (conn, mek, m, { from, text, reply, isCreator }) => {
-    if (!isCreator) return reply("❌ This command is only for owners!");
-    
-    // Usage: .channelreact https://whatsapp.com/channel/.../363 😛,😭,😆
-    const args = text ? text.trim().split(' ') : [];
-    const channelLink = args[0] || (m.quoted ? m.quoted.text : null);
-    const customEmojis = args.slice(1).join(' ') || "😛,😭,😆,🤪";
-    
-    if (!channelLink || !channelLink.includes('whatsapp.com/channel/')) {
-        return reply(
-            `⚠️ Please provide a valid WhatsApp channel post link!\n\n` +
-            `Example:\n` +
-            `• .channelreact https://whatsapp.com/channel/0029Vb8hiKd0gcfQDpEDdf2n/363 😛,😭,😆`
-        );
-    }
-    
-    await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-    
+}, async (conn, mek, m, { from, text, reply }) => {
     try {
-        const result = await sendReactToApi(channelLink, customEmojis);
-        
-        if (result.success) {
-            await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-            reply(`✅ Successfully sent reactions to the channel post!\nEmojis: ${customEmojis}`);
-        } else {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            reply(`❌ Failed to send reactions: ${result.message}`);
+        if (!text) {
+            return reply(
+                `⚠️ Please provide a video name or search query!\n\n` +
+                `Example:\n` +
+                `• .video faded`
+            );
         }
+
+        // Loading reaction
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+
+        // Call the FAA API endpoint with encoded query
+        const encodedQuery = encodeURIComponent(text.trim());
+        const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodedQuery}`;
+        
+        const response = await axios.get(apiUrl, { timeout: 30000 });
+        const resData = response.data;
+
+        // Check if API returned valid data
+        if (!resData || !resData.status || !resData.result) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Could not find any video results for that query.");
+        }
+
+        const info = resData.result;
+        const videoUrl = info.dl_link || info.video || info.url || info.mp4; 
+        const title = info.title || text;
+        const thumbnail = info.thumbnail || '';
+        const duration = info.duration || '';
+        const author = info.author || '';
+
+        if (!videoUrl) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Failed to retrieve the video download link from the API response.");
+        }
+
+        // Prepare info caption with KAMRAN-MD branding
+        let caption = `🎬 *Title:* ${title}\n`;
+        if (author) caption += `👤 *Channel:* ${author}\n`;
+        if (duration) caption += `⏱️ *Duration:* ${duration}\n`;
+        caption += `🤖 *Bot:* KAMRAN-MD\n`;
+        caption += `📁 *Status:* Downloading video...`;
+
+        // Send thumbnail and details first (if available)
+        if (thumbnail) {
+            await conn.sendMessage(from, { 
+                image: { url: thumbnail }, 
+                caption: caption 
+            }, { quoted: mek });
+        } else {
+            await reply(caption);
+        }
+
+        // Send the video file using direct video link
+        await conn.sendMessage(from, {
+            video: { url: videoUrl },
+            mimetype: 'video/mp4',
+            caption: `🎥 ${title}\n> Powered by KAMRAN-MD`
+        }, { quoted: mek });
+
+        // Success reaction
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+
     } catch (error) {
-        console.error("Channel React Error:", error);
+        console.error("KAMRAN-MD Video Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }

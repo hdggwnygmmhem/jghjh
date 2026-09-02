@@ -36,7 +36,7 @@ cmd({
             return reply("❌ Could not retrieve media from the provided URL.");
         }
 
-        const info = resData.result[0]; // Accessing the first item of the result array
+        const info = resData.result[0];
         const downloadUrl = info.url || info.download_url;
         const title = info.title || "Media Download";
         const thumbnail = info.thumb || '';
@@ -49,7 +49,7 @@ cmd({
         // Send info caption first
         let caption = `🎬 *Title:* ${title}\n`;
         caption += `🤖 *Bot:* KAMRAN-MD\n`;
-        caption += `📁 *Status:* Downloading media buffer...`;
+        caption += `📁 *Status:* Sending media...`;
 
         if (thumbnail) {
             await conn.sendMessage(from, { image: { url: thumbnail }, caption: caption }, { quoted: mek });
@@ -57,19 +57,9 @@ cmd({
             await reply(caption);
         }
 
-        // Download media as arraybuffer with proper headers to bypass streaming blocks
-        const mediaBufferRes = await axios.get(downloadUrl, {
-            responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://www.youtube.com/'
-            },
-            timeout: 60000
-        });
-
-        // Send the media file
+        // Send the video URL directly to avoid Heroku/Axios 403 server block
         await conn.sendMessage(from, {
-            video: Buffer.from(mediaBufferRes.data),
+            video: { url: downloadUrl },
             mimetype: 'video/mp4',
             caption: `🎥 ${title}\n> Powered by KAMRAN-MD`
         }, { quoted: mek });

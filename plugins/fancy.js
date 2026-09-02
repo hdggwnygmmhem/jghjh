@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "fancy",
     alias: ["stylish", "font", "fancytext"],
-    desc: "Generate fancy/stylish fonts for text",
+    desc: "Generate fancy/stylish fonts with names and numbers",
     category: "tools",
     react: "✨",
     filename: __filename
@@ -31,37 +31,29 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Debugging log to check API structure if needed
-        console.log("Fancy API Response:", JSON.stringify(resData, null, 2));
-
-        if (!resData || !resData.status || !resData.result) {
+        if (!resData || !resData.status || !resData.results) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Could not generate fancy text from the API.");
         }
 
-        // Handle result format (if result is an array of objects or strings)
-        let results = resData.result;
-        let formattedText = `✨ *KAMRAN-MD FANCY TEXT* ✨\n\n`;
+        let results = resData.results;
+        let formattedText = `✨ *KAMRAN-MD FANCY STYLES* ✨\n\n`;
+        let count = 1;
 
         if (Array.isArray(results)) {
-            // If API returns an array of styles/fonts
-            results.forEach((item, index) => {
-                const styleName = item.name || `Style ${index + 1}`;
-                const stylized = item.result || item.text || item;
-                formattedText += `*${styleName}:*\n${stylized}\n\n`;
+            results.forEach((item) => {
+                const styleName = item.name || `Style ${count}`;
+                const stylized = item.result || '';
+                if (stylized) {
+                    formattedText += `*${count}. ${styleName}*\n${stylized}\n\n`;
+                    count++;
+                }
             });
-        } else if (typeof results === 'object') {
-            // If result is an object mapping names to styles
-            for (const [key, value] of Object.entries(results)) {
-                formattedText += `*${key}:*\n${value}\n\n`;
-            }
-        } else {
-            formattedText += `${results}\n\n`;
         }
 
         formattedText += `> Powered by KAMRAN-MD`;
 
-        // Send the generated fancy text
+        // Send the numbered and named fancy text list
         await reply(formattedText);
 
         // Success reaction

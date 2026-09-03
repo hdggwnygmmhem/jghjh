@@ -1,8 +1,9 @@
-import axios from 'axios';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { cmd } from '../command.js';
 
-// HTML Content for Angry Birds Game
+const __filename = fileURLToPath(import.meta.url);
+
 const ANGRY_HTML = `<style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:'Trebuchet MS','Segoe UI',Arial,sans-serif;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;margin:0;overflow:hidden}
@@ -108,7 +109,6 @@ currentY-=blkH+15;
 var groundPigX=180+Math.floor(Math.random()*80);
 pig(groundPigX,510,15);
 }
-
 function setupLevel(){
 clearTimeout(levelTimer);
 particles=[];texts=[];
@@ -116,7 +116,6 @@ hasLaunched=false;
 generateRandomLevel();
 resetBird();
 }
-
 function wood(x,y,w,h,hp){blocks.push({x:x,y:y,w:w,h:h,hp:hp,maxHp:hp,type:'wood',angle:0})}
 function stone(x,y,w,h,hp){blocks.push({x:x,y:y,w:w,h:h,hp:hp,maxHp:hp,type:'stone',angle:0})}
 function glass(x,y,w,h,hp){blocks.push({x:x,y:y,w:w,h:h,hp:hp,maxHp:hp,type:'glass',angle:0})}
@@ -171,7 +170,6 @@ ctx.strokeStyle='rgba(255,255,255,.75)';ctx.lineWidth=2;ctx.beginPath();ctx.move
 }
 ctx.restore();
 }
-
 function drawPig(p){
 var bob=Math.sin(frame*.08+p.wobble)*1.2,x=p.x,y=p.y+bob,r=p.r;ctx.save();
 ctx.fillStyle='#43bd58';ctx.beginPath();ctx.arc(x-r*.65,y-r*.75,r*.42,0,Math.PI*2);ctx.arc(x+r*.65,y-r*.75,r*.42,0,Math.PI*2);ctx.fill();
@@ -188,7 +186,6 @@ function getLaunchVelocity(){
 var dx=sling.x-bird.x,dy=sling.y-bird.y;
 return {vx:dx*0.19,vy:dy*0.19};
 }
-
 function drawTrajectory(){
 if(state!=='aiming'||!bird)return;
 var launchVel=getLaunchVelocity();
@@ -226,7 +223,6 @@ if(pigs.length===0)return;
 if(birdsLeft>0){birdsLeft--;resetBird();}
 else{state='gameover';sfxGameOver();if(score>high){high=score;try{localStorage.setItem('angry_high',String(high))}catch(e){}}}
 }
-
 function levelClear(){
 state='levelclear';sfxLevelClear();
 levelTimer=setTimeout(function(){
@@ -333,7 +329,6 @@ dragging=true;
 sfxStretch();
 }
 }
-
 function onPointerMove(e){
 if(e.touches)e=e.touches[0];
 pointer.x=e.clientX||e.pageX;
@@ -348,7 +343,6 @@ if(dist>80){dx=dx/dist*80;dy=dy/dist*80;}
 bird.x=sling.x+dx;bird.y=sling.y+dy;
 }
 }
-
 function onPointerUp(){
 if(dragging){
 dragging=false;
@@ -401,7 +395,7 @@ async function kirimForwardSigned(conn, chatId, html, judul) {
         }]
     })).toString('base64');
 
-    return await conn.relayMessage(chatId, {
+    return conn.relayMessage(chatId, {
         messageContextInfo: {
             deviceListMetadata: {},
             deviceListMetadataVersion: 2,
@@ -443,19 +437,34 @@ async function kirimForwardSigned(conn, chatId, html, judul) {
     }, {});
 }
 
-// cmd() handler format
 cmd({
-    pattern: "angrybirds",
-    alias: ["angry", "ketapel"],
-    desc: "Angry Birds Game",
+    pattern: "angry",
+    alias: ["angrybirds", "ketapel"],
+    desc: "Play Angry Birds mini game",
     category: "game",
-    filename: import.meta.url
+    react: "🐦",
+    filename: __filename
 },
 async (conn, mek, m, { from, reply }) => {
     try {
+        // ⏳ React - processing
+        await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+        
+        // 1000ms delay to ensure react is visible
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         await kirimForwardSigned(conn, from, ANGRY_HTML, '🐦 ANGRY BIRDS');
+
+        // 800ms delay before success react
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // ✅ React - success
+        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+
     } catch (e) {
-        console.error('[ANGRY BIRDS ERROR]:', e?.message || e);
-        await reply(`❌ Gagal mengirim game: ${e?.message || e}`);
+        console.error("Error in angry command:", e);
+        // ❌ React - error
+        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
+        await reply(`❌ Error sending game: ${e.message}`);
     }
 });

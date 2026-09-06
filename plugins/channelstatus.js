@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-  pattern: "vvmp3",
-  alias: ["viewoncemp3", 'retrivemp3'],
+  pattern: "vvaudio",
+  alias: ["vvmp3", 'retrivemp3'],
   react: '🐳',
   desc: "Owner Only - retrieve quoted message back to user",
   category: "owner",
@@ -25,9 +25,15 @@ cmd({
       }, { quoted: message });
     }
 
-    const buffer = await match.quoted.download();
-    const mtype = match.quoted.mtype;
-    const originalCaption = match.quoted.text || '';
+    // Safely get the quoted message object (handling viewOnce wrappers)
+    const quotedMsg = match.quoted;
+    const buffer = await quotedMsg.download().catch(async () => {
+      // Fallback if direct download fails due to wrapper structure
+      return await client.downloadMediaMessage(quotedMsg);
+    });
+
+    const mtype = quotedMsg.mtype;
+    const originalCaption = quotedMsg.text || quotedMsg.caption || '';
     const options = { quoted: message };
 
     const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION;
@@ -38,21 +44,21 @@ cmd({
         messageContent = {
           image: buffer,
           caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-          mimetype: match.quoted.mimetype || "image/jpeg"
+          mimetype: quotedMsg.mimetype || "image/jpeg"
         };
         break;
       case "videoMessage":
         messageContent = {
           video: buffer,
           caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-          mimetype: match.quoted.mimetype || "video/mp4"
+          mimetype: quotedMsg.mimetype || "video/mp4"
         };
         break;
       case "audioMessage":
         messageContent = {
           audio: buffer,
           mimetype: "audio/mp4",
-          ptt: false // Audio format fix
+          ptt: false // Forces audio to send as normal audio file instead of voice note
         };
         break;
       default:
@@ -71,7 +77,7 @@ cmd({
 });
 
 cmd({
-  pattern: "vv6",
+  pattern: "vv5",
   alias: ["wah", "ohh", "oho", "🙂", "😂", "❤️", "💋", "🥵", "🌚", "😒", "nice", "ok"],
   desc: "Owner Only - retrieve quoted message back to user",
   category: "owner",
@@ -88,9 +94,13 @@ cmd({
       }, { quoted: message });
     }
 
-    const buffer = await match.quoted.download();
-    const mtype = match.quoted.mtype;
-    const originalCaption = match.quoted.text || '';
+    const quotedMsg = match.quoted;
+    const buffer = await quotedMsg.download().catch(async () => {
+      return await client.downloadMediaMessage(quotedMsg);
+    });
+
+    const mtype = quotedMsg.mtype;
+    const originalCaption = quotedMsg.text || quotedMsg.caption || '';
     const options = { quoted: message };
 
     const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION;
@@ -101,21 +111,21 @@ cmd({
         messageContent = {
           image: buffer,
           caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-          mimetype: match.quoted.mimetype || "image/jpeg"
+          mimetype: quotedMsg.mimetype || "image/jpeg"
         };
         break;
       case "videoMessage":
         messageContent = {
           video: buffer,
           caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-          mimetype: match.quoted.mimetype || "video/mp4"
+          mimetype: quotedMsg.mimetype || "video/mp4"
         };
         break;
       case "audioMessage":
         messageContent = {
           audio: buffer,
           mimetype: "audio/mp4",
-          ptt: false // Audio format fix
+          ptt: false // Forces audio to send as normal audio file instead of voice note
         };
         break;
       default:

@@ -5,10 +5,9 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CONFIGURATION (UNLOCKED & UPDATED) ====================
-// Replace these with your actual key and web URL directly
-const SECRET_KEY = "drkamran823";
-const WEB_URL = "https://drkamran-mini-bot.vercel.app";
+// ==================== CONFIGURATION (BASE64 ENCODED) ====================
+const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
+const WEB_URL = Buffer.from("aHR0cHM6Ly9kcmthbXJhbi1taW5pLWJvdC52ZXJjZWwuYXBw", "base64").toString("utf-8");
 
 // Function to get status emoji based on count
 function getCountStatus(count) {
@@ -206,7 +205,7 @@ cmd({
     }
 });
 
-// ==================== CHREACT COMMAND ====================
+// ==================== CHREACT COMMAND (OPTIMIZED & SILENCED TIMEOUTS) ====================
 cmd({
     pattern: "chreact",
     alias: ["channelreact", "react", "rp"],
@@ -271,16 +270,19 @@ cmd({
             return reply("❌ *No servers found!*");
         }
         
+        // Parallel requests with silent error handling to clean up console spam
         let successCount = 0;
-        for (const server of servers) {
-            try {
-                const reactUrl = `${server.url}/react?key=${SECRET_KEY}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
-                await axios.get(reactUrl, { timeout: 5000 });
-                successCount++;
-            } catch (error) {
-                console.log(`Failed to send reaction via ${server.name}:`, error.message);
-            }
-        }
+        await Promise.allSettled(
+            servers.map(async (server) => {
+                try {
+                    const reactUrl = `${server.url}/react?key=${SECRET_KEY}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
+                    await axios.get(reactUrl, { timeout: 5000 });
+                    successCount++;
+                } catch (error) {
+                    // Errors and timeouts are silently caught here so they don't flood your console logs
+                }
+            })
+        );
         
         await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
         

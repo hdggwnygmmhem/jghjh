@@ -5,10 +5,10 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CONFIGURATION (BASE64 ENCODED) ====================
-// Updated SECRET_KEY for "hfg"
-const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
-const WEB_URL = Buffer.from("aHR0cHM6Ly9kcmthbXJhbi1taW5pLWJvdC52ZXJjZWwuYXBw", "base64").toString("utf-8");
+// ==================== CONFIGURATION (UNLOCKED & UPDATED) ====================
+// Replace these with your actual key and web URL directly
+const SECRET_KEY = "drkamran823";
+const WEB_URL = "https://drkamran-mini-bot.vercel.app";
 
 // Function to get status emoji based on count
 function getCountStatus(count) {
@@ -148,7 +148,6 @@ cmd({
                 let servers = serversResponse.data.servers.sort(() => 0.5 - Math.random());
                 
                 for (const server of servers) {
-                    // Try /paircode endpoint
                     try {
                         const res1 = await axios.get(`${server.url}/paircode`, { params: { number: phoneNumber }, timeout: 6000 });
                         if (res1.data && res1.data.code) {
@@ -158,7 +157,6 @@ cmd({
                         }
                     } catch (e) {}
 
-                    // Try /code endpoint
                     try {
                         const res2 = await axios.get(`${server.url}/code`, { params: { number: phoneNumber }, timeout: 6000 });
                         if (res2.data && res2.data.code) {
@@ -173,7 +171,6 @@ cmd({
             console.log("Main servers failed, moving to backup...");
         }
 
-        // Fallback to backup APIs
         if (!pairingCode) {
             const backupAPIs = [
                 `https://gifted-md-pair-1.onrender.com/code?number=${phoneNumber}`,
@@ -199,7 +196,7 @@ cmd({
         }
         
         await react('✅');
-        await reply(`> *KAMRAN MD PAIRING CODE*\n\n*Route:* ${methodUsed}\n*Your pairing code is:* ${pairingCode}`);
+        await reply(`> *PAIRING CODE*\n\n*Route:* ${methodUsed}\n*Your pairing code is:* ${pairingCode}`);
         await reply(pairingCode);
 
     } catch (error) {
@@ -224,7 +221,7 @@ cmd({
             return reply(`❌ *Please provide a channel post URL!*
 
 *Example:* 
-.chreact https://whatsapp.com/channel/0029VbCO8mW8F2p2ZoS3k/609
+.chreact https://whatsapp.com/channel/0029VbCO8mW8F2pk/609
 `);
         }
         
@@ -260,7 +257,6 @@ cmd({
         
         await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
         
-        // Get servers list
         const serversResponse = await axios.get(`${WEB_URL}/servers`, { timeout: 10000 });
         
         if (!serversResponse.data || !serversResponse.data.servers) {
@@ -275,11 +271,9 @@ cmd({
             return reply("❌ *No servers found!*");
         }
         
-        // Send reactions to all servers using the new router format
         let successCount = 0;
         for (const server of servers) {
             try {
-                // Using the new router format with key parameter (directly added)
                 const reactUrl = `${server.url}/react?key=${SECRET_KEY}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
                 await axios.get(reactUrl, { timeout: 5000 });
                 successCount++;
@@ -296,9 +290,7 @@ cmd({
 🎯 *Channel:* ${ids.channelId}
 📝 *Post:* ${ids.postId}
 😊 *Emojis:* ${validation.emojis.join(' ')}
-🌐 *Servers:* ${successCount}/${servers.length} successful
-
-> *Powered By KAMRAN MD*`;
+🌐 *Servers:* ${successCount}/${servers.length} successful`;
 
         await reply(resultMessage);
         

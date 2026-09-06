@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-  pattern: "vv5",
-  alias: ["viewonce", 'retrive'],
+  pattern: "vvmp3",
+  alias: ["viewoncemp3", 'retrivemp3'],
   react: '🐳',
   desc: "Owner Only - retrieve quoted message back to user",
   category: "owner",
@@ -30,7 +30,6 @@ cmd({
     const originalCaption = match.quoted.text || '';
     const options = { quoted: message };
 
-    // Get DESCRIPTION from userConfig if available, otherwise use config.DESCRIPTION
     const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION;
 
     let messageContent = {};
@@ -53,7 +52,7 @@ cmd({
         messageContent = {
           audio: buffer,
           mimetype: "audio/mp4",
-          ptt: false // Forces audio to send as normal audio file instead of voice note
+          ptt: false // Audio format fix
         };
         break;
       default:
@@ -80,7 +79,7 @@ cmd({
 }, async (client, message, match, { from, isCreator, userConfig }) => {
   try {
     if (!isCreator) {
-      return; // Simply return without any response if not owner
+      return; 
     }
 
     if (!match.quoted) {
@@ -94,7 +93,6 @@ cmd({
     const originalCaption = match.quoted.text || '';
     const options = { quoted: message };
 
-    // Get DESCRIPTION from userConfig if available, otherwise use config.DESCRIPTION
     const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION;
 
     let messageContent = {};
@@ -117,7 +115,7 @@ cmd({
         messageContent = {
           audio: buffer,
           mimetype: "audio/mp4",
-          ptt: false // Forces audio to send as normal audio file instead of voice note
+          ptt: false // Audio format fix
         };
         break;
       default:
@@ -126,7 +124,6 @@ cmd({
         }, { quoted: message });
     }
 
-    // Forward to user's DM
     await client.sendMessage(message.sender, messageContent, options);
   } catch (error) {
     console.error("vv Error:", error);

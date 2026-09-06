@@ -4,147 +4,118 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== TIKTOK STORY FUNCTION ====================
-async function getStoryTiktok(uniqueId) {
-    const headers = {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+// ==================== YOUTUBE SEARCH FUNCTION ====================
+async function searchYoutube(query) {
+  const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
+  
+  const payload = {
+    context: {
+      client: {
+        clientName: 'WEB',
+        clientVersion: '2.20240514.01.00',
+        hl: 'en',
+        gl: 'US',
+      }
+    },
+    query: query
+  };
+
+  try {
+    const response = await axios.post(url, payload, {
+      headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://ttviewer.net/',
-        'Origin': 'https://ttviewer.net',
-        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"'
-    };
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20240514.01.00',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+      },
+      timeout: 10000
+    });
 
-    try {
-        const profileResponse = await axios.post('https://ttviewer.net/api/tiktok/get-profile', { unique_id: uniqueId }, { headers, timeout: 10000 });
-        const profileData = profileResponse.data;
+    const data = response.data;
+    const results = [];
 
-        if (profileData.code !== 0 || !profileData.data?.user?.id) {
-            throw new Error(`User dengan username "${uniqueId}" tidak ditemukan.`);
-        }
-
-        const userId = profileData.data.user.id;
-        const userInfo = {
-            id: userId,
-            uniqueId: profileData.data.user.uniqueId,
-            nickname: profileData.data.user.nickname,
-            avatar: profileData.data.user.avatarThumb,
-            signature: profileData.data.user.signature
-        };
-
-        const storyResponse = await axios.post('https://ttviewer.net/api/tiktok/get-story', { userId: userId, maxCursor: 0 }, { headers, timeout: 10000 });
-        const storyData = storyResponse.data;
-
-        if (storyData.code !== 0) {
-            throw new Error('Gagal mengambil data story dari server.');
-        }
-
-        const rawItems = storyData.data?.items || [];
+    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+    
+    if (contents && Array.isArray(contents)) {
+      for (const section of contents) {
+        const items = section.itemSectionRenderer?.contents || section.richGridRenderer?.contents;
         
-        const stories = rawItems.map(item => ({
-            aweme_id: item.aweme_id,
-            video_id: item.video_id,
-            duration: item.duration,
-            play_url: item.play,      
-            cover_url: item.cover,    
-            music: {
-                title: item.music_info?.title || 'Original Sound',
-                author: item.music_info?.author || 'Unknown',
-                url: item.music
-            },
-            stats: {
-                play_count: item.play_count,
-                digg_count: item.digg_count,
-                comment_count: item.comment_count,
-                share_count: item.share_count
-            },
-            create_time: item.create_time
-        }));
-
-        return {
-            success: true,
-            user: userInfo,
-            story_count: stories.length,
-            stories: stories
-        };
-
-    } catch (error) {
-        let errorMsg = error.message;
-        if (error.response && error.response.status === 403) {
-            errorMsg = "Access Forbidden (403): Website blocked the request. Try again later or server IP is restricted.";
+        if (items && Array.isArray(items)) {
+          for (const item of items) {
+            const videoRenderer = item.videoRenderer || item.richItemRenderer?.content?.videoRenderer;
+            
+            if (videoRenderer && videoRenderer.videoId) {
+              results.push({
+                id: videoRenderer.videoId,
+                title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
+                channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown Channel',
+                views: videoRenderer.viewCountText?.simpleText || '0 views',
+                publishedTime: videoRenderer.publishedTimeText?.simpleText || '',
+                duration: videoRenderer.lengthText?.simpleText || 'LIVE',
+                url: `https://www.youtube.com/watch?v=${videoRenderer.videoId}`
+              });
+            }
+          }
         }
-        return {
-            success: false,
-            message: errorMsg
-        };
+      }
     }
+
+    return results;
+  } catch (error) {
+    console.error('Gagal melakukan scraping YouTube:', error.message);
+    throw error;
+  }
 }
 
-// ==================== TIKTOK STORY COMMAND ====================
+// ==================== YOUTUBE SEARCH COMMAND ====================
 cmd({
-    pattern: "tiktokstory",
-    alias: ["tstory", "ttstory"],
-    react: "📱",
-    desc: "Get Tiktok Story of a target user",
-    category: "downloader",
-    use: ".tiktokstory drkamran",
+    pattern: "yts",
+    alias: ["ytsearch", "youtube"],
+    react: "🔍",
+    desc: "Search videos on YouTube",
+    category: "search",
+    use: ".yts javascript tutorial",
     filename: __filename
 }, async (conn, mek, m, { from, args, reply }) => {
     try {
-        if (!args[0]) {
-            return reply(`❌ *Please provide a TikTok username!*
-
-*Example:* 
-.tiktokstory drkamran
-`);
+        const query = args.join(' ');
+        if (!query) {
+            return reply(`❌ *Please provide a search query!*\n\n*Example:* \n.yts javascript tutorial`);
         }
 
-        const targetUsername = args[0].replace('@', '').trim();
         await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        const result = await getStoryTiktok(targetUsername);
+        const results = await searchYoutube(query);
 
-        if (!result.success) {
+        if (!results || results.length === 0) {
             await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return reply(`❌ *Gagal:* ${result.message}`);
+            return reply(`❌ Tidak ada hasil yang ditemukan untuk "${query}".`);
         }
 
-        if (result.story_count === 0) {
-            await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-            return reply(`ℹ️ User *@${result.user.uniqueId}* (${result.user.nickname}) tidak memiliki story yang aktif saat ini.`);
-        }
+        // Limit to top 5 results to avoid long messages
+        const topResults = results.slice(0, 5);
+        
+        let messageText = `╭──「 *YOUTUBE SEARCH* 」\n`;
+        messageText += `│\n`;
+        messageText += `│ 🔍 *Query:* ${query}\n`;
+        messageText += `│ 📊 *Found:* ${results.length} results\n`;
+        messageText += `│\n`;
+        messageText += `╰─────────────────\n\n`;
 
-        let caption = `╭──「 *TIKTOK STORY* 」\n`;
-        caption += `│\n`;
-        caption += `│ 👤 *Name:* ${result.user.nickname}\n`;
-        caption += `│ 🆔 *Username:* @${result.user.uniqueId}\n`;
-        caption += `│ 📊 *Total Stories:* ${result.story_count}\n`;
-        caption += `│\n`;
-        caption += `╰─────────────────`;
+        topResults.forEach((video, index) => {
+            messageText += `*${index + 1}. ${video.title}*\n`;
+            messageText += `👤 *Channel:* ${video.channel}\n`;
+            messageText += `⏱ *Duration:* ${video.duration} | 👁 *Views:* ${video.views}\n`;
+            messageText += `🔗 *Link:* ${video.url}\n\n`;
+        });
 
-        await conn.sendMessage(from, { text: caption }, { quoted: mek });
+        messageText += `> *Powered By KAMRAN MD*`;
 
-        for (let i = 0; i < result.stories.length; i++) {
-            const story = result.stories[i];
-            const storyCaption = `🎬 *Story [${i + 1}/${result.story_count}]*\n🎵 *Music:* ${story.music.title} - ${story.music.author}\n👁 *Views:* ${story.stats.play_count || 0}\n\n> *Powered By KAMRAN MD*`;
-            
-            try {
-                await conn.sendMessage(from, {
-                    video: { url: story.play_url },
-                    caption: storyCaption
-                }, { quoted: mek });
-            } catch (err) {
-                await conn.sendMessage(from, { text: `❌ Gagal mengirim video story ${i + 1}\n🔗 *Direct URL:* ${story.play_url}` }, { quoted: mek });
-            }
-        }
-
+        await conn.sendMessage(from, { text: messageText }, { quoted: mek });
         await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
 
     } catch (error) {
-        console.error("Tiktok story error:", error);
+        console.error("YouTube search error:", error);
         await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
         await reply(`❌ *Error processing request!*\n\n*Error:* ${error.message}`);
     }

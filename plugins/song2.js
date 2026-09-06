@@ -8,10 +8,14 @@ const __filename = fileURLToPath(import.meta.url);
 async function getStoryTiktok(uniqueId) {
     const headers = {
         'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
         'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36',
-        'Referer': 'https://ttviewer.net/id/tiktok-story',
-        'Origin': 'https://ttviewer.net'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://ttviewer.net/',
+        'Origin': 'https://ttviewer.net',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"'
     };
 
     try {
@@ -68,9 +72,13 @@ async function getStoryTiktok(uniqueId) {
         };
 
     } catch (error) {
+        let errorMsg = error.message;
+        if (error.response && error.response.status === 403) {
+            errorMsg = "Access Forbidden (403): Website blocked the request. Try again later or server IP is restricted.";
+        }
         return {
             success: false,
-            message: error.message
+            message: errorMsg
         };
     }
 }
@@ -90,7 +98,7 @@ cmd({
             return reply(`❌ *Please provide a TikTok username!*
 
 *Example:* 
-.tiktokstory dedytunarsih.co
+.tiktokstory drkamran
 `);
         }
 

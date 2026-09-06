@@ -6,7 +6,8 @@ import { lidToPhone } from '../lib/functions.js';
 const __filename = fileURLToPath(import.meta.url);
 
 // ==================== CONFIGURATION (BASE64 ENCODED) ====================
-const SECRET_KEY = Buffer.from("a2FtcmFueG1kODA4", "base64").toString("utf-8");
+// Updated SECRET_KEY for "hfg"
+const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
 const WEB_URL = Buffer.from("aHR0cHM6Ly9kcmthbXJhbi1taW5pLWJvdC52ZXJjZWwuYXBw", "base64").toString("utf-8");
 
 // Function to get status emoji based on count

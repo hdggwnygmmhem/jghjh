@@ -2,26 +2,23 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import googleTTS from 'google-tts-api';
 import { cmd, commands } from '../command.js';
-// اگر config فائل کی ضرورت ہو تو نیچے والی لائن کو ان کمنٹ کر لیں
-// import config from '../config.js';
 
 cmd({
     pattern: "tts",
-    desc: "Convert text to audio speech.",
+    desc: "Convert text to audio speech in Urdu.",
     category: "download",
-    react: "💀",
+    react: "🗣️",
     filename: fileURLToPath(import.meta.url)
 },
 async (conn, mek, m, { from, q, reply }) => {
     try {
-        // Validation check
         if (!q || typeof q !== 'string' || !q.trim()) {
-            return reply("❌ Please provide some text to convert into speech!");
+            return reply("❌ Baraye meharbani kuch text likhein jisko bolna hai!");
         }
 
-        // Generate Google TTS Audio URL (Hindi/Urdu Accent)
+        // Generate Google TTS Audio URL (Urdu Language)
         const url = googleTTS.getAudioUrl(q.trim(), {
-            lang: 'hi-IN',
+            lang: 'ur',
             slow: false,
             host: 'https://translate.google.com',
         });

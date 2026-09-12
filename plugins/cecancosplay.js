@@ -34,7 +34,19 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         if (response.data) {
             let resData = response.data;
-            let encryptedCode = resData.result?.code || resData.result || resData.encrypted || '';
+            let encryptedCode = '';
+
+            if (typeof resData.result === 'string') {
+                encryptedCode = resData.result;
+            } else if (resData.result?.encrypted_code) {
+                if (typeof resData.result.encrypted_code === 'string') {
+                    encryptedCode = resData.result.encrypted_code;
+                } else if (resData.result.encrypted_code.error) {
+                    return await reply(`❌ API Error: ${resData.result.encrypted_code.details || resData.result.encrypted_code.error}`);
+                }
+            } else if (resData.result?.code) {
+                encryptedCode = resData.result.code;
+            }
 
             if (typeof encryptedCode === 'string' && encryptedCode.length > 0) {
                 return await reply(`🔒 *Encrypted Code:*\n\`\`\`javascript\n${encryptedCode}\`\`\``);

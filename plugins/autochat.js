@@ -4,111 +4,57 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Global memory mein Autochat ka status store karne ke liye
-global.autochatStatus = global.autochatStatus || false;
-
-// 1. AI Command (.ai <query>)
 cmd({
-    pattern: "ai", 
-    desc: "Ask anything to AI chatbot.",
+    pattern: "tts2",
+    alias: ["texttospeech", "speak", "voice"],
+    desc: "Convert text into speech audio using AI TTS API.",
     category: "ai",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        if (!q) {
-            return await reply("❌ Please provide a prompt/question!\n*Example:* .ai write a short poem about coding");
+        let text = q ? q.trim() : "";
+
+        if (!text && m.quoted) {
+            text = m.quoted.text || m.quoted.caption || "";
         }
 
-        await reply("🤖 AI is thinking, please wait...");
+        if (!text) {
+            return await reply("❌ Please provide text for text-to-speech!\n\n*Usage:* \n.tts Hello! This is a test.");
+        }
 
-        const url = `https://api.princetechn.com/api/ai/ai?apikey=prince&q=${encodeURIComponent(q)}`;
-        const response = await axios.get(url);
+        await reply("⏳ Generating speech audio, please wait...");
+
+        const apiUrl = `https://api.princetechn.com/api/ai/tts?apikey=prince&text=${encodeURIComponent(text)}&voice=en_us_female`;
         
+        const response = await axios.get(apiUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            validateStatus: status => status >= 200 && status < 500
+        });
+
         if (response.data) {
-            let aiResult = response.data;
-            if (typeof aiResult === 'object') {
-                aiResult = aiResult.result || aiResult.response || aiResult.ai || JSON.stringify(aiResult, null, 2);
+            let contentType = response.headers['content-type'] || '';
+            
+            if (contentType.includes('application/json')) {
+                let jsonStr = Buffer.from(response.data).toString('utf-8');
+                let jsonObj = JSON.parse(jsonStr);
+                return await reply(`❌ API Error: ${jsonObj.message || JSON.stringify(jsonObj)}`);
             }
-            return await reply(`${aiResult}`);
+
+            return await conn.sendMessage(from, { 
+                audio: Buffer.from(response.data), 
+                mimetype: 'audio/mp4', 
+                ptt: true,
+                caption: `🔊 *TTS Audio for:* ${text}` 
+            }, { quoted: mek });
+
         } else {
-            return await reply("❌ AI API se koi jawab nahi mila.");
+            return await reply("❌ TTS API se koi response nahi mila.");
         }
 
     } catch (e) {
         console.log(e);
         return await reply(`❌ Error occurred: ${e.message}`);
-    }
-});
-
-// 2. Autochat Toggle Command (.autochat on / off)
-cmd({
-    pattern: "autochat",
-    desc: "Enable or disable auto AI reply in personal chat",
-    category: "ai",
-    filename: __filename
-},
-async (conn, mek, m, { reply, args, isBotOwner }) => {
-    try {
-        // Sirf Bot Owner ke liye (Agar sab ke liye karna ho toh yeh line hata sakte hain)
-        if (!isBotOwner) {
-            return reply("❌ Yeh command sirf bot owner ke liye hai!");
-        }
-
-        const option = args[0] ? args[0].toLowerCase() : '';
-
-        if (option === "on") {
-            global.autochatStatus = true;
-            return reply("✅ *Autochat mode successfully enable ho gaya hai.*\n\nAb koi bhi user personal chat mein bina command ke message karega toh AI khud reply karega.");
-        } else if (option === "off") {
-            global.autochatStatus = false;
-            return reply("❌ *Autochat mode disable ho gaya hai.*");
-        } else {
-            return reply(`⚙️ *Autochat Settings*\n\nStatus: ${global.autochatStatus ? "🟢 Enabled" : "🔴 Disabled"}\n\n*Usage:*\n• .autochat on\n• .autochat off`);
-        }
-
-    } catch (err) {
-        console.error("Autochat Toggle Error:", err);
-        reply("❌ Autochat command run karne mein error aaya.");
-    }
-});
-
-// 3. Autochat Background Listener (InBox Auto Reply)
-cmd({
-    on: "text"
-},
-async (conn, mek, m, { isBotOwner }) => {
-    try {
-        // Agar Autochat off hai toh kuch mat karo
-        if (!global.autochatStatus) return;
-
-        const remoteJid = m.key.remoteJid || mek.key.remoteJid;
-        
-        // Sirf Personal Chat (PM) ke liye, group mein auto reply nahi karega
-        if (remoteJid.endsWith('@g.us')) return;
-
-        // Agar message bot ka khud ka bheja hua hai ya owner ka hai toh ignore karo
-        if (m.key.fromMe || isBotOwner) return;
-
-        const messageText = m.text || mek.message?.conversation || mek.message?.extendedTextMessage?.text;
-        if (!messageText) return;
-
-        // Agar message kisi command se start ho raha hai (jaise .ai ya .menu), toh autochat trigger nahi hoga
-        if (messageText.startsWith('.')) return;
-
-        // AI API ko request bhejna
-        const url = `https://api.princetechn.com/api/ai/ai?apikey=prince&q=${encodeURIComponent(messageText)}`;
-        const response = await axios.get(url);
-
-        if (response.data) {
-            let aiResult = response.data;
-            if (typeof aiResult === 'object') {
-                aiResult = aiResult.result || aiResult.response || aiResult.ai || JSON.stringify(aiResult, null, 2);
-            }
-            await conn.sendMessage(remoteJid, { text: aiResult }, { quoted: mek });
-        }
-
-    } catch (e) {
-        console.error("Autochat Listener Error:", e);
     }
 });

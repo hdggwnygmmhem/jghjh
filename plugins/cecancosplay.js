@@ -1,100 +1,52 @@
+import { fileURLToPath } from 'url';
 import axios from 'axios';
-import { cmd } from '../command.js'; // اپنے بوٹ کے کمانڈ ہینڈلر کا صحیح پاتھ رکھیں
+import { cmd } from '../command.js';
 
-// Country List Object
-export const CECAN_LIST = {
-  china:      { flag: "🇨🇳", label: "China" },
-  indonesia:  { flag: "🇮🇩", label: "Indonesia" },
-  japan:      { flag: "🇯🇵", label: "Japan" },
-  korea:      { flag: "🇰🇷", label: "Korea" },
-  malaysia:   { flag: "🇲🇾", label: "Malaysia" },
-  thailand:   { flag: "🇹🇭", label: "Thailand" },
-  vietnam:    { flag: "🇻🇳", label: "Vietnam" },
-  hijaber:    { flag: "🧕", label: "Hijaber" }
-};
-
-// Helper function to fetch and send random photos
-export async function sendCecan(conn, mek, country) {
-  try {
-    const countryData = CECAN_LIST[country];
-    if (!countryData) return false;
-
-    const { flag, label } = countryData;
-    const apiUrl = `https://api.ikyyxd.my.id/random/cecan/${country}`;
-
-    const res = await axios.get(apiUrl, { responseType: "arraybuffer" });
-    const imageBuffer = Buffer.from(res.data);
-
-    await conn.sendMessage(mek.chat, {
-      image: imageBuffer,
-      caption: `${flag} *Random ${label} Image*`
-    }, { quoted: mek });
-
-    return true;
-  } catch (err) {
-    console.error(`Error fetching image for ${country}:`, err);
-    throw err;
-  }
-}
-
-// ==========================================
-//          DYNAMIC COUNTRY COMMANDS
-// ==========================================
-
-Object.keys(CECAN_LIST).forEach(country => {
-  cmd({
-    pattern: `cecan${country}`,
-    alias: [`random${country}`],
-    desc: `Get random photo from ${CECAN_LIST[country].label}`,
-    category: "image",
-    filename: import.meta.url
-  },
-  async (conn, mek, m, { reply, react }) => {
-    try {
-      await react("📸");
-      await sendCecan(conn, mek, country);
-      await react("✅");
-    } catch (err) {
-      await react("❌");
-      await reply("❌ *تصویر حاصل کرنے میں ناکامی ہوئی۔*");
-    }
-  });
-});
-
-// ==========================================
-//           COSPLAY PHOTO COMMAND
-// ==========================================
+const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-  pattern: "cecancosplay",
-  alias: ["cosplay", "cosplaygirl"],
-  desc: "Get random Cosplay photo",
-  category: "image",
-  filename: import.meta.url
+    pattern: "encryptv2",
+    alias: ["encryptcode", "obfuscate"],
+    desc: "Encrypt or obfuscate JavaScript code using encryptv2 API.",
+    category: "tools",
+    filename: __filename
 },
-async (conn, mek, m, { reply, react }) => {
-  try {
-    await react("🌷");
+async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
+    try {
+        let code = q ? q.trim() : "";
 
-    const apiUrl = "https://api.ikyyxd.my.id/cecan/cosplay";
-    const response = await axios.get(apiUrl, {
-      responseType: "arraybuffer",
-      timeout: 60000
-    });
+        if (!code && m.quoted) {
+            code = m.quoted.text || m.quoted.caption || "";
+        }
 
-    const imageBuffer = Buffer.from(response.data);
-    const caption = `💖 *Random Cosplay Photo* 💖`;
+        if (!code) {
+            return await reply("❌ Please provide JavaScript code to encrypt!\n\n*Usage:* \n.encryptv2 console.log('Hello')");
+        }
 
-    await conn.sendMessage(m.chat, {
-      image: imageBuffer,
-      caption: caption
-    }, { quoted: mek });
+        await reply("⏳ Encrypting code, please wait...");
 
-    await react("✅");
+        const apiUrl = `https://api.princetechn.com/api/tools/encryptv2?apikey=prince&code=${encodeURIComponent(code)}`;
+        
+        const response = await axios.get(apiUrl, {
+            timeout: 60000,
+            validateStatus: status => status >= 200 && status < 500
+        });
 
-  } catch (e) {
-    console.error("Cosplay command error:", e);
-    await react("❌");
-    await reply("❌ *تصویر حاصل کرنے میں ناکامی ہوئی۔*");
-  }
+        if (response.data) {
+            let resData = response.data;
+            let encryptedCode = resData.result?.code || resData.result || resData.encrypted || '';
+
+            if (typeof encryptedCode === 'string' && encryptedCode.length > 0) {
+                return await reply(`🔒 *Encrypted Code:*\n\`\`\`javascript\n${encryptedCode}\`\`\``);
+            } else {
+                return await reply(`📦 *API Response:*\n\`\`\`${JSON.stringify(resData, null, 2)}\`\`\``);
+            }
+        } else {
+            return await reply("❌ API se koi response nahi mila.");
+        }
+
+    } catch (e) {
+        console.log(e);
+        return await reply(`❌ Error occurred: ${e.message}`);
+    }
 });

@@ -20,30 +20,12 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         // Agar user ne image bheji hai ya reply kiya hai
         if (/image/.test(mime)) {
-            await reply("⏳ Downloading image buffer...");
+            await reply("⏳ Processing image buffer...");
             let media = await quotedMsg.download();
             
-            // Free alternative public uploader (Imguploader / Quax / Catbox alternative)
-            try {
-                const FormData = (await import('form-data')).default;
-                const form = new FormData();
-                form.append('reqtype', 'fileupload');
-                form.append('fileToUpload', media, { filename: 'image.jpg', contentType: mime });
-
-                const uploadRes = await axios.post('https://catbox.moe/user/api.php', form, {
-                    headers: { ...form.getHeaders() }
-                });
-
-                if (uploadRes.data && uploadRes.data.startsWith('http')) {
-                    imageUrl = uploadRes.data.trim();
-                }
-            } catch (err) {
-                console.log("Upload fallback error:", err.message);
-            }
-
-            if (!imageUrl) {
-                return await reply("❌ Direct image upload currently unavailable on server. Please use direct image URL format:\n\n*Example:* \n.editfoto https://i.ibb.co/p6PrJbBG/image.jpg | STYLISH FULL");
-            }
+            // Convert buffer to base64 data URI (Bina kisi uploader ke direct working)
+            let b64 = media.toString('base64');
+            imageUrl = `data:${mime};base64,${b64}`;
         }
 
         let textArgs = q.split("|");
@@ -62,11 +44,11 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const finalImageUrl = targetUrl || imageUrl;
 
         if (!finalImageUrl) {
-            return await reply("❌ Please provide an image URL or reply to an image!\n\n*Usage:* \n.editfoto <image_url> | <prompt>\n*Example:* \n.editfoto https://i.ibb.co/... | STYLISH FULL");
+            return await reply("❌ Please provide an image URL or reply to an image with a prompt!\n\n*Usage:* \n.editfoto <image_url> | <prompt>\nOR reply to an image with: \n.editfoto <prompt>");
         }
 
         if (!promptText) {
-            return await reply("❌ Please provide a prompt for editing!\n*Example:* .editfoto https://image.com/pic.jpg | STYLISH FULL");
+            return await reply("❌ Please provide a prompt for editing!\n*Example:* .editfoto STYLISH FULL (while replying to an image)");
         }
 
         await reply("🤖 AI is processing your image edit, please wait...");

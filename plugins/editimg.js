@@ -4,35 +4,6 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-async function uploadToTelegraph(buffer, mime) {
-    try {
-        const FormData = (await import('form-data')).default;
-        const form = new FormData();
-        
-        let ext = 'jpg';
-        if (mime.includes('png')) ext = 'png';
-        if (mime.includes('webp')) ext = 'webp';
-        if (mime.includes('jpeg')) ext = 'jpeg';
-
-        form.append('file', buffer, { filename: `image.${ext}`, contentType: mime });
-
-        const res = await axios.post('https://telegra.ph/upload', form, {
-            headers: {
-                ...form.getHeaders(),
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        });
-
-        if (res.data && res.data[0] && res.data[0].src) {
-            return 'https://telegra.ph' + res.data[0].src;
-        }
-        return null;
-    } catch (err) {
-        console.log("Upload Error:", err?.response?.data || err.message);
-        return null;
-    }
-}
-
 cmd({
     pattern: "editfoto",
     alias: ["editai", "aiwriter", "aiimg"],
@@ -47,14 +18,31 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         
         let imageUrl = '';
 
+        // Agar user ne image bheji hai ya reply kiya hai
         if (/image/.test(mime)) {
-            await reply("⏳ Uploading image for editing, please wait...");
+            await reply("⏳ Downloading image buffer...");
             let media = await quotedMsg.download();
             
-            imageUrl = await uploadToTelegraph(media, mime);
-            
+            // Free alternative public uploader (Imguploader / Quax / Catbox alternative)
+            try {
+                const FormData = (await import('form-data')).default;
+                const form = new FormData();
+                form.append('reqtype', 'fileupload');
+                form.append('fileToUpload', media, { filename: 'image.jpg', contentType: mime });
+
+                const uploadRes = await axios.post('https://catbox.moe/user/api.php', form, {
+                    headers: { ...form.getHeaders() }
+                });
+
+                if (uploadRes.data && uploadRes.data.startsWith('http')) {
+                    imageUrl = uploadRes.data.trim();
+                }
+            } catch (err) {
+                console.log("Upload fallback error:", err.message);
+            }
+
             if (!imageUrl) {
-                return await reply("❌ Image upload failed. Please provide a direct image URL instead.\n\n*Example:* .editfoto https://i.ibb.co/... | STYLISH FULL");
+                return await reply("❌ Direct image upload currently unavailable on server. Please use direct image URL format:\n\n*Example:* \n.editfoto https://i.ibb.co/p6PrJbBG/image.jpg | STYLISH FULL");
             }
         }
 
@@ -74,7 +62,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const finalImageUrl = targetUrl || imageUrl;
 
         if (!finalImageUrl) {
-            return await reply("❌ Please reply to an image or provide an image URL!\n\n*Usage:* \n.editfoto <image_url> | <prompt>\n*Example:* \n.editfoto https://i.ibb.co/... | STYLISH FULL");
+            return await reply("❌ Please provide an image URL or reply to an image!\n\n*Usage:* \n.editfoto <image_url> | <prompt>\n*Example:* \n.editfoto https://i.ibb.co/... | STYLISH FULL");
         }
 
         if (!promptText) {

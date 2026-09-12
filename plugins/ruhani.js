@@ -1,105 +1,52 @@
+import { fileURLToPath } from 'url';
 import axios from 'axios';
-import * as cheerio from 'cheerio';
-import { cmd } from '../command.js'; // اپنے بوٹ کے کمانڈ ہینڈلر کا صحیح پاتھ رکھیں
+import { cmd } from '../command.js';
 
-// Scraper Function Exported for ESM
-export async function scrapePage(page = 1) {
-  const url =
-    page === 1
-      ? "https://www.wisataruhani.com/category/blog/"
-      : `https://www.wisataruhani.com/category/blog/page/${page}/`;
-
-  const { data } = await axios.get(url, {
-    headers: {
-      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-  });
-
-  const $ = cheerio.load(data);
-  const posts = [];
-
-  $("article.post").each((i, el) => {
-    posts.push({
-      title: $(el).find("h3.entry-title a").text().trim(),
-      url: $(el).find("h3.entry-title a").attr("href"),
-      image:
-        $(el).find("img").attr("src") ||
-        $(el).find("img").attr("data-src") ||
-        null
-    });
-  });
-
-  return posts;
-}
-
-export async function wisataRuhani(maxPage = 1) {
-  const results = [];
-
-  for (let page = 1; page <= maxPage; page++) {
-    try {
-      const posts = await scrapePage(page);
-      if (!posts.length) break;
-      results.push(...posts);
-    } catch {
-      break;
-    }
-  }
-
-  return {
-    status: true,
-    total: results.length,
-    result: results
-  };
-}
-
-// ==========================================
-//          WHATSAPP BOT COMMAND
-// ==========================================
+const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "wisataruhani",
-    alias: ["wisata", "ruhani", "tourblog"],
-    desc: "Search and fetch articles from Wisata Ruhani blog",
-    category: "search",
-    filename: import.meta.url
+    pattern: "define",
+    alias: ["meaning", "dictionary"],
+    desc: "Get the definition of a term using the definition API.",
+    category: "tools",
+    filename: __filename
 },
-async (conn, mek, m, { reply, react }) => {
+async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        await react("🔍");
+        let term = q ? q.trim() : "";
 
-        // Fetch first page articles by default for WhatsApp bot speed
-        const data = await wisataRuhani(1);
-
-        if (!data.status || !data.result.length) {
-            await react("❌");
-            return reply("❌ *کوئی مضامین یا بلاگ پسٹ نہیں مل سکے۔*");
+        if (!term && m.quoted) {
+            term = m.quoted.text || m.quoted.caption || "";
         }
 
-        let caption = `🕌 *WISATA RUHANI BLOG POSTS*\n\n`;
-        caption += `📌 *Total Articles:* ${data.total}\n\n`;
+        if (!term) {
+            return await reply("❌ Please provide a term to define!\n\n*Usage:* \n.define cat");
+        }
 
-        data.result.forEach((item, index) => {
-            caption += `*${index + 1}. ${item.title}*\n`;
-            caption += `🔗 *Link:* ${item.url}\n\n`;
+        await reply("⏳ Searching for definition, please wait...");
+
+        const apiUrl = `https://api.princetechn.com/api/tools/define?apikey=prince&term=${encodeURIComponent(term)}`;
+        
+        const response = await axios.get(apiUrl, {
+            timeout: 60000,
+            validateStatus: status => status >= 200 && status < 500
         });
 
-        // Send first image as header if available
-        const firstImage = data.result.find(v => v.image)?.image;
+        if (response.data) {
+            let resData = response.data;
+            let definition = resData.result?.definition || resData.result || resData.definition || '';
 
-        if (firstImage) {
-            await conn.sendMessage(m.chat, {
-                image: { url: firstImage },
-                caption: caption
-            }, { quoted: mek });
+            if (typeof definition === 'string' && definition.length > 0) {
+                return await reply(`📖 *Definition of ${term}:*\n\n${definition}`);
+            } else {
+                return await reply(`📦 *API Response:*\n\`\`\`${JSON.stringify(resData, null, 2)}\`\`\``);
+            }
         } else {
-            await reply(caption);
+            return await reply("❌ API se koi response nahi mila.");
         }
 
-        await react("✅");
-
-    } catch (err) {
-        console.error("Wisata Ruhani Error:", err);
-        await react("❌");
-        await reply(`❌ *Error:* ${err.message}`);
+    } catch (e) {
+        console.log(e);
+        return await reply(`❌ Error occurred: ${e.message}`);
     }
 });

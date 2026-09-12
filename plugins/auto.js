@@ -1,6 +1,5 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
-import { randomUUID } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -538,7 +537,7 @@ body{
 
     <p id="resultText">
       White wins.
-    p>
+    </p>
 
     <div class="modeButtons">
       <button class="modeBtn" data-mode="easy">
@@ -1299,59 +1298,11 @@ cmd({
     category: "game",
     filename: __filename
 },
-async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
+async (conn, mek, m, { from, reply }) => {
     try {
-        await conn.relayMessage(
-            from,
-            {
-                messageContextInfo: {
-                    deviceListMetadata: {},
-                    deviceListMetadataVersion: 2,
-                    botMetadata: {}
-                },
-                botForwardedMessage: {
-                    message: {
-                        richResponseMessage: {
-                            messageType: 1,
-                            submessages: [
-                                {
-                                    messageType: 2,
-                                    messageText: 'kamran Chess ♟️✨'
-                                }
-                            ],
-                            unifiedResponse: {
-                                data: Buffer.from(
-                                    JSON.stringify({
-                                        response_id: 'kamran-chess-2026',
-                                        sections: [
-                                            {
-                                                view_model: {
-                                                    primitive: {
-                                                        __typename: 'GenAIaeacdsnwHtmlPrimitive',
-                                                        payload: html,
-                                                        trusted_sources: []
-                                                    },
-                                                    __typename: 'GenAISingleLayoutViewModel'
-                                                }
-                                            }
-                                        ]
-                                    })
-                                ).toString('base64')
-                            },
-                            contextInfo: {
-                                forwardingScore: 1,
-                                isForwarded: true,
-                                forwardedAiBotMessageInfo: {
-                                    botJid: '867051314767696@bot'
-                                },
-                                forwardOrigin: 4
-                            }
-                        }
-                    }
-                }
-            },
-            {}
-        );
+        await conn.sendMessage(from, {
+            text: html
+        }, { quoted: mek });
     } catch (err) {
         console.error("[chess error]", err);
         return await reply("❌ Gagal memuat game catur.\nError: " + err.message);

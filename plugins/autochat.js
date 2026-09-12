@@ -1,11 +1,12 @@
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { cmd } from '../command.js';
+import { toPTT } from '../lib/converter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "tts2",
+    pattern: "tts",
     alias: ["texttospeech", "speak", "voice"],
     desc: "Convert text into speech audio using AI TTS API.",
     category: "ai",
@@ -42,11 +43,15 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
                 return await reply(`❌ API Error: ${jsonObj.message || JSON.stringify(jsonObj)}`);
             }
 
+            let audioBuffer = Buffer.from(response.data);
+            
+            // Convert to PTT using the converter library
+            const pttAudio = await toPTT(audioBuffer, 'mp3');
+
             return await conn.sendMessage(from, { 
-                audio: Buffer.from(response.data), 
-                mimetype: 'audio/mp4', 
-                ptt: true,
-                caption: `🔊 *TTS Audio for:* ${text}` 
+                audio: pttAudio, 
+                mimetype: 'audio/ogg; codecs=opus', 
+                ptt: true 
             }, { quoted: mek });
 
         } else {

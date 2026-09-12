@@ -1,78 +1,110 @@
+// ꜰᴀᴛɪᴍᴀ-ᴍᴅ
+
 import { fileURLToPath } from 'url';
-import { cmd } from '../command.js';
-import fs from 'fs';
 import axios from 'axios';
 import FormData from 'form-data';
-import fetch from 'node-fetch';
+import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-async function uguu(filePath) {
-  const form = new FormData();
-  form.append('files[]', fs.createReadStream(filePath));
-  const { data } = await axios.post('https://uguu.se/upload', form, {
-    headers: { ...form.getHeaders() }
-  });
-  return data.files[0].url;
-}
-
 cmd({
-    pattern: "editimage",
-    alias: ["nanobanana"],
-    desc: "Edit image using AI prompt",
+    pattern: "editimg",
+    desc: "Edit photos using AI with KAMRAN-MD style",
     category: "ai",
-    react: "✨",
-    filename: __filename,
-    limit: true
+    react: "🎨",
+    filename: __filename
 },
-async (conn, mek, m, { from, reply, text, usedPrefix, command }) => {
+async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply, usedPrefix }) => {
     try {
-        let q = m.quoted ? m.quoted : m;
+        const targetMsg = m.quoted ? m.quoted : m;
+        const mime = (targetMsg.msg || targetMsg).mimetype || targetMsg.mediaType || '';
 
-        if (q.mtype !== 'imageMessage') {
-            return reply(`*Example :* reply gambar + ${usedPrefix + command} Ubah jadi tersenyum`);
+        let prompt = (q || '').trim();
+        if (!prompt) prompt = 'Edit this character to smile';
+
+        let imageUrl = null;
+
+        if (/image/.test(mime)) {
+            const media = await targetMsg.download();
+            if (!media) {
+                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+                return reply("❌ *Upload failed, Uguu!*");
+            }
+
+            const form = new FormData();
+            form.append('files[]', media, { filename: 'upload.' + mime.split('/')[1] });
+
+            const upload = await axios.post('https://uguu.se/upload.php', form, {
+                headers: form.getHeaders()
+            });
+
+            imageUrl = upload?.data?.files?.[0]?.url;
+            if (!imageUrl) {
+                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+                return reply("❌ *Upload failed, Uguu!*");
+            }
+        } else {
+            const urlMatch = (q || '').match(/https?:\/\/\S+/);
+            if (urlMatch) {
+                imageUrl = urlMatch[0];
+                prompt = q.replace(imageUrl, '').trim() || prompt;
+            }
         }
 
-        if (!text) {
-            return reply(`*Example :* reply gambar + ${usedPrefix + command} Ubah jadi tersenyum`);
+        if (!imageUrl) {
+            return reply(
+                `╔════════════════════════╗\n` +
+                `║   🤖 KAMRAN-MD EDITIMG 🤖   \n` +
+                `╚════════════════════════╝\n\n` +
+                `❌ *Send or reply to the photo you want to edit with a caption:*\n\n` +
+                `> 📌 *Example:* \`${usedPrefix + command} Edit this character to smile\`\n` +
+                `> ⚡ *Version:* \`8.00\``
+            );
         }
 
-        // ⏳ React - processing
-        await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+        await reply("⏳ *Please wait a moment, editing a photo...*");
 
-        let media = await q.download();
-        let tmp = './tmp_' + Date.now() + '.jpg';
-        fs.writeFileSync(tmp, media);
+        const apiUrl = `https://api-faa.my.id/faa/editfoto?url=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(prompt)}`;
+        const res = await axios.get(apiUrl, {
+            responseType: 'arraybuffer'
+        });
 
-        let urlGambar = await uguu(tmp);
-        fs.unlinkSync(tmp);
-
-        let url = `${global.APIs.faa}/faa/nano-banana?url=${encodeURIComponent(urlGambar)}&prompt=${encodeURIComponent(text)}`;
-        let res = await fetch(url);
-
-        if (!res.ok) {
-            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return reply('Gagal memproses gambar dari API.');
+        if (!res.data) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ *Failed to edit photo!*");
         }
-
-        let buffer = Buffer.from(await res.arrayBuffer());
 
         await conn.sendMessage(from, {
-            image: buffer,
-            caption: ''
-        }, { quoted: mek });
+            image: Buffer.from(res.data),
+            caption: 
+`╔════════════════════════╗
+║   🤖 KAMRAN-MD EDITIMG 🤖   
+╚════════════════════════╝
 
-        // 800ms delay before success react
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // ✅ React - success
-        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+✅ *Finished editing the photo ✨*
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by DR KAMRAN*`
+        }, { 
+            quoted: mek,
+            contextInfo: { 
+                forwardingScore: 999, 
+                isForwarded: true, 
+                forwardedNewsletterMessageInfo: { 
+                    newsletterJid: '120363418144382782@newsletter', 
+                    newsletterName: 'DR KAMRAN', 
+                    serverMessageId: 143 
+                } 
+            }
+        });
+
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
-        console.error("Error in editimage command:", e);
-        // ❌ React - error
-        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-        await reply(`❌ Error: ${e.message}`);
+        console.error("EditImg Command Error:", e);
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        return reply(`❌ *Error occurred:* \`\`\`${e.message || e}\`\`\``);
     }
 });

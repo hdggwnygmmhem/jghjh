@@ -24,8 +24,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             return await reply("❌ Please provide text for text-to-speech!\n\n*Usage:* \n.tts Hello! This is a test.");
         }
 
-        await reply("⏳ Generating speech audio, please wait...");
-
         const apiUrl = `https://api.princetechn.com/api/ai/tts?apikey=prince&text=${encodeURIComponent(text)}&voice=en_us_female`;
         
         const response = await axios.get(apiUrl, {
@@ -44,8 +42,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             }
 
             let audioBuffer = Buffer.from(response.data);
-            
-            // Convert to PTT using the converter library
             const pttAudio = await toPTT(audioBuffer, 'mp3');
 
             return await conn.sendMessage(from, { 

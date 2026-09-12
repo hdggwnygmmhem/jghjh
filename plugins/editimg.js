@@ -20,12 +20,29 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         // Agar user ne image bheji hai ya reply kiya hai
         if (/image/.test(mime)) {
-            await reply("⏳ Processing image buffer...");
+            await reply("⏳ Uploading image temporarily...");
             let media = await quotedMsg.download();
             
-            // Convert buffer to base64 data URI (Bina kisi uploader ke direct working)
-            let b64 = media.toString('base64');
-            imageUrl = `data:${mime};base64,${b64}`;
+            try {
+                const FormData = (await import('form-data')).default;
+                const form = new FormData();
+                form.append('image', media.toString('base64'));
+
+                // Free ImgBB API for instant direct image URL conversion
+                const uploadRes = await axios.post('https://api.imgbb.com/1/upload?key=9042b47de516cfdd92b45e7f1f44052f', form, {
+                    headers: { ...form.getHeaders() }
+                });
+
+                if (uploadRes.data && uploadRes.data.success) {
+                    imageUrl = uploadRes.data.data.url;
+                }
+            } catch (err) {
+                console.log("ImgBB Upload Error:", err.message);
+            }
+
+            if (!imageUrl) {
+                return await reply("❌ Image upload failed. Please send the direct image URL instead:\n\n*Example:* \n.editfoto https://i.ibb.co/... | STYLISH FULL");
+            }
         }
 
         let textArgs = q.split("|");

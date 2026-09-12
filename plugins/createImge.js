@@ -1,239 +1,93 @@
 import { fileURLToPath } from 'url';
+import axios from 'axios';
 import { cmd } from '../command.js';
-import fetch from 'node-fetch';
 
 const __filename = fileURLToPath(import.meta.url);
 
-const API_BASE = 'https://www.createimg.com?api=v1';
-
-class CreateImgAPI {
-  constructor() {
-    this.token = null;
-    this.security = null;
-    this.server = null;
-  }
-
-  generateSecurity() {
-    return Array.from({length: 32}, () => 
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('');
-  }
-
-  async initialize() {
-    const cfToken = await bypassTurnstile();
-    this.security = this.generateSecurity();
+const funAndFootballApis = {
+    // Fun / Quotes / Wishes APIs
+    "gratitude": "Gratitude Message",
+    "quotes": "Random Quote",
+    "goodnight": "Good Night Wish",
+    "flirt": "Flirt Message",
+    "fathersday": "Father's Day Wish",
+    "mothersday": "Mother's Day Wish",
+    "pickupline": "Pick Up Line",
+    "boyfriendsday": "Boyfriend's Day Wish",
+    "newyear": "New Year Wish",
+    "christmas": "Christmas Wish",
+    "heartbreak": "Heartbreak Quote",
     
-    const params = new URLSearchParams({
-      token: cfToken,
-      security: this.security,
-      action: 'turnstile',
-      module: 'create'
-    });
+    // Football APIs
+    "livescore": "Football Live Score",
+    "livescore2": "Football Live Score 2",
+    "footballnews": "Football News",
+    "ligue1standings": "Ligue 1 Standings",
+    "uclstandings": "UCL Standings",
+    "uclmatches": "UCL Matches",
+    "euroscorers": "Euro Top Scorers",
+    "footballstreamingall": "Football Streaming All",
+    "footballstreaming": "Football Streaming"
+};
 
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
-        'Origin': 'https://www.createimg.com',
-        'Referer': 'https://www.createimg.com/'
-      },
-      body: params
-    });
-
-    const data = await res.json();
-    if (!data.status) throw new Error('Inisialisasi gagal');
-
-    this.token = cfToken;
-    this.server = data.server;
-    return data;
-  }
-
-  async create(prompt, options = {}) {
-    if (!this.token) await this.initialize();
-
-    const params = new URLSearchParams({
-      token: this.token,
-      security: this.security,
-      action: 'create',
-      server: this.server,
-      prompt: prompt,
-      negative: options.negative || '',
-      seed: options.seed || Math.floor(Math.random() * 1000000000),
-      size: options.size || 1024
-    });
-
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
-        'Origin': 'https://www.createimg.com',
-        'Referer': 'https://www.createimg.com/'
-      },
-      body: params
-    });
-
-    return await res.json();
-  }
-
-  async checkQueue(id, queue) {
-    const params = new URLSearchParams({
-      id,
-      queue,
-      module: 'create',
-      action: 'queue',
-      server: this.server,
-      token: this.token,
-      security: this.security
-    });
-
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
-        'Origin': 'https://www.createimg.com',
-        'Referer': 'https://www.createimg.com/'
-      },
-      body: params
-    });
-
-    return await res.json();
-  }
-
-  async getHistory(id) {
-    const params = new URLSearchParams({
-      id,
-      action: 'history',
-      server: this.server,
-      module: 'create',
-      token: this.token,
-      security: this.security
-    });
-
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
-        'Origin': 'https://www.createimg.com',
-        'Referer': 'https://www.createimg.com/'
-      },
-      body: params
-    });
-
-    return await res.json();
-  }
-
-  async getOutput(filename) {
-    const params = new URLSearchParams({
-      id: filename,
-      action: 'output',
-      server: this.server,
-      module: 'create',
-      token: this.token,
-      security: this.security,
-      page: 'home',
-      lang: 'en'
-    });
-
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36',
-        'Origin': 'https://www.createimg.com',
-        'Referer': 'https://www.createimg.com/'
-      },
-      body: params
-    });
-
-    return await res.json();
-  }
-
-  async generate(prompt, options = {}) {
-    const createRes = await this.create(prompt, options);
-    if (!createRes.status) throw new Error('Create failed');
-
-    const { id, queue } = createRes;
-    
-    let pending = 1;
-    let attempts = 0;
-    const maxAttempts = 60;
-    
-    while (pending > 0 && attempts < maxAttempts) {
-      await new Promise(r => setTimeout(r, 3000));
-      attempts++;
-      const queueRes = await this.checkQueue(id, queue);
-      pending = queueRes.pending || 0;
-    }
-
-    if (attempts >= maxAttempts) throw new Error('Timeout');
-
-    const historyRes = await this.getHistory(id);
-    if (!historyRes.status) throw new Error('History failed');
-
-    const outputRes = await this.getOutput(historyRes.file);
-    if (!outputRes.status) throw new Error('Output failed');
-
-    return {
-      id,
-      filename: historyRes.file,
-      data: outputRes.data
-    };
-  }
-}
-
-async function bypassTurnstile() {
-  const url = 'https://api.nekolabs.web.id/tools/bypass/cf-turnstile?url=https://www.createimg.com/&siteKey=0x4AAAAAABggkaHPwa2n_WBx';
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!data.success) throw new Error('Bypass gagal');
-  return data.result;
-}
+const aliasesList = Object.keys(funAndFootballApis);
 
 cmd({
-    pattern: "createimg",
-    alias: [],
-    desc: "Text to Image generator using createimg.com",
-    category: "ai",
-    react: "🎨",
-    filename: __filename,
-    limit: true
+    pattern: "funapi",
+    alias: aliasesList,
+    desc: "Fetch fun messages, quotes, and football updates using various APIs.",
+    category: "fun",
+    filename: __filename
 },
-async (conn, mek, m, { from, reply, text, usedPrefix, command }) => {
+async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        if (!text) {
-            return reply(`*Contoh:* ${usedPrefix + command} a beautiful girl`);
+        let key = command.toLowerCase();
+        if (!funAndFootballApis[key]) {
+            return;
         }
 
-        // ⏳ React - processing
-        await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+        let apiName = funAndFootballApis[key];
+        await reply(`⏳ Fetching ${apiName}, please wait...`);
+
+        // Mapping endpoint names to correct API paths
+        let endpointPath = key;
+        if (key.startsWith("football")) {
+            if (key === "footballnews") endpointPath = "football/news";
+            else if (key === "ligue1standings") endpointPath = "football/ligue1/standings";
+            else if (key === "uclstandings") endpointPath = "football/ucl/standings";
+            else if (key === "uclmatches") endpointPath = "football/ucl/matches";
+            else if (key === "euroscorers") endpointPath = "football/euros/scorers";
+            else if (key === "footballstreamingall") endpointPath = "football/streaming/all";
+            else if (key === "footballstreaming") endpointPath = "football/streaming";
+            else endpointPath = `football/${key}`;
+        } else {
+            endpointPath = `fun/${key}`;
+        }
+
+        const apiUrl = `https://api.princetechn.com/api/${endpointPath}?apikey=prince`;
         
-        // 1000ms delay to ensure react is visible
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const response = await axios.get(apiUrl, {
+            timeout: 60000,
+            validateStatus: status => status >= 200 && status < 500
+        });
 
-        await reply('*Sedang generate gambar...*');
+        if (response.data) {
+            let resData = response.data;
+            
+            // Extracting text/message/result dynamically based on common formats
+            let outputText = resData.result?.message || resData.result?.quote || resData.result?.text || resData.result || resData.message || '';
 
-        const api = new CreateImgAPI();
-        const result = await api.generate(text);
-
-        await conn.sendMessage(from, {
-            image: { url: result.data },
-            caption: `*Prompt:* ${text}`
-        }, { quoted: mek });
-
-        // 800ms delay before success react
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // ✅ React - success
-        await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
+            if (typeof outputText === 'string' && outputText.length > 0) {
+                return await reply(`✨ *${apiName}*:\n\n${outputText}`);
+            } else {
+                return await reply(`📦 *${apiName} Response:*\n\`\`\`${JSON.stringify(resData, null, 2)}\`\`\``);
+            }
+        } else {
+            return await reply("❌ API se koi response nahi mila.");
+        }
 
     } catch (e) {
-        console.error("Error in createimg command:", e);
-        // ❌ React - error
-        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-        await reply(`Error: ${e.message}`);
+        console.log(e);
+        return await reply(`❌ Error occurred: ${e.message}`);
     }
 });

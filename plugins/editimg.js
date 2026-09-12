@@ -22,10 +22,10 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             await reply("⏳ Uploading image for editing, please wait...");
             let media = await quotedMsg.download();
             
-            // Upload buffer to an image host (e.g., Catbox or Telegraph) to get a public URL for the API
             const FormData = (await import('form-data')).default;
             const form = new FormData();
-            form.append('file', media, { filename: 'image.jpg', contentType: mime });
+            form.append('reqtype', 'fileupload');
+            form.append('fileToUpload', media, { filename: 'image.jpg', contentType: mime });
 
             const uploadRes = await axios.post('https://catbox.moe/user/api.php', form, {
                 headers: {
@@ -33,24 +33,21 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
                 }
             });
 
-            if (uploadRes.data && uploadRes.data.startsWith('http')) {
+            if (uploadRes.data && typeof uploadRes.data === 'string' && uploadRes.data.startsWith('http')) {
                 imageUrl = uploadRes.data.trim();
             } else {
-                return await reply("❌ Failed to upload image to public URL for processing.");
+                return await reply(`❌ Failed to upload image to Catbox: ${uploadRes.data}`);
             }
         }
 
-        // If user provided a direct URL and prompt separated by '|' or just text prompt if replying/attaching
         let textArgs = q.split("|");
         let targetUrl = textArgs[0] ? textArgs[0].trim() : "";
         let promptText = textArgs[1] ? textArgs[1].trim() : "";
 
-        // If no separator used, check if first arg looks like a URL
         if (!promptText && targetUrl) {
             if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
                 promptText = textArgs.slice(1).join("|").trim() || args.slice(1).join(" ");
             } else {
-                // If it's not a URL, then the whole 'q' is likely just the prompt and an image was attached/quoted
                 promptText = q;
                 targetUrl = "";
             }

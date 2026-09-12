@@ -4,8 +4,7 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-const funAndFootballApis = {
-    // Fun / Quotes / Wishes APIs
+const funApis = {
     "gratitude": "Gratitude Message",
     "quotes": "Random Quote",
     "goodnight": "Good Night Wish",
@@ -16,55 +15,29 @@ const funAndFootballApis = {
     "boyfriendsday": "Boyfriend's Day Wish",
     "newyear": "New Year Wish",
     "christmas": "Christmas Wish",
-    "heartbreak": "Heartbreak Quote",
-    
-    // Football APIs
-    "livescore": "Football Live Score",
-    "livescore2": "Football Live Score 2",
-    "footballnews": "Football News",
-    "ligue1standings": "Ligue 1 Standings",
-    "uclstandings": "UCL Standings",
-    "uclmatches": "UCL Matches",
-    "euroscorers": "Euro Top Scorers",
-    "footballstreamingall": "Football Streaming All",
-    "footballstreaming": "Football Streaming"
+    "heartbreak": "Heartbreak Quote"
 };
 
-const aliasesList = Object.keys(funAndFootballApis);
+const aliasesList = Object.keys(funApis);
 
 cmd({
-    pattern: "funapi",
+    pattern: "fun",
     alias: aliasesList,
-    desc: "Fetch fun messages, quotes, and football updates using various APIs.",
+    desc: "Fetch fun messages, quotes, and wishes using APIs.",
     category: "fun",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
         let key = command.toLowerCase();
-        if (!funAndFootballApis[key]) {
+        if (!funApis[key]) {
             return;
         }
 
-        let apiName = funAndFootballApis[key];
+        let apiName = funApis[key];
         await reply(`⏳ Fetching ${apiName}, please wait...`);
 
-        // Mapping endpoint names to correct API paths
-        let endpointPath = key;
-        if (key.startsWith("football")) {
-            if (key === "footballnews") endpointPath = "football/news";
-            else if (key === "ligue1standings") endpointPath = "football/ligue1/standings";
-            else if (key === "uclstandings") endpointPath = "football/ucl/standings";
-            else if (key === "uclmatches") endpointPath = "football/ucl/matches";
-            else if (key === "euroscorers") endpointPath = "football/euros/scorers";
-            else if (key === "footballstreamingall") endpointPath = "football/streaming/all";
-            else if (key === "footballstreaming") endpointPath = "football/streaming";
-            else endpointPath = `football/${key}`;
-        } else {
-            endpointPath = `fun/${key}`;
-        }
-
-        const apiUrl = `https://api.princetechn.com/api/${endpointPath}?apikey=prince`;
+        const apiUrl = `https://api.princetechn.com/api/fun/${key}?apikey=prince`;
         
         const response = await axios.get(apiUrl, {
             timeout: 60000,
@@ -73,8 +46,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         if (response.data) {
             let resData = response.data;
-            
-            // Extracting text/message/result dynamically based on common formats
             let outputText = resData.result?.message || resData.result?.quote || resData.result?.text || resData.result || resData.message || '';
 
             if (typeof outputText === 'string' && outputText.length > 0) {

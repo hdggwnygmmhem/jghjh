@@ -4,6 +4,35 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
+async function uploadToTelegraph(buffer, mime) {
+    try {
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        
+        let ext = 'jpg';
+        if (mime.includes('png')) ext = 'png';
+        if (mime.includes('webp')) ext = 'webp';
+        if (mime.includes('jpeg')) ext = 'jpeg';
+
+        form.append('file', buffer, { filename: `image.${ext}`, contentType: mime });
+
+        const res = await axios.post('https://telegra.ph/upload', form, {
+            headers: {
+                ...form.getHeaders(),
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+
+        if (res.data && res.data[0] && res.data[0].src) {
+            return 'https://telegra.ph' + res.data[0].src;
+        }
+        return null;
+    } catch (err) {
+        console.log("Upload Error:", err?.response?.data || err.message);
+        return null;
+    }
+}
+
 cmd({
     pattern: "editfoto",
     alias: ["editai", "aiwriter", "aiimg"],
@@ -22,20 +51,10 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             await reply("⏳ Uploading image for editing, please wait...");
             let media = await quotedMsg.download();
             
-            const FormData = (await import('form-data')).default;
-            const form = new FormData();
-            form.append('file', media, { filename: 'image.jpg', contentType: mime });
-
-            const uploadRes = await axios.post('https://telegra.ph/upload', form, {
-                headers: {
-                    ...form.getHeaders()
-                }
-            });
-
-            if (uploadRes.data && uploadRes.data[0] && uploadRes.data[0].src) {
-                imageUrl = 'https://telegra.ph' + uploadRes.data[0].src;
-            } else {
-                return await reply("❌ Failed to upload image to Telegraph.");
+            imageUrl = await uploadToTelegraph(media, mime);
+            
+            if (!imageUrl) {
+                return await reply("❌ Image upload failed. Please provide a direct image URL instead.\n\n*Example:* .editfoto https://i.ibb.co/... | STYLISH FULL");
             }
         }
 
@@ -55,7 +74,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const finalImageUrl = targetUrl || imageUrl;
 
         if (!finalImageUrl) {
-            return await reply("❌ Please reply to an image, attach an image, or provide an image URL!\n\n*Usage:* \n.editfoto <image_url> | <prompt>\n*Example:* \n.editfoto https://i.ibb.co/... | STYLISH FULL");
+            return await reply("❌ Please reply to an image or provide an image URL!\n\n*Usage:* \n.editfoto <image_url> | <prompt>\n*Example:* \n.editfoto https://i.ibb.co/... | STYLISH FULL");
         }
 
         if (!promptText) {

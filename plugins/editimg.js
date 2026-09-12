@@ -24,19 +24,18 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             
             const FormData = (await import('form-data')).default;
             const form = new FormData();
-            form.append('reqtype', 'fileupload');
-            form.append('fileToUpload', media, { filename: 'image.jpg', contentType: mime });
+            form.append('file', media, { filename: 'image.jpg', contentType: mime });
 
-            const uploadRes = await axios.post('https://catbox.moe/user/api.php', form, {
+            const uploadRes = await axios.post('https://telegra.ph/upload', form, {
                 headers: {
                     ...form.getHeaders()
                 }
             });
 
-            if (uploadRes.data && typeof uploadRes.data === 'string' && uploadRes.data.startsWith('http')) {
-                imageUrl = uploadRes.data.trim();
+            if (uploadRes.data && uploadRes.data[0] && uploadRes.data[0].src) {
+                imageUrl = 'https://telegra.ph' + uploadRes.data[0].src;
             } else {
-                return await reply(`❌ Failed to upload image to Catbox: ${uploadRes.data}`);
+                return await reply("❌ Failed to upload image to Telegraph.");
             }
         }
 

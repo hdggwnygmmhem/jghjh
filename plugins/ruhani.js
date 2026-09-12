@@ -34,7 +34,14 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         if (response.data) {
             let resData = response.data;
-            let definition = resData.result?.definition || resData.result || resData.definition || '';
+            
+            // Correct path handling for results array
+            let definition = "";
+            if (resData.results && Array.isArray(resData.results) && resData.results.length > 0) {
+                definition = resData.results[0].definition;
+            } else if (resData.result?.definition) {
+                definition = resData.result.definition;
+            }
 
             if (typeof definition === 'string' && definition.length > 0) {
                 return await reply(`📖 *Definition of ${term}:*\n\n${definition}`);

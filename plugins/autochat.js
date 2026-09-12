@@ -44,8 +44,8 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
             return await conn.sendMessage(from, { 
                 audio: audioBuffer, 
-                mimetype: 'audio/mpeg', 
-                ptt: true 
+                mimetype: 'audio/mp4', 
+                ptt: false 
             }, { quoted: mek });
 
         } else {

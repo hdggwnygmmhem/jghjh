@@ -35,8 +35,8 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         if (response.data) {
             let resData = response.data;
             
-            // Checking common JSON structures for image URLs in text-maker APIs
-            let imageUrl = resData.result?.url || resData.url || resData.result || resData.image || '';
+            // Correct path for PrinceTech API image response
+            let imageUrl = resData.result?.image_url || resData.result?.url || resData.url || resData.image || '';
 
             if (typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
                 return await conn.sendMessage(from, { 

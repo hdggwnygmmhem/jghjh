@@ -16,7 +16,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         let quotedMsg = m.quoted ? m.quoted : m;
         let mime = (quotedMsg.msg || quotedMsg).mimetype || '';
         
-        let imageUrl = '';
         let imageBuffer = null;
 
         // Agar user ne image bheji hai ya reply kiya hai
@@ -51,7 +50,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         let response;
 
         if (imageBuffer) {
-            // Agar user ne direct photo bheji hai, toh formdata ke through direct API ko bhejo
             const FormData = (await import('form-data')).default;
             const form = new FormData();
             form.append('image', imageBuffer, { filename: 'image.jpg', contentType: mime });
@@ -64,7 +62,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
                 validateStatus: status => status >= 200 && status < 500
             });
         } else {
-            // Agar user ne URL diya hai
             const apiUrl = `https://api-faa.my.id/faa/editfoto?url=${encodeURIComponent(targetUrl)}&prompt=${encodeURIComponent(promptText)}`;
             response = await axios.get(apiUrl, {
                 responseType: 'arraybuffer',
@@ -90,7 +87,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             return await reply("❌ Edit API se koi response nahi mila.");
         }
 
-    }chas (e) {
+    } catch (e) {
         console.log(e);
         return await reply(`❌ Error occurred: ${e.message}`);
     }

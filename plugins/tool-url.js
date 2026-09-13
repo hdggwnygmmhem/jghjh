@@ -1,97 +1,143 @@
+// DR KAMRAN 
+
+import { fileURLToPath } from 'url';
+import path from 'path';
 import axios from 'axios';
 import FormData from 'form-data';
-import { cmd } from '../command.js'; // اپنے بوٹ کے کمانڈ ہینڈلر کا صحیح پاتھ رکھیں
+import { cmd } from '../command.js';
 
-// Helper function to upload file stream/buffer to host API
-export async function uploadFileToHost(fileBuffer, fileName, host = 'catbox') {
+const __filename = fileURLToPath(import.meta.url);
+const API = 'https://pone.rs/upload.php';
+
+function getExtFromMime(mime = '') {
+    if (mime.includes('image/jpeg')) return '.jpg';
+    if (mime.includes('image/png')) return '.png';
+    if (mime.includes('image/webp')) return '.webp';
+    if (mime.includes('image/gif')) return '.gif';
+    if (mime.includes('video/mp4')) return '.mp4';
+    if (mime.includes('video/webm')) return '.webm';
+    if (mime.includes('audio/mpeg')) return '.mp3';
+    if (mime.includes('audio/ogg')) return '.ogg';
+    if (mime.includes('audio/mp4')) return '.m4a';
+    if (mime.includes('application/pdf')) return '.pdf';
+    if (mime.includes('application/zip')) return '.zip';
+    return '.bin';
+}
+
+async function uploadPone(buffer, filename = 'file.bin') {
+    const form = new FormData();
+    form.append('files[]', buffer, { filename });
+
     try {
-        const form = new FormData();
-        form.append('file', fileBuffer, { filename: fileName });
-
-        const { data } = await axios.post(`https://api.ikyyxd.my.id/uploads?host=${host}`, form, {
-            headers: { ...form.getHeaders() }
+        const res = await axios.post(API, form, {
+            headers: {
+                ...form.getHeaders(),
+                'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36',
+                accept: '*/*',
+                origin: 'https://pone.rs',
+                referer: 'https://pone.rs/'
+            },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+            validateStatus: () => true
         });
 
-        if (data && data.status) {
-            let finalUrl = '';
-            if (host === 'catbox') finalUrl = data.result;
-            else if (host === 'uguu') finalUrl = data.result?.files?.[0]?.url;
-            else if (host === 'cdn') finalUrl = data.result?.url;
+        const data = res.data;
+        const url = data?.files?.[0]?.url?.replaceAll('\\/', '/') || null;
 
-            return { status: true, url: finalUrl, host };
-        } else {
-            throw new Error(data?.error || 'API Respon Gagal');
-        }
+        return {
+            status: Boolean(data?.success && url),
+            code: res.status,
+            result_url: url
+        };
     } catch (err) {
-        return { status: false, error: err.response?.data?.error || err.message };
+        return {
+            status: false,
+            code: err.response?.status || 500,
+            result_url: null,
+            error: err.message
+        };
     }
 }
 
-// ==========================================
-//          WHATSAPP BOT COMMAND
-// ==========================================
-
 cmd({
     pattern: "tourl",
-    alias: ["url", "upload", "catbox", "uguu"],
-    desc: "Upload image, video or document file to URL",
+    alias: ["tolink", "upload"],
+    desc: "Upload media and convert to URL",
     category: "tools",
-    filename: import.meta.url
+    react: "🔗",
+    filename: __filename
 },
-async (conn, mek, m, { q, reply, react }) => {
+async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        const isQuotedMedia = mek.quoted && (
-            mek.quoted.type === 'imageMessage' ||
-            mek.quoted.type === 'videoMessage' ||
-            mek.quoted.type === 'documentMessage' ||
-            (mek.quoted.msg || mek.quoted).mimetype
-        );
+        // Quoted message ya current message check karein media ke liye
+        const targetMedia = quoted ? quoted : mek;
+        const mime = targetMedia.mimetype || targetMedia.msg?.mimetype || '';
 
-        const isMedia = (
-            mek.type === 'imageMessage' ||
-            mek.type === 'videoMessage' ||
-            mek.type === 'documentMessage' ||
-            (mek.msg || mek).mimetype
-        );
-
-        if (!isMedia && !isQuotedMedia) {
-            await react("❌");
-            return reply("⚠️ *براہ کرم کسی تصویر، ویڈیو یا فائل کو ریپلائی کر کے کمانڈ چلائیں!*\n\n*مثال:* `.tourl catbox` یا `.tourl uguu` یا `.tourl cdn`");
+        if (!mime) {
+            return reply(
+                `╔════════════════════════╗\n` +
+                `║   🔗 KAMRAN-MD TOURL 🔗   \n` +
+                `╚════════════════════════╝\n\n` +
+                `❌ *Please reply or send any media (image, video, audio, document)!*\n\n` +
+                `> 📌 *Example:* \`.tourl\` (replying to media)\n` +
+                `> ⚡ *Version:* \`12.00\``
+            );
         }
 
-        // Determine target host (default: catbox)
-        let selectedHost = (q || '').toLowerCase().trim();
-        if (!['catbox', 'uguu', 'cdn'].includes(selectedHost)) {
-            selectedHost = 'catbox';
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+
+        // Buffer download function based on bot structure
+        const buffer = typeof targetMedia.download === 'function' 
+            ? await targetMedia.download() 
+            : await conn.downloadMediaMessage(targetMedia);
+
+        if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 1) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ *Failed to download media, buffer is empty!*");
         }
 
-        await react("⏳");
-        await reply(`⏳ *فائل **${selectedHost.toUpperCase()}** پر اپ لوڈ کی جا رہی ہے...*`);
+        let filename =
+            targetMedia.fileName ||
+            targetMedia.msg?.fileName ||
+            `KAMRAN-MD-${Date.now()}${getExtFromMime(mime)}`;
 
-        // Download Media Buffer
-        const targetMsg = isQuotedMedia ? mek.quoted : mek;
-        const mediaBuffer = await targetMsg.download();
-        
-        const mime = (targetMsg.msg || targetMsg).mimetype || 'application/octet-stream';
-        const ext = mime.split('/')[1]?.split(';')[0] || 'bin';
-        const fileName = `upload_${Date.now()}.${ext}`;
+        filename = path.basename(filename);
 
-        // Upload to selected host
-        const res = await uploadFileToHost(mediaBuffer, fileName, selectedHost);
+        const result = await uploadPone(buffer, filename);
 
-        if (!res.status || !res.url) {
-            await react("❌");
-            return reply(`❌ *اپ لوڈنگ میں ناکامی ہوئی:* ${res.error}`);
+        if (!result.status) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply(`❌ *Upload gagal!*\n\nCode: ${result.code || '-'}\nError: ${result.error || 'Tidak diketahui'}`);
         }
 
-        const caption = `✅ *فائل کامیابی سے اپ لوڈ ہو گئی!*\n\n🌐 *Host:* ${res.host.toUpperCase()}\n🔗 *URL:* ${res.url}`;
+        const urlBox = `
+╔════════════════════════╗
+║   🔗 KAMRAN-MD TOURL UPLOAD   
+╚════════════════════════╝
 
-        await reply(caption);
-        await react("✅");
+📦 *File:* ${filename}
+🔗 *URL:* ${result.result_url}
 
-    } catch (err) {
-        console.error("Tourl Command Error:", err);
-        await react("❌");
-        await reply(`❌ *Error:* ${err.message}`);
+> ⚡ *Version:* \`10.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+        await reply(urlBox, {
+            contextInfo: { 
+                forwardingScore: 999, 
+                isForwarded: true, 
+                forwardedNewsletterMessageInfo: { 
+                    newsletterJid: '120363418144382782@newsletter', 
+                    newsletterName: 'DR KAMRAN', 
+                    serverMessageId: 143 
+                } 
+            }
+        });
+
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+
+    } catch (e) {
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        return reply("❌ *Please reply or send any media (image, video, audio, document)!*");
     }
 });

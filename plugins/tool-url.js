@@ -70,16 +70,26 @@ cmd({
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        // Quoted message ya current message check karein media ke liye
-        const targetMedia = quoted ? quoted : mek;
-        const mime = targetMedia.mimetype || targetMedia.msg?.mimetype || '';
+        // Masla ye tha ke bot 'quoted' ya 'mek' ke andar specific media message object (jaise imageMessage, viewOnceMessage, etc.) ko direct detect nahi kar paa raha tha.
+        // Neeche ab saare nested objects aur quoted message structures ko properly handle karne ke liye robust check laga diya hai:
+        const targetMsg = quoted ? quoted : mek;
+        
+        // Quoted message agar viewOnce ya nested ho toh uske message object ko target karo
+        const realMsg = targetMsg.msg || targetMsg.message || targetMsg;
+        
+        const mime = realMsg.mimetype || 
+                     targetMsg.mimetype || 
+                     realMsg.imageMessage?.mimetype || 
+                     realMsg.videoMessage?.mimetype || 
+                     realMsg.documentMessage?.mimetype || 
+                     realMsg.audioMessage?.mimetype || '';
 
         if (!mime) {
             return reply(
                 `╔════════════════════════╗\n` +
                 `║   🔗 KAMRAN-MD TOURL 🔗   \n` +
                 `╚════════════════════════╝\n\n` +
-                `❌ *Please reply or send any media (image, video, audio, document)!*\n\n` +
+                `❌ *Kripya kisi media (image, video, audio, document) ko reply ya send karein!*\n\n` +
                 `> 📌 *Example:* \`.tourl\` (replying to media)\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
@@ -87,19 +97,28 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Buffer download function based on bot structure
-        const buffer = typeof targetMedia.download === 'function' 
-            ? await targetMedia.download() 
-            : await conn.downloadMediaMessage(targetMedia);
+        // Media download function ko direct aur safe tareeqe se call karna
+        let buffer;
+        try {
+            if (typeof targetMsg.download === 'function') {
+                buffer = await targetMsg.download();
+            } else if (typeof conn.downloadMediaMessage === 'function') {
+                buffer = await conn.downloadMediaMessage(targetMsg);
+            } else {
+                buffer = await conn.downloadAndSaveMediaMessage(targetMsg);
+            }
+        } catch (err) {
+            buffer = await conn.downloadMediaMessage(mek);
+        }
 
         if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 1) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ *Failed to download media, buffer is empty!*");
+            return reply("❌ *Gagal download media, buffer kosong!*");
         }
 
         let filename =
-            targetMedia.fileName ||
-            targetMedia.msg?.fileName ||
+            realMsg.fileName ||
+            targetMsg.fileName ||
             `KAMRAN-MD-${Date.now()}${getExtFromMime(mime)}`;
 
         filename = path.basename(filename);
@@ -119,7 +138,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 📦 *File:* ${filename}
 🔗 *URL:* ${result.result_url}
 
-> ⚡ *Version:* \`10.00\`
+> ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
 
         await reply(urlBox, {
@@ -138,6 +157,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
     } catch (e) {
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ *Please reply or send any media (image, video, audio, document)!*");
+        return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
     }
 });
+                

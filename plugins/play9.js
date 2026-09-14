@@ -6,18 +6,36 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "play",
-    alias: ["ytplay", "song", "plays"],
-    desc: "Search and download songs from YouTube via FAA API",
+    alias: ["ytplay", "song", "plays", "music", "kamran", "yta"],
+    desc: "Search and download songs from YouTube via FAA API (supports auto-body trigger)",
     category: "downloader",
     react: "🎵",
-    filename: __filename
-}, async (conn, mek, m, { from, text, reply }) => {
+    filename: __filename,
+    // Add this if your bot framework supports non-prefix/body matching hooks
+    body: ["auto play", "song", "music", "kamran", "ytplay", "yta"] 
+}, async (conn, mek, m, { from, text, q, body }) => {
     try {
-        if (!text) {
+        // Automatically extract the query whether it's used via prefix (.play) or body keyword (song / kamran)
+        let searchQuery = text || q;
+        
+        if (!searchQuery && body) {
+            const triggers = ['auto play', 'song', 'music', 'kamran', 'ytplay', 'yta'];
+            const lowerBody = body.toLowerCase().trim();
+            
+            for (const trig of triggers) {
+                if (lowerBody.startsWith(trig)) {
+                    searchQuery = body.slice(trig.length).trim();
+                    break;
+                }
+            }
+        }
+
+        if (!searchQuery) {
             return reply(
                 `⚠️ Please provide a song name or search query!\n\n` +
                 `Example:\n` +
-                `• .play Song pal`
+                `• .play Song pal\n` +
+                `• song pal`
             );
         }
 
@@ -25,7 +43,7 @@ cmd({
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
         // Call the API endpoint
-        const encodedQuery = encodeURIComponent(text.trim());
+        const encodedQuery = encodeURIComponent(searchQuery.trim());
         const apiUrl = `https://api-faa.my.id/faa/ytplay?query=${encodedQuery}`;
         
         const response = await axios.get(apiUrl, { timeout: 30000 });
@@ -38,8 +56,8 @@ cmd({
         }
 
         const info = resData.result;
-        const audioUrl = info.mp3; // Exact key from your API log
-        const title = info.title || text;
+        const audioUrl = info.mp3;
+        const title = info.title || searchQuery;
         const thumbnail = info.thumbnail || '';
         const duration = info.duration_timestamp || '';
         const author = info.author || '';
@@ -69,7 +87,7 @@ cmd({
         await conn.sendMessage(from, {
             audio: { url: audioUrl },
             mimetype: 'audio/mp4',
-            ptt: false // Set true if you want voice note style
+            ptt: false
         }, { quoted: mek });
 
         // Success reaction

@@ -1,4 +1,5 @@
-Import { fileURLToPath } from 'url';
+
+import { fileURLToPath } from 'url';
 import config from '../config.js';
 import { cmd } from '../command.js';
 import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from '../lib/functions.js';

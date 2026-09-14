@@ -7,8 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "ai",
-    alias: ["gpt", "chatgpt", "gemini", "ask"],
-    desc: "Ask anything to Gemini AI chatbot.",
+    alias: ["gpt", "chatgpt", "deepai", "blackbox"],
+    desc: "Ask anything to AI chatbot via FAA APIs.",
     category: "ai",
     react: "🤖",
     filename: __filename
@@ -25,26 +25,35 @@ cmd({
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Official Google Gemini Public Endpoint (Free & Reliable)
-        // Aap yahan apni Gemini API key bhi laga sakte hain agar zaroorat ho
-        const apiKey = "AIzaSyD-FreeGeminiKeyPlaceholder"; // Free public proxy endpoint
         const encodedQuery = encodeURIComponent(text.trim());
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
-        // Alternative reliable free AI endpoint agar Google key na ho:
-        const fallbackUrl = `https://api.giftedtech.web.id/api/ai/gpt4?apikey=gifted&q=${encodedQuery}`;
+        // Primary API: Blackbox endpoint
+        const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
+        // Fallback API: DeepAI endpoint
+        const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
 
         let aiResult = "";
+
         try {
-            const response = await axios.post(apiUrl, {
-                contents: [{ parts: [{ text: text.trim() }] }]
-            }, { timeout: 30000 });
+            const response = await axios.get(blackboxUrl, { timeout: 30000 });
+            const resData = response.data;
             
-            aiResult = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            // Support different JSON key structures returned by the API
+            aiResult = resData?.result || resData?.response || resData?.message || resData?.text || (typeof resData === 'string' ? resData : '');
         } catch (e) {
-            // Agar primary fail ho toh fallback API use karega
-            const resFallback = await axios.get(fallbackUrl, { timeout: 30000 });
-            aiResult = resFallback.data?.result || resFallback.data?.response;
+            console.log("Blackbox API failed, trying DeepAI fallback...");
+        }
+
+        // If Blackbox fails or returns empty, try DeepAI endpoint
+        if (!aiResult) {
+            try {
+                const responseFallback = await axios.get(deepAiUrl, { timeout: 30000 });
+                const resDataFallback = responseFallback.data;
+                
+                aiResult = resDataFallback?.result || resDataFallback?.response || resDataFallback?.message || resDataFallback?.text || (typeof resDataFallback === 'string' ? resDataFallback : '');
+            } catch (err) {
+                console.error("DeepAI fallback also failed:", err.message);
+            }
         }
 
         if (!aiResult) {
@@ -59,7 +68,7 @@ cmd({
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (err) {
-        console.error("AI Error:", err);
+        console.error("AI Command Error:", err);
         reply(`❌ Error: ${err.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }

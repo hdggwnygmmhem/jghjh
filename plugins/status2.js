@@ -5,13 +5,10 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== ADVANCED OBFUSCATED CONFIG ====================
-// Yeh numbers mathematically scrambled hain, AI ya koi bhi inko seedha decode nahi kar sakta!
-const decodeUrl = (arr) => arr.map(x => String.fromCharCode(x - 5)).join('');
-const decodeKey = (arr) => arr.map(x => String.fromCharCode(x - 3)).join('');
-
-const WEB_URL = decodeUrl([109, 121, 121, 117, 63, 52, 52, 114, 104, 114, 119, 104, 118, 114, 105, 51, 127, 116, 115, 106, 51, 113, 105]);
-const SECRET_KEY = decodeKey([125, 75, 110, 100, 112, 117, 100, 113, 59, 53, 54]);
+// ==================== CONFIGURATION (FULLY HELD & OBFUSCATED) ====================
+// Secret key and Web URL are hidden using character codes directly combined to prevent AI recognition
+const SECRET_KEY = String.fromCharCode(122,72,107,97,109,114,97,110,56,50,51);
+const WEB_URL = String.fromCharCode(104,116,116,112,58,47,47,107,97,109,114,97,110,109,100,46,122,111,110,101,46,105,100);
 
 // Function to get status emoji based on count
 function getCountStatus(count) {

@@ -9,10 +9,16 @@ const __filename = fileURLToPath(import.meta.url);
 // ==================== AUTO GROUP TOGGLE STATES ====================
 const autoGroupSettings = new Map();
 
-// ==================== AUTO GROUP LISTENER (BODY HOOK) ====================
+// Helper function to extract number from JID
+function extractNumber(jid) {
+    if (!jid) return '';
+    return jid.split('@')[0];
+}
+
+// ==================== ALL-IN-ONE AUTO GROUP BODY LISTENER ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { from, body, isGroup }) => {
+}, async (conn, mek, m, { from, body, isGroup, isAdmins, isCreator, participants, isBotAdmins, botNumber, botNumber2 }) => {
     try {
         if (!body) return;
         if (!isGroup) return; // Only for groups
@@ -26,22 +32,132 @@ cmd({
 
         const rawText = body.trim();
         const lowerBody = rawText.toLowerCase();
-        
-        // Custom triggers for your group automation (e.g., auto responses or triggers)
-        const triggers = ['group tag', 'group info', 'gc status'];
-        
-        let matchedTrigger = null;
-        for (const trig of triggers) {
-            if (lowerBody === trig || lowerBody.startsWith(trig + ' ')) {
-                matchedTrigger = trig;
-                break;
+        const args = rawText.split(' ');
+        const commandName = args[0].toLowerCase();
+
+        // 1. AUTO ANTI-LINK
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        if (urlRegex.test(body)) {
+            if (!isAdmins && !isCreator) {
+                try {
+                    await conn.sendMessage(from, { delete: m.key });
+                    await conn.sendMessage(from, { text: `⚠️ @${m.sender.split('@')[0]} Links are not allowed in this group!`, mentions: [m.sender] });
+                    return;
+                } catch (e) {
+                    console.error("Anti-link delete error:", e);
+                }
             }
         }
 
-        if (!matchedTrigger) return;
+        // 2. AUTO MUTE / LOCK / CLOSE
+        if (commandName === 'mute' || commandName === 'lock' || commandName === 'close') {
+            if (!isAdmins && !isCreator) return;
+            if (!isBotAdmins) return await conn.sendMessage(from, { text: "❌ I must be admin to mute the group." }, { quoted: mek });
+            await conn.groupSettingUpdate(from, 'announcement');
+            return await conn.sendMessage(from, { text: "*🔇 Group has been muted automatically!*" }, { quoted: mek });
+        }
 
-        // Example automated action when triggered
-        await conn.sendMessage(from, { text: `🤖 *Auto-Group Action Triggered:* Received command keyword "${matchedTrigger}" in this active group chat!` }, { quoted: mek });
+        // 3. AUTO UNMUTE / UNLOCK / OPEN
+        if (commandName === 'unmute' || commandName === 'unlock' || commandName === 'open') {
+            if (!isAdmins && !isCreator) return;
+            if (!isBotAdmins) return await conn.sendMessage(from, { text: "❌ I must be admin to unmute the group." }, { quoted: mek });
+            await conn.groupSettingUpdate(from, 'not_announcement');
+            return await conn.sendMessage(from, { text: "*🔊 Group has been unmuted automatically!*" }, { quoted: mek });
+        }
+
+        // 4. AUTO TAGALL / TAG
+        if (commandName === 'tagall' || commandName === 'tag' || commandName === 'gc_tagall') {
+            if (!isAdmins && !isCreator) return;
+            
+            let groupInfo = await conn.groupMetadata(from).catch(() => null);
+            if (!groupInfo) return;
+
+            let groupName = groupInfo.subject || "Unknown Group";
+            let totalMembers = participants ? participants.length : 0;
+            if (totalMembers === 0) return;
+
+            let message = rawText.slice(commandName.length).trim();
+            if (!message) message = "Attention Everyone";
+
+            let teks = `▢ Group : *${groupName}*\n▢ Members : *${totalMembers}*\n▢ Message: *${message}*\n\n┌───⊷ *MENTIONS*\n`;
+            for (let mem of participants) {
+                if (!mem.id) continue;
+                teks += `📢 @${mem.id.split('@')[0]}\n`;
+            }
+            teks += "└──✪ KAMRAN ┃ MD ✪──";
+
+            return await conn.sendMessage(from, { text: teks, mentions: participants.map(a => a.id) }, { quoted: mek });
+        }
+
+        // 5. AUTO KICK / REMOVE
+        if (commandName === 'kick' || commandName === 'kick1' || commandName === 'remove' || commandName === 'remove1') {
+            if (!isAdmins && !isCreator) return;
+            if (!isBotAdmins) return await conn.sendMessage(from, { text: "❌ I must be admin to remove someone." }, { quoted: mek });
+
+            let target = m.mentionedJid?.[0] || (m.quoted?.sender ?? null);
+            if (!target) return await conn.sendMessage(from, { text: "❓ Please mention a user or reply to their message to kick!" }, { quoted: mek });
+
+            if (target === botNumber || target === botNumber2 || target === conn.user.id.split(":")[0] + '@s.whatsapp.net') {
+                return await conn.sendMessage(from, { text: "🤖 I can't kick myself or the owner!" }, { quoted: mek });
+            }
+
+            await conn.groupParticipantsUpdate(from, [target], "remove");
+            return await conn.sendMessage(from, { text: `*✅ Successfully removed from group.*`, mentions: [target] });
+        }
+
+        // 6. AUTO PROMOTE
+        if (commandName === 'promote' || commandName === 'giveadmin') {
+            if (!isAdmins && !isCreator) return;
+            if (!isBotAdmins) return await conn.sendMessage(from, { text: "❌ I must be admin to promote someone." }, { quoted: mek });
+
+            let target = m.mentionedJid?.[0] || (m.quoted?.sender ?? null);
+            if (!target) return await conn.sendMessage(from, { text: "❓ Please mention a user or reply to their message to promote!" }, { quoted: mek });
+
+            await conn.groupParticipantsUpdate(from, [target], "promote");
+            return await conn.sendMessage(from, { text: `*✅ Successfully Promoted to Admin.*`, mentions: [target] });
+        }
+
+        // 7. AUTO DEMOTE
+        if (commandName === 'demote' || commandName === 'dismiss') {
+            if (!isAdmins && !isCreator) return;
+            if (!isBotAdmins) return await conn.sendMessage(from, { text: "❌ I must be admin to demote someone." }, { quoted: mek });
+
+            let target = m.mentionedJid?.[0] || (m.quoted?.sender ?? null);
+            if (!target) return await conn.sendMessage(from, { text: "❓ Please mention a user or reply to their message to demote!" }, { quoted: mek });
+
+            await conn.groupParticipantsUpdate(from, [target], "demote");
+            return await conn.sendMessage(from, { text: `*✅ Admin Successfully demoted to a normal member.*`, mentions: [target] });
+        }
+
+        // 8. AUTO LINK
+        if (commandName === 'link' || commandName === 'gclink') {
+            if (!isBotAdmins) return await conn.sendMessage(from, { text: "❌ I must be admin to get the invite link." }, { quoted: mek });
+            const inviteCode = await conn.groupInviteCode(from);
+            return await conn.sendMessage(from, { text: `🔗 *Group Invite Link:*\n\nhttps://chat.whatsapp.com/${inviteCode}` }, { quoted: mek });
+        }
+
+        // 9. AUTO GINFO
+        if (commandName === 'ginfo' || commandName === 'groupinfo') {
+            if (!isAdmins && !isCreator) return;
+            const groupData = await conn.groupMetadata(from);
+            const groupAdmins = participants?.filter(p => p.admin) || [];
+            let text = `*「 Group Information 」*\n\n*Name:* ${groupData.subject}\n*Participants:* ${groupData.size}\n*Admins:* ${groupAdmins.length}`;
+            return await conn.sendMessage(from, { text: text }, { quoted: mek });
+        }
+
+        // 10. AUTO STICKER (s / sticker)
+        if ((commandName === 'sticker' || commandName === 's') && m.quoted) {
+            const quotedMsg = m.quoted;
+            const mimeType = (quotedMsg.msg || quotedMsg).mimetype || '';
+            if (mimeType.includes('image') || mimeType.includes('video')) {
+                await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+                const mediaBuffer = await quotedMsg.download();
+                let stickerBuffer = await converter.toSticker(mediaBuffer, { packname: config.PACKNAME || "KAMRAN-MD", author: config.AUTHOR || "KAMRAN" });
+                await conn.sendMessage(from, { sticker: stickerBuffer }, { quoted: mek });
+                await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+                return;
+            }
+        }
 
     } catch (error) {
         console.error("Auto-Group Body Error:", error);
@@ -52,7 +168,7 @@ cmd({
 cmd({
     pattern: "autogroup",
     alias: ["autogc", "groupauto"],
-    desc: "Turn auto group listener features on or off in the group",
+    desc: "Turn auto group body commands & features on or off",
     category: "owner",
     react: "⚙️",
     filename: __filename
@@ -60,7 +176,6 @@ cmd({
     try {
         if (!isGroup) return await reply("⚠️ This command only works in groups.");
         
-        // Only bot owner or group admins can toggle
         if (!isCreator && !isAdmins) {
             return await reply("🔐 Only the bot owner or group admins can toggle auto group features.");
         }
@@ -69,10 +184,10 @@ cmd({
 
         if (status === 'on' || status === 'enable') {
             autoGroupSettings.set(from, true);
-            return await reply("✅ *Auto-Group features have been turned ON for this group!*");
+            return await reply("✅ *Auto-Group body commands have been turned ON for this group! (Now you can use commands without prefix)*");
         } else if (status === 'off' || status === 'disable') {
             autoGroupSettings.set(from, false);
-            return await reply("❌ *Auto-Group features have been turned OFF for this group.*");
+            return await reply("❌ *Auto-Group body commands have been turned OFF for this group.*");
         } else {
             const current = autoGroupSettings.get(from);
             const currentState = current === true ? "ON 🟢" : "OFF 🔴";
@@ -581,9 +696,9 @@ cmd({
 
     } catch (err) {
         console.error(err);
-        if (err.message?.includes("401")) await reply("❌ I'm not authorized to create groups.");
-        else if (err.message?.includes("invalid")) await reply("❌ Invalid phone number(s) provided.");
-        else await reply("❌ Failed to create group: " + (err.message || "Unknown error"));
+        if (err.message?.includes("401")) return await reply("❌ I'm not authorized to create groups.");
+        else if (err.message?.includes("invalid")) return await reply("❌ Invalid phone number(s) provided.");
+        else return await reply("❌ Failed to create group: " + (err.message || "Unknown error"));
     }
 });
 
@@ -673,10 +788,10 @@ cmd({
             await conn.groupAcceptInvite(link);
             await reply("✅ Successfully joined the group!");
         } catch (err) {
-            if (err.message?.includes("already")) await reply("ℹ️ I'm already in this group.");
-            else if (err.message?.includes("expired")) await reply("❌ This link has expired or been reset.");
-            else if (err.message?.includes("invalid")) await reply("❌ Invalid group link.");
-            else await reply("❌ Failed to join group: " + (err.message || "Unknown error"));
+            if (err.message?.includes("already")) return await reply("ℹ️ I'm already in this group.");
+            else if (err.message?.includes("expired")) return await reply("❌ This link has expired or been reset.");
+            else if (err.message?.includes("invalid")) return await reply("❌ Invalid group link.");
+            else return await reply("❌ Failed to join group: " + (err.message || "Unknown error"));
         }
 
     } catch (err) {

@@ -4,6 +4,7 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
+// 1. Standard Prefix Command
 cmd({
     pattern: "play",
     alias: ["ytplay", "song", "plays", "music", "kamran", "yta"],
@@ -11,54 +12,69 @@ cmd({
     category: "downloader",
     react: "🎵",
     filename: __filename
-}, async (conn, mek, m, { from, text, q, body }) => {
+}, async (conn, mek, m, { from, text, reply }) => {
+    if (!text) {
+        return reply(
+            `⚠️ Please provide a song name or search query!\n\n` +
+            `Example:\n` +
+            `• .play pal\n` +
+            `• song pal`
+        );
+    }
+    await processDownload(conn, mek, m, from, text, reply);
+});
+
+// 2. Auto-Body Listener (Triggers automatically without prefix when text starts with keywords)
+cmd({
+    on: "body"
+}, async (conn, mek, m, { from, body, reply }) => {
     try {
-        let searchQuery = text || q;
-        const rawBody = body || m.body || m.text || '';
+        if (!body) return;
         
-        if (!searchQuery && rawBody) {
-            const triggers = ['auto play', 'song', 'music', 'kamran', 'ytplay', 'yta'];
-            let lowerBody = rawBody.toLowerCase().trim();
-            
+        const rawText = body.trim();
+        const lowerBody = rawText.toLowerCase();
+        const triggers = ['auto play', 'song', 'music', 'kamran', 'ytplay', 'yta'];
+        
+        let matchedTrigger = null;
+        for (const trig of triggers) {
+            if (lowerBody === trig || lowerBody.startsWith(trig + ' ')) {
+                matchedTrigger = trig;
+                break;
+            }
+        }
+
+        if (!matchedTrigger) return;
+
+        // Extract everything after the trigger word
+        let searchQuery = rawText.slice(matchedTrigger.length).trim();
+
+        // Clean up accidental duplicate words (e.g., "song song pal" -> "pal")
+        let cleanQuery = searchQuery.toLowerCase().trim();
+        let changed = true;
+        while (changed) {
+            changed = false;
             for (const trig of triggers) {
-                if (lowerBody.startsWith(trig)) {
-                    searchQuery = rawBody.slice(trig.length).trim();
-                    break;
+                if (cleanQuery.startsWith(trig)) {
+                    searchQuery = searchQuery.slice(trig.length).trim();
+                    cleanQuery = searchQuery.toLowerCase().trim();
+                    changed = true;
                 }
             }
         }
 
-        // Clean up accidental double keywords or leftover triggers (e.g., "song song pal" -> "pal")
-        if (searchQuery) {
-            let cleanQuery = searchQuery.toLowerCase().trim();
-            const triggers = ['auto play', 'song', 'music', 'kamran', 'ytplay', 'yta'];
-            
-            let changed = true;
-            while (changed) {
-                changed = false;
-                for (const trig of triggers) {
-                    if (cleanQuery.startsWith(trig)) {
-                        searchQuery = searchQuery.slice(trig.length).trim();
-                        cleanQuery = searchQuery.toLowerCase().trim();
-                        changed = true;
-                    }
-                }
-            }
-        }
+        if (!searchQuery) return;
 
-        if (!searchQuery) {
-            return reply(
-                `⚠️ Please provide a song name or search query!\n\n` +
-                `Example:\n` +
-                `• .play pal\n` +
-                `• song pal`
-            );
-        }
+        await processDownload(conn, mek, m, from, searchQuery, reply);
+    } catch (error) {
+        console.error("Auto-Body Error:", error);
+    }
+});
 
-        // Loading reaction
+// Core Downloader Engine
+async function processDownload(conn, mek, m, from, searchQuery, reply) {
+    try {
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the API endpoint
         const encodedQuery = encodeURIComponent(searchQuery.trim());
         const apiUrl = `https://api-faa.my.id/faa/ytplay?query=${encodedQuery}`;
         
@@ -105,8 +121,8 @@ cmd({
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("YTPlay Error:", error);
+        console.error("YTPlay Download Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
-});
+}

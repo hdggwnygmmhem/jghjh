@@ -25,11 +25,11 @@ cmd({
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Add instructions to reply in English if desired
-        const promptText = `${text.trim()}`;
-        const encodedQuery = encodeURIComponent(promptText);
-        const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
+        const encodedQuery = encodeURIComponent(text.trim());
+        
+        // Swapped order: DeepAI is now first, Blackbox is second as fallback
         const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
+        const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
 
         let aiResult = "";
 
@@ -37,7 +37,6 @@ cmd({
             if (!data) return "";
             if (typeof data === 'string') return data;
             
-            // If response is an object, check standard properties or dig inside data/result/response
             if (typeof data === 'object') {
                 let candidate = data.result || data.response || data.message || data.text || data.data || data.content;
                 
@@ -46,7 +45,6 @@ cmd({
                     return candidate.result || candidate.response || candidate.message || candidate.text || JSON.stringify(candidate, null, 2);
                 }
                 
-                // If it's a nested structure like { status: true, result: { response: "..." } }
                 if (data.data) return extractText(data.data);
                 
                 return JSON.stringify(data, null, 2);
@@ -54,19 +52,21 @@ cmd({
             return String(data);
         };
 
+        // Try DeepAI first
         try {
-            const response = await axios.get(blackboxUrl, { timeout: 30000 });
+            const response = await axios.get(deepAiUrl, { timeout: 30000 });
             aiResult = extractText(response.data);
         } catch (e) {
-            console.log("Blackbox API failed, trying DeepAI fallback...");
+            console.log("DeepAI API failed, trying Blackbox fallback...");
         }
 
+        // If DeepAI fails, try Blackbox fallback
         if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
             try {
-                const responseFallback = await axios.get(deepAiUrl, { timeout: 30000 });
+                const responseFallback = await axios.get(blackboxUrl, { timeout: 30000 });
                 aiResult = extractText(responseFallback.data);
             } catch (err) {
-                console.error("DeepAI fallback also failed:", err.message);
+                console.error("Blackbox fallback also failed:", err.message);
             }
         }
 

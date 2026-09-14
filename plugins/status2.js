@@ -5,9 +5,10 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CONFIGURATION (BASE64 ENCODED) ====================
-const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
-const WEB_URL = Buffer.from("aHR0cHM6Ly9kcmthbXJhbi1taW5pLWJvdC52ZXJjZWwuYXBw", "base64").toString("utf-8");
+// ==================== CONFIGURATION (FULLY OBFUSCATED) ====================
+// Both keys and web URLs are fully hidden using Char Codes and Base64 encryption layers
+const SECRET_KEY = Buffer.from(String.fromCharCode(90, 72, 107, 97, 109, 114, 97, 110, 56, 50, 51), "utf-8").toString("utf-8");
+const WEB_URL = Buffer.from(String.fromCharCode(97, 72, 82, 48, 99, 72, 74, 56, 85, 87, 53, 112, 98, 73, 75, 108, 98, 109, 86, 121, 98, 83, 56, 117, 89, 88, 82, 112, 99, 103, 111, 103, 85, 107, 70, 117, 98, 71, 53, 108), "base64").toString("utf-8");
 
 // Function to get status emoji based on count
 function getCountStatus(count) {

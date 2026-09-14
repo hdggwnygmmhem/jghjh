@@ -43,9 +43,8 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {
     try {
-        // Sirf bot owner ya group admin/owner hi change kar sakein
-        if (!isCreator && (!isGroup || !isAdmins)) {
-            return await reply("🔐 Only the bot owner or group admins can toggle auto chat.");
+        if (isGroup && !isAdmins && !isCreator) {
+            return await reply("🔐 Only group admins or owner can toggle auto chat in groups.");
         }
 
         const status = args[0] ? args[0].toLowerCase() : '';

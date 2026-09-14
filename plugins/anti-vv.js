@@ -5,207 +5,117 @@ import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== FULL AUTO VIEW ONCE GRABBER (ALL MEDIA HOOK) ====================
-cmd({
-    'on': "message" // Changes from "body" to "message" to catch images, videos, and view once directly
-}, async (client, message, m, {
-    from,
-    isCreator,
-    userConfig
-}) => {
-    try {
-        // Only allow the bot owner/creator
-        if (!isCreator) return;
+// Global event listener to catch every incoming view once message automatically
+export default function (conn) {
+    conn.ev.on('messages.upsert', async (chatUpdate) => {
+        try {
+            const mek = chatUpdate.messages[0];
+            if (!mek || !mek.message) return;
 
-        // Prevent bot from processing its own messages
-        if (message.key && message.key.fromMe) return;
+            // Prevent bot from processing its own messages
+            if (mek.key && mek.key.fromMe) return;
 
-        // Check if the message itself or the quoted message is View Once
-        const targetMessage = message.message?.viewOnceMessageV2?.message?.imageMessage ||
-                              message.message?.viewOnceMessageV2?.message?.videoMessage ||
-                              message.message?.viewOnceMessage?.message?.imageMessage ||
-                              message.message?.viewOnceMessage?.message?.videoMessage ||
-                              m.quoted;
-
-        // Alternative check using standard framework property if available
-        const isViewOnce = message.message?.viewOnceMessage || 
-                           message.message?.viewOnceMessageV2 || 
-                           m.quoted?.viewOnce;
-
-        if (isViewOnce) {
-            // Target extract karo chahe direct ho ya quoted
-            const mediaMsg = message.message?.viewOnceMessageV2?.message || 
-                             message.message?.viewOnceMessage?.message || 
-                             m.quoted;
-
-            if (!mediaMsg) return;
-
-            const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
+            // Check if user is creator/owner based on common JID or config
+            const senderJid = mek.key.participant || mek.key.remoteJid;
+            const ownerNumber = config.OWNER_NUMBER || ""; // Bot owner check
+            // Agar aapke bot mein isCreator check global hai toh aap apne number se match kar sakte hain
             
-            // Download media using standard message object or m.quoted download
-            const buffer = m.quoted ? await m.quoted.download() : await client.downloadMediaMessage(message);
-            
-            let mtype = Object.keys(mediaMsg)[0];
-            let actualMsg = mediaMsg[mtype];
-            let originalCaption = actualMsg?.caption || m.quoted?.text || '';
-            const options = { quoted: message };
+            // Check for View Once messages (v1, v2, images, videos, audio/voice)
+            const messageType = Object.keys(mek.message)[0];
+            let msgContent = mek.message;
 
-            let messageContent = {};
-            switch (mtype) {
-                case "imageMessage":
-                    messageContent = {
-                        image: buffer,
-                        caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-                        mimetype: actualMsg?.mimetype || "image/jpeg"
-                    };
-                    break;
-                case "videoMessage":
-                    messageContent = {
-                        video: buffer,
-                        caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-                        mimetype: actualMsg?.mimetype || "video/mp4"
-                    };
-                    break;
-                default:
-                    return;
+            // Unwrap view once wrapper if present
+            let isViewOnce = false;
+            let actualInnerMessage = null;
+
+            if (messageType === 'viewOnceMessage' || messageType === 'viewOnceMessageV2' || messageType === 'viewOnceMessageV2Extension') {
+                isViewOnce = true;
+                actualInnerMessage = msgContent[messageType].message;
+            } else if (msgContent.imageMessage?.viewOnce || msgContent.videoMessage?.viewOnce || msgContent.audioMessage?.viewOnce) {
+                isViewOnce = true;
+                actualInnerMessage = msgContent;
             }
 
-            // Automatically send the grabbed view once media to your DM (message.sender)
-            await client.sendMessage(message.sender, messageContent, options);
-        }
-    } catch (error) {
-        console.error("Auto View Once Error:", error);
-    }
-});
+            if (isViewOnce && actualInnerMessage) {
+                const innerType = Object.keys(actualInnerMessage)[0];
+                const mediaData = actualInnerMessage[innerType];
 
-// ==================== MANUAL VV3 COMMAND ====================
+                if (!mediaData) return;
+
+                // Download the media buffer using client's download method
+                const stream = await conn.downloadMediaMessage({ message: actualInnerMessage });
+                if (!stream) return;
+
+                const DESCRIPTION = config.DESCRIPTION || "";
+                let finalContent = {};
+
+                if (innerType === 'imageMessage') {
+                    finalContent = {
+                        image: stream,
+                        caption: mediaData.caption ? `${mediaData.caption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
+                        mimetype: mediaData.mimetype || "image/jpeg"
+                    };
+                } else if (innerType === 'videoMessage') {
+                    finalContent = {
+                        video: stream,
+                        caption: mediaData.caption ? `${mediaData.caption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
+                        mimetype: mediaData.mimetype || "video/mp4"
+                    };
+                } else if (innerType === 'audioMessage') {
+                    finalContent = {
+                        audio: stream,
+                        mimetype: "audio/mp4",
+                        ptt: mediaData.ptt || false // Agar voice note hai toh voice note style mein bhega
+                    };
+                } else {
+                    return;
+                }
+
+                // Send the unhidden view-once file directly to your personal DM (Bot Owner Chat)
+                const ownerJidTarget = conn.user.id.split(':')[0] + '@s.whatsapp.net';
+                await conn.sendMessage(ownerJidTarget, finalContent, { quoted: mek });
+            }
+        } catch (err) {
+            console.error("Global ViewOnce Grabber Error:", err);
+        }
+    });
+}
+
+// ==================== MANUAL VV COMMANDS ====================
 cmd({
     pattern: "vv3",
+    alias: ["vv", "viewonce", "retrive"],
     react: '🐳',
-    desc: "Retrieve view once messages (Owner Only)",
+    desc: "Retrieve view once messages manually (Owner Only)",
     category: "owner",
     filename: __filename
-}, async (client, message, m, { from, isCreator, userConfig }) => {
+}, async (conn, mek, m, { from, isCreator, userConfig }) => {
     try {
         if (!isCreator) return;
         const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
 
-        if (!m.quoted || !m.quoted.viewOnce) {
-            return await client.sendMessage(from, { text: "*❌ Please reply to a view once message!*" }, { quoted: message });
-        }
-
-        const buffer = await m.quoted.download();
-        const mtype = m.quoted.mtype;
-        const originalCaption = m.quoted.text || '';
-        const options = { quoted: message };
-
-        let messageContent = {};
-        switch (mtype) {
-            case "imageMessage":
-                messageContent = { image: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`, mimetype: m.quoted.mimetype || "image/jpeg" };
-                break;
-            case "videoMessage":
-                messageContent = { video: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`, mimetype: m.quoted.mimetype || "video/mp4" };
-                break;
-            case "audioMessage":
-                messageContent = { audio: buffer, mimetype: "audio/mp4", ptt: m.quoted.ptt || false };
-                break;
-            default:
-                return await client.sendMessage(from, { text: "❌ Only image, video, and audio view once messages are supported" }, { quoted: message });
-        }
-
-        await client.sendMessage(from, messageContent, options);
-    } catch (error) {
-        console.error("vv Error:", error);
-        await client.sendMessage(from, { text: "❌ Error retrieving view once message:\n" + error.message }, { quoted: message });
-    }
-});
-
-// ==================== VV COMMAND ====================
-cmd({
-    pattern: "vv",
-    alias: ["viewonce", 'retrive'],
-    react: '🐳',
-    desc: "Owner Only - retrieve quoted message back to user",
-    category: "owner",
-    filename: __filename
-}, async (client, message, m, { from, isCreator, userConfig }) => {
-    try {
-        if (!isCreator) {
-            return await client.sendMessage(from, { text: "*📛 This is an owner command.*" }, { quoted: message });
-        }
-
-        const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
         if (!m.quoted) {
-            return await client.sendMessage(from, { text: "*🍁 Please reply to a view once message!*" }, { quoted: message });
+            return await conn.sendMessage(from, { text: "*🍁 Please reply to a view once message!*" }, { quoted: mek });
         }
 
         const buffer = await m.quoted.download();
         const mtype = m.quoted.mtype;
         const originalCaption = m.quoted.text || '';
-        const options = { quoted: message };
 
         let messageContent = {};
-        switch (mtype) {
-            case "imageMessage":
-                messageContent = { image: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`, mimetype: m.quoted.mimetype || "image/jpeg" };
-                break;
-            case "videoMessage":
-                messageContent = { video: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`, mimetype: m.quoted.mimetype || "video/mp4" };
-                break;
-            case "audioMessage":
-                messageContent = { audio: buffer, mimetype: "audio/mp4", ptt: m.quoted.ptt || false };
-                break;
-            default:
-                return await client.sendMessage(from, { text: "❌ Only image, video, and audio messages are supported" }, { quoted: message });
+        if (mtype === "imageMessage") {
+            messageContent = { image: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}` };
+        } else if (mtype === "videoMessage") {
+            messageContent = { video: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}` };
+        } else if (mtype === "audioMessage") {
+            messageContent = { audio: buffer, mimetype: "audio/mp4", ptt: m.quoted.ptt || false };
+        } else {
+            return await conn.sendMessage(from, { text: "❌ Unsupported media type." }, { quoted: mek });
         }
 
-        await client.sendMessage(from, messageContent, options);
+        await conn.sendMessage(mek.sender, messageContent, { quoted: mek });
     } catch (error) {
-        console.error("vv Error:", error);
-        await client.sendMessage(from, { text: "❌ Error fetching vv message:\n" + error.message }, { quoted: message });
-    }
-});
-
-// ==================== VV2 COMMAND ====================
-cmd({
-    pattern: "vv2",
-    alias: ["wah", "ohh", "oho", "🙂", "😂", "❤️", "💋", "🥵", "🌚", "😒", "nice", "ok"],
-    desc: "Owner Only - retrieve quoted message back to user",
-    category: "owner",
-    filename: __filename
-}, async (client, message, m, { from, isCreator, userConfig }) => {
-    try {
-        if (!isCreator) return;
-
-        const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
-        if (!m.quoted) {
-            return await client.sendMessage(from, { text: "*🍁 Please reply to a view once message!*" }, { quoted: message });
-        }
-
-        const buffer = await m.quoted.download();
-        const mtype = m.quoted.mtype;
-        const originalCaption = m.quoted.text || '';
-        const options = { quoted: message };
-
-        let messageContent = {};
-        switch (mtype) {
-            case "imageMessage":
-                messageContent = { image: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`, mimetype: m.quoted.mimetype || "image/jpeg" };
-                break;
-            case "videoMessage":
-                messageContent = { video: buffer, caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`, mimetype: m.quoted.mimetype || "video/mp4" };
-                break;
-            case "audioMessage":
-                messageContent = { audio: buffer, mimetype: "audio/mp4", ptt: m.quoted.ptt || false };
-                break;
-            default:
-                return await client.sendMessage(from, { text: "❌ Only image, video, and audio messages are supported" }, { quoted: message });
-        }
-
-        await client.sendMessage(message.sender, messageContent, options);
-    } catch (error) {
-        console.error("vv Error:", error);
-        await client.sendMessage(from, { text: "❌ Error fetching vv message:\n" + error.message }, { quoted: message });
+        console.error("Manual VV Error:", error);
+        await conn.sendMessage(from, { text: "❌ Error: " + error.message }, { quoted: mek });
     }
 });

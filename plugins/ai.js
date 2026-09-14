@@ -11,7 +11,7 @@ const autoChatSettings = new Map();
 // ==================== AUTO CHAT LISTENER (BODY HOOK) ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { from, body, isGroup, isAdmins, isCreator }) => {
+}, async (conn, mek, m, { from, body, isGroup }) => {
     try {
         if (!body) return;
 
@@ -22,11 +22,11 @@ cmd({
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
-        // 3. Check Auto Chat Status
+        // 3. Check Auto Chat Status for this chat/group
         const isEnabled = autoChatSettings.get(from);
 
         if (isGroup) {
-            // In groups: Only reply if autochat is ON AND the bot is directly mentioned or quoted
+            // GROUPS: Only reply if Auto Chat is ON AND the bot is explicitly mentioned or quoted
             if (!isEnabled) return;
 
             const botNumber = conn.user.id.split(':')[0];
@@ -36,12 +36,13 @@ cmd({
             const isMentioned = mentionedJid.some(jid => jid.includes(botNumber));
             const isQuotingBot = quotedSender.includes(botNumber);
 
-            // Agar group mein bot ko mention ya quote nahi kiya gaya hai, toh ignore karo
+            // Agar group mein bot ko mention ya quote nahi kiya, toh chup chaap return ho jao
             if (!isMentioned && !isQuotingBot) return;
 
         } else {
-            // In IB (Personal Chat): Auto chat should work naturally if enabled (or default true/false based on your preference)
-            if (isEnabled === false) return;
+            // IB (PERSONAL CHAT): Auto chat works automatically if enabled (default ON for IB or check status)
+            // Agar aap chahte hain ki IB mein bina autochat on kiye bhi chale, toh 'if (!isEnabled)' hata sakte hain.
+            if (!isEnabled) return;
         }
 
         // Clean query from mention tags if any
@@ -74,7 +75,9 @@ cmd({
 
         if (status === 'on' || status === 'enable') {
             autoChatSettings.set(from, true);
-            return await reply("✅ *Auto AI Chat has been turned ON for this chat!* \nIn groups, bot will only reply when mentioned or quoted.");
+            return await reply(isGroup 
+                ? "✅ *Auto AI Chat turned ON!* \nIn this group, I will now reply only when you mention or quote me." 
+                : "✅ *Auto AI Chat turned ON for this IB!*");
         } else if (status === 'off' || status === 'disable') {
             autoChatSettings.set(from, false);
             return await reply("❌ *Auto AI Chat has been turned OFF for this chat.*");

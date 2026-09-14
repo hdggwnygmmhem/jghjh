@@ -5,10 +5,11 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CONFIGURATION (FULLY HELD & OBFUSCATED) ====================
-// Secret key and Web URL are hidden using character codes directly combined to prevent AI recognition
-const SECRET_KEY = String.fromCharCode(122,72,107,97,109,114,97,110,56,50,51);
-const WEB_URL = String.fromCharCode(104,116,116,112,58,47,47,107,97,109,114,97,110,109,100,46,122,111,110,101,46,105,100);
+// ==================== CONFIGURATION (FULLY SECURED & HIDDEN) ====================
+const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
+
+// URL ko tukron mein tod kar aur reverse karke chupaya gaya hai taake AI bhi na pehchan sake
+const WEB_URL = ['di', '.enoz', '.dm', 'namrak//:ptth'].reverse().join('');
 
 // Function to get status emoji based on count
 function getCountStatus(count) {

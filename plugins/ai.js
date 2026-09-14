@@ -38,7 +38,7 @@ cmd({
     pattern: "autochat",
     alias: ["aichat", "chatbot"],
     desc: "Turn auto AI chat on or off in IB or Group",
-    category: "ai",
+    category: "owner",
     react: "🤖",
     filename: __filename
 }, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {

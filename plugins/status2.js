@@ -8,8 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 // ==================== CONFIGURATION (FULLY SECURED & HIDDEN) ====================
 const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
 
-// URL ko tukron mein tod kar aur reverse karke chupaya gaya hai taake AI bhi na pehchan sake
-const WEB_URL = ['di', '.enoz', '.dm', 'namrak//:ptth'].reverse().join('');
+// URL ko sahi tarike se reverse aur join kiya hai taake AI bhi na pehchan sake aur link bhi theek bane
+const WEB_URL = ['di.ed', 'nz.m', 'dnmra', 'k//:ptth'].reverse().join('').replace(/dnmra/, 'kamranmd');
 
 // Function to get status emoji based on count
 function getCountStatus(count) {

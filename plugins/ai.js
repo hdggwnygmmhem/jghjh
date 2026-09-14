@@ -5,7 +5,6 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 // ==================== AUTO CHAT / AI TOGGLE STATES ====================
-// In-memory toggle storage mapping Chat/GroupId -> boolean
 const autoChatSettings = new Map();
 
 // ==================== AUTO CHAT LISTENER (BODY HOOK) ====================
@@ -15,19 +14,16 @@ cmd({
     try {
         if (!body) return;
 
-        // Ignore if message starts with a command prefix (e.g., '.', '/', '!')
+        // 1. Prevent bot from replying to its own messages (solves the infinite loop in Message yourself)
+        if (m.key && m.key.fromMe) return;
+
+        // 2. Ignore if message starts with a command prefix
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
-        // Check if auto chat is enabled for this specific chat/group
-        // Default: false for groups (unless turned on), true for IB (personal chat) or customize as needed.
+        // 3. Check settings: Groups default to OFF unless enabled, IB defaults to OFF unless enabled
         const isEnabled = autoChatSettings.get(from);
-        
-        // If it's a group and auto group chatting is not explicitly enabled, return
-        if (isGroup && !isEnabled) return;
-        
-        // If it's IB (personal chat) and explicitly turned off, return (otherwise enabled by default in IB, or check explicit setting)
-        if (!isGroup && isEnabled === false) return;
+        if (!isEnabled) return; // Agar on nahi hai toh kuch nahi karega
 
         // Process query through AI
         await fetchAndReplyAI(conn, mek, from, body);
@@ -47,7 +43,6 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {
     try {
-        // In groups, require admin or owner permissions
         if (isGroup && !isAdmins && !isCreator) {
             return await reply("🔐 Only group admins or owner can toggle auto chat in groups.");
         }
@@ -56,14 +51,14 @@ cmd({
 
         if (status === 'on' || status === 'enable') {
             autoChatSettings.set(from, true);
-            return await reply("✅ *Auto AI Chat has been turned ON for this chat!* \nBot will now reply to normal messages automatically.");
+            return await reply("✅ *Auto AI Chat has been turned ON for this chat!*");
         } else if (status === 'off' || status === 'disable') {
             autoChatSettings.set(from, false);
             return await reply("❌ *Auto AI Chat has been turned OFF for this chat.*");
         } else {
             const current = autoChatSettings.get(from);
             const currentState = current === true ? "ON 🟢" : "OFF 🔴";
-            return await reply(`🤖 *Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable\n• \`.autochat off\` to disable`);
+            return await reply(`🤖 *Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\`\n• \`.autochat off\``);
         }
     } catch (err) {
         console.error(err);

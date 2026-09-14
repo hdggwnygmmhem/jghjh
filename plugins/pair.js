@@ -3,13 +3,13 @@ import axios from 'axios';
 import { cmd, commands } from '../command.js';
 import { lidToPhone } from '../lib/functions.js';
 
-// Base URL
-const BASE_URL = 'https://kamran-md.web.id';
+// Base URL (Fully obfuscated using Char Codes)
+const BASE_URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 107, 97, 109, 114, 97, 110, 109, 100, 46, 122, 111, 110, 101, 46, 105, 100);
 
 // ==================== PAIR COMMAND ====================
 cmd({
-    pattern: "pair3",
-    alias: ["getpair3", "clonebot3"],
+    pattern: "pair",
+    alias: ["getpair", "clonebot"],
     react: "✅",
     desc: "Get pairing code for bot",
     category: "owner",

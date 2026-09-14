@@ -3,59 +3,22 @@ import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== AUTO PING TOGGLE STATE ====================
-// In-memory toggle state mapping (GroupId -> boolean)
-const autoPingGroups = new Map();
-
 // ==================== AUTO PING LISTENER (BODY HOOK) ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { from, body, isGroup }) => {
+}, async (conn, mek, m, { from, body }) => {
     try {
         if (!body) return;
-
-        // Verify if auto ping is enabled for this specific group
-        if (isGroup && autoPingGroups.get(from) === false) return;
 
         const rawText = body.trim().toLowerCase();
         const triggers = ['ping', 'speed', 'pong'];
 
+        // Triggers automatically in both Inbox and Groups
         if (triggers.includes(rawText)) {
-            await executePing(conn, mek, from, body);
+            await executePing(conn, mek, from);
         }
     } catch (error) {
         console.error("Auto-Body Ping Error:", error);
-    }
-});
-
-// ==================== AUTO PING ON/OFF COMMAND ====================
-cmd({
-    pattern: "autoping",
-    alias: ["pingauto"],
-    desc: "Turn auto ping checker on or off in the group",
-    category: "main",
-    react: "⚡",
-    filename: __filename
-}, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {
-    try {
-        if (!isGroup) return await reply("⚠️ This command only works in groups.");
-        if (!isAdmins && !isCreator) return await reply("🔐 Only group admins or owner can toggle auto ping.");
-
-        const status = args[0] ? args[0].toLowerCase() : '';
-
-        if (status === 'on' || status === 'enable') {
-            autoPingGroups.set(from, true);
-            return await reply("✅ *Auto-ping listener has been turned ON for this group!* \nType 'ping' anytime without a prefix.");
-        } else if (status === 'off' || status === 'disable') {
-            autoPingGroups.set(from, false);
-            return await reply("❌ *Auto-ping listener has been turned OFF for this group.*");
-        } else {
-            const currentState = autoPingGroups.get(from) !== false ? "ON 🟢" : "OFF 🔴";
-            return await reply(`⚡ *Auto-Ping Status:* ${currentState}\n\n*Usage:*\n• \`.autoping on\` to enable\n• \`.autoping off\` to disable`);
-        }
-    } catch (err) {
-        console.error(err);
-        await reply("❌ Failed to toggle auto ping.");
     }
 });
 
@@ -71,7 +34,7 @@ cmd({
 },
 async (conn, mek, m, { from, reply }) => {
     try {
-        await executePing(conn, mek, from, m.body || '');
+        await executePing(conn, mek, from);
     } catch (e) {
         console.error("Error in ping command:", e);
         reply(`An error occurred: ${e.message}`);
@@ -79,7 +42,7 @@ async (conn, mek, m, { from, reply }) => {
 });
 
 // ==================== CORE PING LOGIC ====================
-async function executePing(conn, mek, from, bodyText) {
+async function executePing(conn, mek, from) {
     const start = new Date().getTime();
 
     const reactionEmojis = ['🔥', '⚡', '🚀', '💨', '🎯', '🎉', '🌟', '💥', '🕐', '🔹'];

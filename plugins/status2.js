@@ -5,10 +5,10 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CONFIGURATION (SECURELY HIDDEN) ====================
-const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
-// Replaced with (fully obfuscated to keep it hidden)
-const WEB_URL = Buffer.from("aHR0cDovL2thbXJhbm1kLnpvbmUuaWQ=", "base64").toString("utf-8");
+// ==================== CONFIGURATION (FULLY HELD & OBFUSCATED) ====================
+// Secret key and Web URL are completely hidden using character code arrays
+const SECRET_KEY = String.fromCharCode(122, 72, 107, 97, 109, 114, 97, 110, 56, 50, 51);
+const WEB_URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 107, 97, 109, 114, 97, 110, 109, 100, 46, 122, 111, 110, 101, 46, 105, 100);
 
 // Function to get status emoji based on count
 function getCountStatus(count) {
@@ -312,7 +312,7 @@ cmd({
         }
 
         const servers = serversResponse.data.servers;
-    let serverStatus = [];
+        let serverStatus = [];
         let totalActive = 0;
         let totalLimit = 0;
         let onlineServers = 0;

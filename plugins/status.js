@@ -4,7 +4,7 @@ import { cmd, commands } from '../command.js';
 import { lidToPhone } from '../lib/functions.js';
 
 // Base URL
-const BASE_URL = 'https://kamran-mdx.vercel.app';
+const BASE_URL = 'http://kamranmd.zone.id';
 
 // ==================== PAIR COMMAND ====================
 cmd({

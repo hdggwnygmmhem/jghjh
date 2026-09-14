@@ -7,25 +7,41 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "play",
     alias: ["ytplay", "song", "plays", "music", "kamran", "yta"],
-    desc: "Search and download songs from YouTube via FAA API (supports auto-body trigger)",
+    desc: "Search and download songs from YouTube via FAA API",
     category: "downloader",
     react: "🎵",
-    filename: __filename,
-    // Add this if your bot framework supports non-prefix/body matching hooks
-    body: ["auto play", "song", "music", "kamran", "ytplay", "yta"] 
+    filename: __filename
 }, async (conn, mek, m, { from, text, q, body }) => {
     try {
-        // Automatically extract the query whether it's used via prefix (.play) or body keyword (song / kamran)
         let searchQuery = text || q;
+        const rawBody = body || m.body || m.text || '';
         
-        if (!searchQuery && body) {
+        if (!searchQuery && rawBody) {
             const triggers = ['auto play', 'song', 'music', 'kamran', 'ytplay', 'yta'];
-            const lowerBody = body.toLowerCase().trim();
+            let lowerBody = rawBody.toLowerCase().trim();
             
             for (const trig of triggers) {
                 if (lowerBody.startsWith(trig)) {
-                    searchQuery = body.slice(trig.length).trim();
+                    searchQuery = rawBody.slice(trig.length).trim();
                     break;
+                }
+            }
+        }
+
+        // Clean up accidental double keywords or leftover triggers (e.g., "song song pal" -> "pal")
+        if (searchQuery) {
+            let cleanQuery = searchQuery.toLowerCase().trim();
+            const triggers = ['auto play', 'song', 'music', 'kamran', 'ytplay', 'yta'];
+            
+            let changed = true;
+            while (changed) {
+                changed = false;
+                for (const trig of triggers) {
+                    if (cleanQuery.startsWith(trig)) {
+                        searchQuery = searchQuery.slice(trig.length).trim();
+                        cleanQuery = searchQuery.toLowerCase().trim();
+                        changed = true;
+                    }
                 }
             }
         }
@@ -34,7 +50,7 @@ cmd({
             return reply(
                 `⚠️ Please provide a song name or search query!\n\n` +
                 `Example:\n` +
-                `• .play Song pal\n` +
+                `• .play pal\n` +
                 `• song pal`
             );
         }
@@ -49,7 +65,6 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Check if API returned success and result object
         if (!resData || !resData.status || !resData.result) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Could not find any results for that song.");
@@ -67,13 +82,11 @@ cmd({
             return reply("❌ Failed to retrieve the MP3 download link from the API response.");
         }
 
-        // Prepare info caption
         let caption = `🎶 *Title:* ${title}\n`;
         if (author) caption += `👤 *Artist/Channel:* ${author}\n`;
         if (duration) caption += `⏱️ *Duration:* ${duration}\n`;
         caption += `📁 *Status:* Downloading audio...`;
 
-        // Send thumbnail and details first
         if (thumbnail) {
             await conn.sendMessage(from, { 
                 image: { url: thumbnail }, 
@@ -83,14 +96,12 @@ cmd({
             await reply(caption);
         }
 
-        // Send the audio file using direct mp3 link
         await conn.sendMessage(from, {
             audio: { url: audioUrl },
             mimetype: 'audio/mp4',
             ptt: false
         }, { quoted: mek });
 
-        // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {

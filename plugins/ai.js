@@ -25,24 +25,30 @@ cmd({
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const encodedQuery = encodeURIComponent(text.trim());
+        // Add instructions to reply in English if desired
+        const promptText = `${text.trim()}`;
+        const encodedQuery = encodeURIComponent(promptText);
         const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
         const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
 
         let aiResult = "";
 
-        // Helper function to safely extract text from various JSON response formats
         const extractText = (data) => {
             if (!data) return "";
             if (typeof data === 'string') return data;
+            
+            // If response is an object, check standard properties or dig inside data/result/response
             if (typeof data === 'object') {
-                // Check common keys
-                const candidate = data.result || data.response || data.message || data.text || data.data || data.content;
+                let candidate = data.result || data.response || data.message || data.text || data.data || data.content;
+                
                 if (typeof candidate === 'string') return candidate;
-                if (typeof candidate === 'object') {
+                if (typeof candidate === 'object' && candidate !== null) {
                     return candidate.result || candidate.response || candidate.message || candidate.text || JSON.stringify(candidate, null, 2);
                 }
-                // If it's a nested object, look deeper or stringify safely
+                
+                // If it's a nested structure like { status: true, result: { response: "..." } }
+                if (data.data) return extractText(data.data);
+                
                 return JSON.stringify(data, null, 2);
             }
             return String(data);
@@ -55,7 +61,7 @@ cmd({
             console.log("Blackbox API failed, trying DeepAI fallback...");
         }
 
-        if (!aiResult || aiResult.includes("[object Object]")) {
+        if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
             try {
                 const responseFallback = await axios.get(deepAiUrl, { timeout: 30000 });
                 aiResult = extractText(responseFallback.data);
@@ -64,9 +70,9 @@ cmd({
             }
         }
 
-        if (!aiResult || aiResult.includes("[object Object]")) {
+        if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ AI se koi valid response nahi mila.");
+            return reply("❌ Could not get a valid response from AI.");
         }
 
         await conn.sendMessage(from, { 

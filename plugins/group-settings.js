@@ -1,4 +1,3 @@
-
 import { fileURLToPath } from 'url';
 import config from '../config.js';
 import { cmd } from '../command.js';
@@ -6,6 +5,84 @@ import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep,
 import converter from '../lib/converter.js';
 
 const __filename = fileURLToPath(import.meta.url);
+
+// ==================== AUTO GROUP TOGGLE STATES ====================
+const autoGroupSettings = new Map();
+
+// ==================== AUTO GROUP LISTENER (BODY HOOK) ====================
+cmd({
+    on: "body"
+}, async (conn, mek, m, { from, body, isGroup }) => {
+    try {
+        if (!body) return;
+        if (!isGroup) return; // Only for groups
+
+        // Prevent bot from replying to its own messages
+        if (m.key && m.key.fromMe) return;
+
+        // Check if auto group features are enabled for this chat
+        const isEnabled = autoGroupSettings.get(from);
+        if (!isEnabled) return;
+
+        const rawText = body.trim();
+        const lowerBody = rawText.toLowerCase();
+        
+        // Custom triggers for your group automation (e.g., auto responses or triggers)
+        const triggers = ['group tag', 'group info', 'gc status'];
+        
+        let matchedTrigger = null;
+        for (const trig of triggers) {
+            if (lowerBody === trig || lowerBody.startsWith(trig + ' ')) {
+                matchedTrigger = trig;
+                break;
+            }
+        }
+
+        if (!matchedTrigger) return;
+
+        // Example automated action when triggered
+        await conn.sendMessage(from, { text: `🤖 *Auto-Group Action Triggered:* Received command keyword "${matchedTrigger}" in this active group chat!` }, { quoted: mek });
+
+    } catch (error) {
+        console.error("Auto-Group Body Error:", error);
+    }
+});
+
+// ==================== AUTO GROUP ON/OFF COMMAND ====================
+cmd({
+    pattern: "autogroup",
+    alias: ["autogc", "groupauto"],
+    desc: "Turn auto group listener features on or off in the group",
+    category: "owner",
+    react: "⚙️",
+    filename: __filename
+}, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {
+    try {
+        if (!isGroup) return await reply("⚠️ This command only works in groups.");
+        
+        // Only bot owner or group admins can toggle
+        if (!isCreator && !isAdmins) {
+            return await reply("🔐 Only the bot owner or group admins can toggle auto group features.");
+        }
+
+        const status = args[0] ? args[0].toLowerCase() : '';
+
+        if (status === 'on' || status === 'enable') {
+            autoGroupSettings.set(from, true);
+            return await reply("✅ *Auto-Group features have been turned ON for this group!*");
+        } else if (status === 'off' || status === 'disable') {
+            autoGroupSettings.set(from, false);
+            return await reply("❌ *Auto-Group features have been turned OFF for this group.*");
+        } else {
+            const current = autoGroupSettings.get(from);
+            const currentState = current === true ? "ON 🟢" : "OFF 🔴";
+            return await reply(`⚙️ *Auto-Group Status:* ${currentState}\n\n*Usage:*\n• \`.autogroup on\`\n• \`.autogroup off\``);
+        }
+    } catch (err) {
+        console.error(err);
+        await reply("❌ Failed to toggle auto group.");
+    }
+});
 
 // ==================== UNMUTE COMMAND ====================
 cmd({

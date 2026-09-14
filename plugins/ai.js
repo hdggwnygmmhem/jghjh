@@ -6,51 +6,29 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 // ==================== AUTO CHAT TOGGLE STATES ====================
+// In-memory toggle storage mapping Chat/GroupId -> boolean
 const autoChatSettings = new Map();
 
 // ==================== AUTO CHAT LISTENER (BODY HOOK) ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { from, body, isGroup }) => {
+}, async (conn, mek, m, { from, body, isGroup, isAdmins, isCreator }) => {
     try {
         if (!body) return;
 
-        // 1. Prevent bot from replying to its own messages
+        // 1. Prevent bot from replying to its own messages to avoid loops
         if (m.key && m.key.fromMe) return;
 
-        // 2. Ignore command prefixes
+        // 2. Ignore if message starts with a command prefix (e.g., '.', '/', '!')
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
-        // 3. Check Auto Chat Status for this chat/group
+        // 3. Check if auto chat is enabled for this chat/group
         const isEnabled = autoChatSettings.get(from);
-
-        if (isGroup) {
-            // GROUPS: Only reply if Auto Chat is ON AND the bot is explicitly mentioned or quoted
-            if (!isEnabled) return;
-
-            const botNumber = conn.user.id.split(':')[0];
-            const mentionedJid = mek.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            const quotedSender = mek.message?.extendedTextMessage?.contextInfo?.participant || '';
-            
-            const isMentioned = mentionedJid.some(jid => jid.includes(botNumber));
-            const isQuotingBot = quotedSender.includes(botNumber);
-
-            // Agar group mein bot ko mention ya quote nahi kiya, toh chup chaap return ho jao
-            if (!isMentioned && !isQuotingBot) return;
-
-        } else {
-            // IB (PERSONAL CHAT): Auto chat works automatically if enabled (default ON for IB or check status)
-            // Agar aap chahte hain ki IB mein bina autochat on kiye bhi chale, toh 'if (!isEnabled)' hata sakte hain.
-            if (!isEnabled) return;
-        }
-
-        // Clean query from mention tags if any
-        let cleanQuery = body.replace(/@\d+/g, '').trim();
-        if (!cleanQuery) return;
+        if (!isEnabled) return;
 
         // Process message through AI engine automatically
-        await fetchAndReplyAI(conn, mek, from, cleanQuery);
+        await fetchAndReplyAI(conn, mek, from, body);
 
     } catch (error) {
         console.error("Auto-Chat Error:", error);
@@ -67,6 +45,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {
     try {
+        // If in a group, enforce admin or owner restrictions based on setup
         if (isGroup && !isAdmins && !isCreator) {
             return await reply("🔐 Only group admins or owner can toggle auto chat in groups.");
         }
@@ -75,20 +54,18 @@ cmd({
 
         if (status === 'on' || status === 'enable') {
             autoChatSettings.set(from, true);
-            return await reply(isGroup 
-                ? "✅ *Auto AI Chat turned ON!* \nIn this group, I will now reply only when you mention or quote me." 
-                : "✅ *Auto AI Chat turned ON for this IB!*");
+            return await reply("✅ *Auto AI Chat has been turned ON for this chat!* \nBot will now reply to normal messages automatically.");
         } else if (status === 'off' || status === 'disable') {
             autoChatSettings.set(from, false);
             return await reply("❌ *Auto AI Chat has been turned OFF for this chat.*");
         } else {
             const current = autoChatSettings.get(from);
             const currentState = current === true ? "ON 🟢" : "OFF 🔴";
-            return await reply(`🤖 *Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\`\n• \`.autochat off\``);
+            return await reply(`🤖 *Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable\n• \`.autochat off\` to disable`);
         }
     } catch (err) {
         console.error(err);
-        reply("❌ Failed to toggle auto chat.");
+        await reply("❌ Failed to toggle auto chat.");
     }
 });
 
@@ -126,6 +103,7 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
     try {
         const encodedQuery = encodeURIComponent(queryText);
         
+        // DeepAI first, Blackbox as fallback
         const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
         const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
 
@@ -150,6 +128,7 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
             return String(data);
         };
 
+        // Try DeepAI first
         try {
             const response = await axios.get(deepAiUrl, { timeout: 30000 });
             aiResult = extractText(response.data);
@@ -157,6 +136,7 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
             console.log("DeepAI API failed, trying Blackbox fallback...");
         }
 
+        // If DeepAI fails, try Blackbox fallback
         if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
             try {
                 const responseFallback = await axios.get(blackboxUrl, { timeout: 30000 });

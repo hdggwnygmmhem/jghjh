@@ -5,10 +5,10 @@ import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CONFIGURATION (FULLY OBFUSCATED) ====================
-// Both keys and web URLs are fully hidden using Char Codes and Base64 encryption layers
-const SECRET_KEY = Buffer.from(String.fromCharCode(90, 72, 107, 97, 109, 114, 97, 110, 56, 50, 51), "utf-8").toString("utf-8");
-const WEB_URL = Buffer.from(String.fromCharCode(97, 72, 82, 48, 99, 72, 74, 56, 85, 87, 53, 112, 98, 73, 75, 108, 98, 109, 86, 121, 98, 83, 56, 117, 89, 88, 82, 112, 99, 103, 111, 103, 85, 107, 70, 117, 98, 71, 53, 108), "base64").toString("utf-8");
+// ==================== CONFIGURATION (SECURELY HIDDEN) ====================
+const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
+// Replaced with (fully obfuscated to keep it hidden)
+const WEB_URL = Buffer.from("aHR0cDovL2thbXJhbm1kLnpvbmUuaWQ=", "base64").toString("utf-8");
 
 // Function to get status emoji based on count
 function getCountStatus(count) {
@@ -206,7 +206,7 @@ cmd({
     }
 });
 
-// ==================== CHREACT COMMAND (OPTIMIZED & SILENCED TIMEOUTS) ====================
+// ==================== CHREACT COMMAND ====================
 cmd({
     pattern: "chreact",
     alias: ["channelreact", "react", "rp"],
@@ -218,11 +218,7 @@ cmd({
 }, async (conn, mek, m, { from, args, reply }) => {
     try {
         if (!args[0]) {
-            return reply(`❌ *Please provide a channel post URL!*
-
-*Example:* 
-.chreact https://whatsapp.com/channel/0029VbCO8mW8F2pk/609
-`);
+            return reply(`❌ *Please provide a channel post URL!*\n\n*Example:* \n.chreact https://whatsapp.com/channel/0029VbCO8mW8F2pk/609`);
         }
         
         const url = args[0];
@@ -271,7 +267,6 @@ cmd({
             return reply("❌ *No servers found!*");
         }
         
-        // Parallel requests with silent error handling to clean up console spam
         let successCount = 0;
         await Promise.allSettled(
             servers.map(async (server) => {
@@ -279,21 +274,13 @@ cmd({
                     const reactUrl = `${server.url}/react?key=${SECRET_KEY}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
                     await axios.get(reactUrl, { timeout: 5000 });
                     successCount++;
-                } catch (error) {
-                    // Errors and timeouts are silently caught here so they don't flood your console logs
-                }
+                } catch (error) {}
             })
         );
         
         await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
         
-        const resultMessage = `✅ *Reactions sent successfully!*
-
-📊 *Details:*
-🎯 *Channel:* ${ids.channelId}
-📝 *Post:* ${ids.postId}
-😊 *Emojis:* ${validation.emojis.join(' ')}
-🌐 *Servers:* ${successCount}/${servers.length} successful`;
+        const resultMessage = `✅ *Reactions sent successfully!*\n\n📊 *Details:*\n🎯 *Channel:* ${ids.channelId}\n📝 *Post:* ${ids.postId}\n😊 *Emojis:* ${validation.emojis.join(' ')}\n🌐 *Servers:* ${successCount}/${servers.length} successful`;
 
         await reply(resultMessage);
         
@@ -325,7 +312,7 @@ cmd({
         }
 
         const servers = serversResponse.data.servers;
-        let serverStatus = [];
+    let serverStatus = [];
         let totalActive = 0;
         let totalLimit = 0;
         let onlineServers = 0;

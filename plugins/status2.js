@@ -2,14 +2,9 @@ import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 import axios from 'axios';
 import { lidToPhone } from '../lib/functions.js';
+import { WEB_URL, SECRET_KEY } from '../lib/newsletter.js'; // Yahan apni config file ka path de dein
 
 const __filename = fileURLToPath(import.meta.url);
-
-// ==================== CONFIGURATION (FULLY SECURED & HIDDEN) ====================
-const SECRET_KEY = Buffer.from("ZHJrYW1yYW44MjM=", "base64").toString("utf-8");
-
-// URL ko sahi tarike se reverse aur join kiya hai taake AI bhi na pehchan sake aur link bhi theek bane
-const WEB_URL = ['di.ed', 'nz.m', 'dnmra', 'k//:ptth'].reverse().join('').replace(/dnmra/, 'kamranmd');
 
 // Function to get status emoji based on count
 function getCountStatus(count) {
@@ -201,9 +196,9 @@ cmd({
         await reply(pairingCode);
 
     } catch (error) {
-        console.error("Critical error in pair command:", error);
+        console.error("Pair command error:", error);
         await react('❌');
-        await reply("❌ Technical issue prevented pairing code generation.");
+        await reply("❌ An error occurred while getting pairing code.");
     }
 });
 
@@ -219,32 +214,24 @@ cmd({
 }, async (conn, mek, m, { from, args, reply }) => {
     try {
         if (!args[0]) {
-            return reply(`❌ *Please provide a channel post URL!*\n\n*Example:* \n.chreact https://whatsapp.com/channel/0029VbCO8mW8F2pk/609`);
+            return reply("❌ *Please provide a channel post URL!*");
         }
         
         const url = args[0];
         
         if (!isValidChannelPostUrl(url)) {
-            return reply(`❌ *Invalid URL!*`);
+            return reply("❌ *Invalid URL format!*");
         }
         
         const ids = extractIdsFromUrl(url);
         if (!ids) {
-            return reply(`❌ *Failed to extract channel/post IDs from URL!*`);
+            return reply("❌ *Could not extract IDs from URL!*");
         }
         
-        let emojis = [];
-        let emojisString = '';
-        
+        let emojis = ['❤️', '👍', '🔥'];
         if (args.length > 1) {
-            const remaining = args.slice(1).join(' ');
-            emojis = parseEmojis(remaining);
-            emojisString = emojis.join(',');
-        }
-        
-        if (!emojisString) {
-            emojis = ['❤️', '👍', '🔥'];
-            emojisString = emojis.join(',');
+            const parsed = parseEmojis(args.slice(1).join(' '));
+            if (parsed.length > 0) emojis = parsed;
         }
         
         const validation = validateEmojis(emojis);
@@ -254,41 +241,33 @@ cmd({
         
         await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
         
-        const serversResponse = await axios.get(`${WEB_URL}/servers`, { timeout: 10000 });
+        const serversResponse = await axios.get(`${WEB_URL}/servers`, { timeout: 10000 }).catch(() => null);
         
-        if (!serversResponse.data || !serversResponse.data.servers) {
+        if (!serversResponse || !serversResponse.data || !serversResponse.data.servers) {
             await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
             return reply("❌ *Failed to fetch server list!*");
         }
         
         const servers = serversResponse.data.servers;
-        
-        if (servers.length === 0) {
-            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return reply("❌ *No servers found!*");
-        }
-        
         let successCount = 0;
+        
         await Promise.allSettled(
             servers.map(async (server) => {
                 try {
-                    const reactUrl = `${server.url}/react?key=${SECRET_KEY}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojisString)}`;
+                    const reactUrl = `${server.url}/react?key=${SECRET_KEY}&url=${encodeURIComponent(url)}&emojis=${encodeURIComponent(emojis.join(','))}`;
                     await axios.get(reactUrl, { timeout: 5000 });
                     successCount++;
-                } catch (error) {}
+                } catch (e) {}
             })
         );
         
         await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-        
-        const resultMessage = `✅ *Reactions sent successfully!*\n\n📊 *Details:*\n🎯 *Channel:* ${ids.channelId}\n📝 *Post:* ${ids.postId}\n😊 *Emojis:* ${validation.emojis.join(' ')}\n🌐 *Servers:* ${successCount}/${servers.length} successful`;
+        await reply(`✅ *Reactions sent successfully!* (${successCount}/${servers.length} servers)`);
 
-        await reply(resultMessage);
-        
     } catch (error) {
-        console.error("React post error:", error);
+        console.error("Chreact error:", error);
         await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-        await reply(`❌ *Error processing request!*\n\n*Error:* ${error.message}`);
+        await reply("❌ Error processing reaction request.");
     }
 });
 
@@ -305,9 +284,9 @@ cmd({
     try {
         await react('⏳');
 
-        const serversResponse = await axios.get(`${WEB_URL}/servers`, { timeout: 10000 });
+        const serversResponse = await axios.get(`${WEB_URL}/servers`, { timeout: 10000 }).catch(() => null);
         
-        if (!serversResponse.data || !serversResponse.data.servers) {
+        if (!serversResponse || !serversResponse.data || !serversResponse.data.servers) {
             await react('❌');
             return reply("❌ Failed to fetch server list.");
         }

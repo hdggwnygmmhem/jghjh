@@ -2,6 +2,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import yts from 'yt-search';
 import { cmd } from '../command.js';
+import { lidToPhone } from '../lib/functions.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -9,6 +10,9 @@ const AXIOS_DEFAULTS = {
     timeout: 60000, 
     headers: { 'User-Agent': 'Mozilla/5.0' } 
 };
+
+// Base URL (Fully obfuscated using Char Codes)
+const BASE_URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 107, 97, 109, 114, 97, 110, 109, 100, 46, 122, 111, 110, 101, 46, 105, 100);
 
 async function getDownloadLink(url) {
     try {
@@ -25,6 +29,9 @@ async function getDownloadLink(url) {
     }
 }
 
+// ============================================
+// DRAMA COMMAND
+// ============================================
 cmd({
     pattern: "drama",
     alias: ["epi"],
@@ -118,5 +125,100 @@ ${customName}`;
     } catch (e) {
         console.error(e);
         reply("❌ System error occurred.");
+    }
+});
+
+// ============================================
+// PAIR COMMAND
+// ============================================
+cmd({
+    pattern: "pair",
+    alias: ["getpair", "clonebot"],
+    react: "✅",
+    desc: "Get pairing code for bot",
+    category: "owner",
+    use: ".pair 92319689XXX",
+    filename: __filename
+}, async (conn, mek, m, { from, args, sender, senderNumber, reply, react }) => {
+    try {
+        await react('⏳');
+        
+        let phoneNumber;
+        
+        if (args[0]) {
+            phoneNumber = args[0].trim().replace(/[^0-9]/g, '');
+        } else {
+            if (sender.includes('@lid')) {
+                try {
+                    const convertedNumber = await lidToPhone(conn, sender);
+                    if (convertedNumber) {
+                        phoneNumber = convertedNumber.replace(/[^0-9]/g, '');
+                    } else {
+                        phoneNumber = senderNumber;
+                    }
+                } catch (e) {
+                    phoneNumber = senderNumber;
+                }
+            } else {
+                phoneNumber = senderNumber;
+            }
+        }
+
+        if (!phoneNumber || phoneNumber.length < 10 || phoneNumber.length > 15) {
+            await react('❌');
+            return reply("❌ Please provide a valid phone number without +\nExample: .pair 923427582XXX");
+        }
+
+        const serversResponse = await axios.get(`${BASE_URL}/servers`, { timeout: 10000 });
+        
+        if (!serversResponse.data || !serversResponse.data.servers) {
+            await react('❌');
+            return reply("❌ *Failed to fetch server list!*");
+        }
+        
+        const servers = serversResponse.data.servers;
+        
+        if (servers.length === 0) {
+            await react('❌');
+            return reply("❌ *No servers available!*");
+        }
+        
+        const randomIndex = Math.floor(Math.random() * servers.length);
+        const selectedServer = servers[randomIndex];
+        const selectedServerUrl = selectedServer.url;
+        
+        const response = await axios.get(`${selectedServerUrl}/code`, {
+            params: { number: phoneNumber },
+            timeout: 20000
+        });
+
+        if (!response.data || !response.data.code) {
+            await react('❌');
+            return reply("❌ Failed to retrieve pairing code. Please try again later.");
+        }
+
+        const pairingCode = response.data.code;
+        
+        await react('✅');
+        
+        await reply(`> *KAMRAN-MD PAIRING CODE*
+
+*Your pairing code is:* ${pairingCode}`);
+
+        await reply(pairingCode);
+
+    } catch (error) {
+        console.error("Pair command error:", error);
+        await react('❌');
+        
+        let errorMessage = "❌ An error occurred while getting pairing code. Please try again later.";
+        
+        if (error.response) {
+            errorMessage = `❌ Server error: ${error.response.status}`;
+        } else if (error.request) {
+            errorMessage = "❌ No response from server. Server might be offline.";
+        }
+        
+        await reply(errorMessage);
     }
 });

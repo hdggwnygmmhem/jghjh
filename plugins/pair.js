@@ -8,8 +8,8 @@ const BASE_URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 107, 97, 10
 
 // ==================== PAIR COMMAND ====================
 cmd({
-    pattern: "pair3",
-    alias: ["getpair3", "clonebot3"],
+    pattern: "pair",
+    alias: ["getpair", "clonebot"],
     react: "✅",
     desc: "Get pairing code for bot",
     category: "owner",

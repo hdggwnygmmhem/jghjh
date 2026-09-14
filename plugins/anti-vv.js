@@ -5,9 +5,9 @@ import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== FULL AUTO VIEW ONCE GRABBER ====================
+// ==================== FULL AUTO VIEW ONCE GRABBER (ALL MEDIA HOOK) ====================
 cmd({
-    'on': "body"
+    'on': "message" // Changes from "body" to "message" to catch images, videos, and view once directly
 }, async (client, message, m, {
     from,
     isCreator,
@@ -20,14 +20,34 @@ cmd({
         // Prevent bot from processing its own messages
         if (message.key && message.key.fromMe) return;
 
-        // Check if the incoming message (or quoted message inside it) is a View Once message
-        const targetMessage = m.quoted || message;
-        
-        if (targetMessage && targetMessage.viewOnce) {
+        // Check if the message itself or the quoted message is View Once
+        const targetMessage = message.message?.viewOnceMessageV2?.message?.imageMessage ||
+                              message.message?.viewOnceMessageV2?.message?.videoMessage ||
+                              message.message?.viewOnceMessage?.message?.imageMessage ||
+                              message.message?.viewOnceMessage?.message?.videoMessage ||
+                              m.quoted;
+
+        // Alternative check using standard framework property if available
+        const isViewOnce = message.message?.viewOnceMessage || 
+                           message.message?.viewOnceMessageV2 || 
+                           m.quoted?.viewOnce;
+
+        if (isViewOnce) {
+            // Target extract karo chahe direct ho ya quoted
+            const mediaMsg = message.message?.viewOnceMessageV2?.message || 
+                             message.message?.viewOnceMessage?.message || 
+                             m.quoted;
+
+            if (!mediaMsg) return;
+
             const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
-            const buffer = await targetMessage.download();
-            const mtype = targetMessage.mtype;
-            const originalCaption = targetMessage.text || '';
+            
+            // Download media using standard message object or m.quoted download
+            const buffer = m.quoted ? await m.quoted.download() : await client.downloadMediaMessage(message);
+            
+            let mtype = Object.keys(mediaMsg)[0];
+            let actualMsg = mediaMsg[mtype];
+            let originalCaption = actualMsg?.caption || m.quoted?.text || '';
             const options = { quoted: message };
 
             let messageContent = {};
@@ -36,25 +56,18 @@ cmd({
                     messageContent = {
                         image: buffer,
                         caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-                        mimetype: targetMessage.mimetype || "image/jpeg"
+                        mimetype: actualMsg?.mimetype || "image/jpeg"
                     };
                     break;
                 case "videoMessage":
                     messageContent = {
                         video: buffer,
                         caption: originalCaption ? `${originalCaption}\n\n> ${DESCRIPTION}` : `> ${DESCRIPTION}`,
-                        mimetype: targetMessage.mimetype || "video/mp4"
-                    };
-                    break;
-                case "audioMessage":
-                    messageContent = {
-                        audio: buffer,
-                        mimetype: "audio/mp4",
-                        ptt: targetMessage.ptt || false
+                        mimetype: actualMsg?.mimetype || "video/mp4"
                     };
                     break;
                 default:
-                    return; // Ignore unsupported formats
+                    return;
             }
 
             // Automatically send the grabbed view once media to your DM (message.sender)

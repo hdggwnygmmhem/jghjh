@@ -5,7 +5,7 @@ import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Global event listener to catch every incoming view once message automatically
+// Global event listener to catch and forward view once messages from both Group and IB
 export default function (conn) {
     conn.ev.on('messages.upsert', async (chatUpdate) => {
         try {
@@ -15,16 +15,16 @@ export default function (conn) {
             // Prevent bot from processing its own messages
             if (mek.key && mek.key.fromMe) return;
 
-            // Check if user is creator/owner based on common JID or config
+            // Check if user is creator/owner
+            const botOwnerNumber = conn.user.id.split(':')[0] + '@s.whatsapp.net';
             const senderJid = mek.key.participant || mek.key.remoteJid;
-            const ownerNumber = config.OWNER_NUMBER || ""; // Bot owner check
-            // Agar aapke bot mein isCreator check global hai toh aap apne number se match kar sakte hain
             
-            // Check for View Once messages (v1, v2, images, videos, audio/voice)
+            // Optional: If you only want it to work when sent by you or everyone, configure here.
+            // (Currently grabs any view-once sent by anyone in groups or IB and forwards to your DM)
+
             const messageType = Object.keys(mek.message)[0];
             let msgContent = mek.message;
 
-            // Unwrap view once wrapper if present
             let isViewOnce = false;
             let actualInnerMessage = null;
 
@@ -42,7 +42,7 @@ export default function (conn) {
 
                 if (!mediaData) return;
 
-                // Download the media buffer using client's download method
+                // Download media buffer
                 const stream = await conn.downloadMediaMessage({ message: actualInnerMessage });
                 if (!stream) return;
 
@@ -65,15 +65,14 @@ export default function (conn) {
                     finalContent = {
                         audio: stream,
                         mimetype: "audio/mp4",
-                        ptt: mediaData.ptt || false // Agar voice note hai toh voice note style mein bhega
+                        ptt: mediaData.ptt || false
                     };
                 } else {
                     return;
                 }
 
-                // Send the unhidden view-once file directly to your personal DM (Bot Owner Chat)
-                const ownerJidTarget = conn.user.id.split(':')[0] + '@s.whatsapp.net';
-                await conn.sendMessage(ownerJidTarget, finalContent, { quoted: mek });
+                // Send the captured media directly to your personal DM (Owner Chat)
+                await conn.sendMessage(botOwnerNumber, finalContent, { quoted: mek });
             }
         } catch (err) {
             console.error("Global ViewOnce Grabber Error:", err);

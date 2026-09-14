@@ -674,7 +674,7 @@ cmd({
 });
 
 cmd({
-    pattern: "status2",
+    pattern: "status",
     alias: ["serverstatus", "stats", "servers"],
     react: "📊",
     desc: "Check server status and active users",

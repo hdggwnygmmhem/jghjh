@@ -1,270 +1,544 @@
-// DR KAMRAN 
-
 import { fileURLToPath } from 'url';
-import path from 'path';
-import axios from 'axios';
-import sharp from 'sharp';
-import { cmd } from '../command.js';
+import * as cheerio from 'cheerio';
+import { cmd, commands } from '../command.js';
+import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-async function getThumbnailBuffer(url) {
-  if (!url) return null;
-  try {
-    const { data } = await axios.get(url, { responseType: "arraybuffer" });
-    return await sharp(data)
-      .resize(300, 300)
-      .jpeg({ quality: 80 })
-      .toBuffer();
-  } catch (err) {
-    console.error("Error processing thumbnail:", err.message || err);
-    return null;
+let gotScraping = null
+
+async function loadGotScraping() {
+  if (!gotScraping) {
+    const mod = await import('got-scraping')
+    gotScraping = mod.gotScraping
+  }
+  return gotScraping
+}
+
+const BASE_URL = 'https://id.akinator.com'
+
+const THEMES = {
+  characters: 1,
+  animals: 14,
+  objects: 2
+}
+
+const ANSWERS = {
+  yes: 0,
+  no: 1,
+  idk: 2,
+  probably: 3,
+  'probably not': 4
+}
+
+/* ============================================================
+ * SESSION MANAGEMENT
+ * ========================================================== */
+
+if (!global.akinatorSessions) {
+  global.akinatorSessions = new Map()
+}
+
+const getUserId = (m) => m.sender || m.chat
+const getSession = (m) => global.akinatorSessions.get(getUserId(m))
+const setSession = (m, data) => global.akinatorSessions.set(getUserId(m), data)
+const deleteSession = (m) => global.akinatorSessions.delete(getUserId(m))
+
+/* ============================================================
+ * COOKIE HANDLERS
+ * ========================================================== */
+
+function updateCookies(jar, headers) {
+  const setCookies = headers && headers['set-cookie']
+  if (!setCookies) return
+
+  for (let c of setCookies) {
+    const kv = c.split(';')[0]
+    const index = kv.indexOf('=')
+    if (index === -1) continue
+
+    const key = kv.slice(0, index).trim()
+    const value = kv.slice(index + 1).trim()
+    jar[key] = value
   }
 }
 
-cmd({
-    pattern: "cineflura",
-    alias: ["cfl", "cinefluradl"],
-    desc: "Search and download movies from Cineflura via API",
-    category: "downloader",
-    filename: __filename
-},
-async (conn, mek, m, { from, quoted, body, args, q, reply, react, socket, sock }) => {
-    const client = socket || sock || conn;
+function cookieString(jar) {
+  return Object.keys(jar)
+    .map((key) => `${key}=${jar[key]}`)
+    .join('; ')
+}
 
-    // API CONFIGURATION
-    const apiKey = "VajiraOfc";
-    const searchApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/search`;
-    const detailsApiUrl = `https://vajiraofc-apis.vercel.app/api/cineflura/details`;
+/* ============================================================
+ * AKINATOR CORE FUNCTIONS
+ * ========================================================== */
+
+async function startGame(theme = 'characters', childMode = false) {
+  const got = await loadGotScraping()
+  const sid = THEMES[theme] || THEMES.characters
+  const jar = {}
+
+  const homeRes = await got({
+    url: `${BASE_URL}/`,
+    throwHttpErrors: false
+  })
+  updateCookies(jar, homeRes.headers)
+
+  const res = await got({
+    url: `${BASE_URL}/game`,
+    method: 'POST',
+    form: { sid: String(sid), cm: String(childMode) },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieString(jar)
+    },
+    throwHttpErrors: false
+  })
+  updateCookies(jar, res.headers)
+
+  const $ = cheerio.load(res.body)
+  const question = $('#question-label').text().trim()
+  const sessionMatch = res.body.match(/name="session"[^>]*value="([^"]+)"/)
+  const signatureMatch = res.body.match(/name="signature"[^>]*value="([^"]+)"/)
+  const akitudeMatch = res.body.match(/akitude[^"]*"[^"]*([^/]+\.png)"/)
+
+  const session = sessionMatch ? sessionMatch[1] : null
+  const signature = signatureMatch ? signatureMatch[1] : null
+  const akitude = akitudeMatch ? akitudeMatch[1] : 'defi.png'
+
+  if (!session || !signature) {
+    return { status: false, error: 'Gagal mengambil session/signature Akinator.' }
+  }
+
+  return {
+    status: true,
+    session,
+    signature,
+    question,
+    step: 0,
+    progression: 0,
+    akitude,
+    sid,
+    theme,
+    childMode,
+    cookies: jar
+  }
+}
+
+async function answerGame(game, ans) {
+  const got = await loadGotScraping()
+  let answerId
+
+  if (typeof ans === 'number') {
+    answerId = ans
+  } else {
+    const answerKey = String(ans).toLowerCase()
+    answerId = typeof ANSWERS[answerKey] !== 'undefined' ? ANSWERS[answerKey] : -1
+  }
+
+  if (answerId === -1) {
+    return { status: false, error: 'Jawaban tidak valid.' }
+  }
+
+  const res = await got({
+    url: `${BASE_URL}/answer`,
+    method: 'POST',
+    form: {
+      step: String(game.step),
+      progression: String(game.progression),
+      sid: String(game.sid),
+      cm: String(game.childMode),
+      answer: String(answerId),
+      session: game.session,
+      signature: game.signature
+    },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieString(game.cookies || {})
+    },
+    throwHttpErrors: false
+  })
+
+  if (res.headers) updateCookies(game.cookies || {}, res.headers)
+
+  let data
+  try {
+    data = JSON.parse(res.body)
+  } catch (e) {
+    return { status: false, error: 'Gagal membaca response Akinator.' }
+  }
+
+  if (data.completion === 'KO') {
+    return { status: false, error: 'Session Akinator sudah expired.' }
+  }
+
+  if (data.id_proposition) {
+    return {
+      status: true,
+      won: true,
+      name: data.name_proposition,
+      description: data.description_proposition,
+      photo: data.photo,
+      pseudo: data.pseudo
+    }
+  }
+
+  return {
+    status: true,
+    won: false,
+    question: data.question,
+    step: parseInt(data.step),
+    progression: parseFloat(data.progression),
+    akitude: data.akitude
+  }
+}
+
+async function backGame(game) {
+  const got = await loadGotScraping()
+  const res = await got({
+    url: `${BASE_URL}/cancel_answer`,
+    method: 'POST',
+    form: {
+      step: String(game.step),
+      progression: String(game.progression),
+      sid: String(game.sid),
+      cm: String(game.childMode),
+      session: game.session,
+      signature: game.signature
+    },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieString(game.cookies || {})
+    },
+    throwHttpErrors: false
+  })
+
+  let data
+  try {
+    data = JSON.parse(res.body)
+  } catch (e) {
+    return { status: false, error: 'Gagal membaca response Akinator.' }
+  }
+
+  return {
+    status: true,
+    question: data.question,
+    step: parseInt(data.step),
+    progression: parseFloat(data.progression),
+    akitude: data.akitude
+  }
+}
+
+async function excludeGame(game) {
+  const got = await loadGotScraping()
+  const res = await got({
+    url: `${BASE_URL}/exclude`,
+    method: 'POST',
+    form: {
+      step: String(game.step),
+      progression: String(game.progression),
+      sid: String(game.sid),
+      cm: String(game.childMode),
+      session: game.session,
+      signature: game.signature,
+      step_last_proposition: String(game.step)
+    },
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieString(game.cookies || {})
+    },
+    throwHttpErrors: false,
+    followRedirect: true
+  })
+
+  try {
+    const data = JSON.parse(res.body)
+    return {
+      status: true,
+      question: data.question,
+      step: parseInt(data.step),
+      progression: parseFloat(data.progression),
+      akitude: data.akitude
+    }
+  } catch (e) {
+    const $ = cheerio.load(res.body)
+    const question = $('#question-label').text().trim()
+
+    if (!question) {
+      return { status: false, error: 'Akinator menolak exclude.' }
+    }
+
+    const newSession = res.body.match(/name="session"[^>]*value="([^"]+)"/)
+    const newSignature = res.body.match(/name="signature"[^>]*value="([^"]+)"/)
+
+    return {
+      status: true,
+      question,
+      step: 0,
+      progression: 0,
+      akitude: 'defi.png',
+      newSession: newSession ? newSession[1] : game.session,
+      newSignature: newSignature ? newSignature[1] : game.signature
+    }
+  }
+}
+
+/* ============================================================
+ * MESSAGE TEMPLATES
+ * ========================================================== */
+
+function questionText(game) {
+  return `╭───〔 🎩 AKINATOR 〕───
+│
+│ ❓ ${game.question}
+│
+│ 1. Ya
+│ 2. Tidak
+│ 3. Tidak tahu
+│ 4. Mungkin
+│ 5. Mungkin tidak
+│
+│ Progress: ${game.progression}%
+│ Step: ${game.step}
+│
+╰─────────────────────
+
+Balas dengan:
+.akinator 1
+.akinator 2
+.akinator 3
+.akinator 4
+.akinator 5
+
+Ketik .akinator stop untuk berhenti.`
+}
+
+/* ============================================================
+ * CORE AKINATOR LOGIC
+ * ========================================================== */
+
+async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
+  const sub = args[0] ? String(args[0]).toLowerCase() : ''
+
+  // --- STOP ---
+  if (sub === 'stop' || sub === 'cancel') {
+    if (!getSession(m)) return reply('❌ Kamu sedang tidak bermain Akinator.')
+    deleteSession(m)
+    return reply('🛑 Permainan Akinator dihentikan.')
+  }
+
+  // --- BACK ---
+  if (sub === 'back' || sub === 'mundur') {
+    const gameBack = getSession(m)
+    if (!gameBack) return reply('❌ Belum ada permainan Akinator.')
 
     try {
-        await react("🎬");
+      const resultBack = await backGame(gameBack)
+      if (!resultBack.status) {
+        deleteSession(m)
+        return reply(`❌ ${resultBack.error}`)
+      }
 
-        if (!q) {
-            return reply(
-                "❌ *Opps! Title Missing* ❌\n\n" +
-                "Please provide a movie name to search!\n" +
-                "📌 *Example:* `.cineflura Interstellar`"
-            );
+      Object.assign(gameBack, {
+        question: resultBack.question,
+        step: resultBack.step,
+        progression: resultBack.progression,
+        akitude: resultBack.akitude
+      })
+      setSession(m, gameBack)
+      return reply(questionText(gameBack))
+    } catch (e) {
+      return reply(`❌ Error back:\n${e.message}`)
+    }
+  }
+
+  // --- EXCLUDE ---
+  if (sub === 'exclude') {
+    const gameExclude = getSession(m)
+    if (!gameExclude) return reply('❌ Belum ada permainan Akinator.')
+
+    try {
+      const resultExclude = await excludeGame(gameExclude)
+      if (!resultExclude.status) {
+        deleteSession(m)
+        return reply(`❌ ${resultExclude.error}`)
+      }
+
+      if (resultExclude.newSession) {
+        gameExclude.session = resultExclude.newSession
+        gameExclude.signature = resultExclude.newSignature
+      }
+
+      Object.assign(gameExclude, {
+        question: resultExclude.question,
+        step: resultExclude.step,
+        progression: resultExclude.progression,
+        akitude: resultExclude.akitude
+      })
+
+      setSession(m, gameExclude)
+      return reply(questionText(gameExclude))
+    } catch (e) {
+      return reply(`❌ Error exclude:\n${e.message}`)
+    }
+  }
+
+  // --- ANSWER ---
+  const validNumbers = ['1', '2', '3', '4', '5']
+  if (validNumbers.includes(sub) || typeof ANSWERS[sub] !== 'undefined') {
+    const gameAnswer = getSession(m)
+    if (!gameAnswer) {
+      return reply(`❌ Belum ada permainan.\n\nMulai dengan:\n${usedPrefix}${command}`)
+    }
+
+    const answerMap = {
+      '1': 'yes',
+      '2': 'no',
+      '3': 'idk',
+      '4': 'probably',
+      '5': 'probably not'
+    }
+    const answer = answerMap[sub] || sub
+
+    try {
+      const resultAnswer = await answerGame(gameAnswer, answer)
+      if (!resultAnswer.status) {
+        deleteSession(m)
+        return reply(`❌ ${resultAnswer.error}`)
+      }
+
+      // -- WIN --
+      if (resultAnswer.won) {
+        deleteSession(m)
+        let text = `╭───〔 🎩 AKINATOR 〕───\n` +
+                   `│\n` +
+                   `│ 🎯 Aku tahu jawabannya!\n` +
+                   `│\n` +
+                   `│ 👤 ${resultAnswer.name || 'Tidak diketahui'}\n` +
+                   `│\n` +
+                   `│ 📝 ${resultAnswer.description || 'Tidak ada deskripsi'}\n` +
+                   `│\n` +
+                   `╰─────────────────────`
+
+        if (resultAnswer.pseudo) text += `\n\n👨‍💻 Pseudo: ${resultAnswer.pseudo}`
+
+        if (resultAnswer.photo) {
+          try {
+            return await conn.sendMessage(
+              m.chat,
+              { image: { url: resultAnswer.photo }, caption: text },
+              { quoted: m }
+            )
+          } catch (e) {
+            return reply(text)
+          }
         }
+        return reply(text)
+      }
 
-        await reply(`🔍 _Searching for *"${q}"* on Cineflura servers..._`);
-
-        const response = await axios.get(searchApiUrl, {
-            params: { 
-                apikey: apiKey, 
-                q: q
-            },
-            timeout: 30000
-        });
-
-        if (response.status !== 200 || !response.data) {
-            await react("❌");
-            return reply("🛸 *API Error:* Server responded with an invalid status.");
-        }
-
-        let results = null;
-        if (response.data && response.data.success) {
-            results = response.data.results || [];
-        }
-
-        if (!results || results.length === 0) {
-            await react("❌");
-            return reply(`🛸 *No Results Found!*\nCineflura par *"${q}"* naam ki koi movie nahi mili.`);
-        }
-
-        let listText = `┏━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-        listText += `┃ 🎬  *CINEFLURA SEARCH*  🎬 ┃\n`;
-        listText += `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-        listText += `🔎 *Query:* \`${q.toUpperCase()}\`\n`;
-        listText += `✨ *Results Found:* ${results.length}\n\n`;
-        listText += `┌─────────────────────┐\n`;
-
-        results.forEach((v, i) => {
-            const title = v.title || 'Unknown Title';
-            const displayTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
-            listText += `┃ 🎥 *[${i + 1}]* _${displayTitle}_\n`;
-            listText += `┃ └─ 📊 Rating: ${v.rating || 'N/A'} | ${v.type || 'Movie'}\n`;
-            if (i !== results.length - 1) listText += `┃─────────────────────┃\n`;
-        });
-
-        listText += `└─────────────────────┘\n\n`;
-        listText += `⚡ *Reply with the item number* to view download options.\n\n`;
-        listText += `> *© KAMRAN-MINI-BOT ッ*`;
-
-        const firstImage = results[0].imageUrl || "https://placehold.co/600x400?text=No+Poster";
-
-        const sentSearch = await client.sendMessage(from, {
-            image: { url: firstImage },
-            caption: listText
-        }, { quoted: mek });
-
-        const searchMsgId = sentSearch.key.id;
-        let detailsTimeout, downloadTimeout;
-
-        // ================= INTERACTIVE STEP: DETAILS HANDLER =================
-        const detailsHandler = async (update) => {
-            try {
-                const msg = update.messages[0];
-                if (!msg?.message || msg.key.remoteJid !== from) return;
-
-                const ctx = msg.message.extendedTextMessage?.contextInfo || msg.message.conversation?.contextInfo;
-                if (ctx?.stanzaId !== searchMsgId) return;
-
-                const choice = (msg.message.conversation || msg.message.extendedTextMessage?.text || "").trim();
-                const num = parseInt(choice);
-                if (isNaN(num) || num < 1 || num > results.length) return;
-                
-                const selected = results[num - 1];
-                if (!selected) return;
-
-                client.ev.off("messages.upsert", detailsHandler);
-                clearTimeout(detailsTimeout);
-
-                await react("⏳");
-
-                const detailResponse = await axios.get(detailsApiUrl, {
-                    params: { 
-                        apikey: apiKey, 
-                        url: selected.url
-                    },
-                    timeout: 30000
-                });
-
-                if (detailResponse.status !== 200 || !detailResponse.data || !detailResponse.data.success) {
-                    await react("❌");
-                    return reply("❌ *Error:* Failed to pull details for this item.");
-                }
-
-                const movieDetails = detailResponse.data.movie || {};
-                const downloads = detailResponse.data.downloads || [];
-
-                if (downloads.length === 0) {
-                    await react("❌");
-                    return reply("❌ *Sorry:* No downloadable links were located for this selection.");
-                }
-
-                let cap = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-                cap += `┃ 🎥 *${movieDetails.title || selected.title}*\n`;
-                cap += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                cap += `📋 *Type:* \`${movieDetails.type || 'Movie'}\`\n`;
-                cap += `📅 *Year:* ${movieDetails.year || 'N/A'}\n`;
-                cap += `🌍 *Country:* ${movieDetails.country || 'N/A'}\n`;
-                cap += `🗣️ *Language:* ${movieDetails.language || 'N/A'}\n`;
-                cap += `🎭 *Genre:* ${movieDetails.genre || 'N/A'}\n`;
-                cap += `🎬 *Director:* ${movieDetails.director || 'N/A'}\n\n`;
-                
-                if (movieDetails.story) {
-                    const story = movieDetails.story.length > 200 ? movieDetails.story.substring(0, 200) + '...' : movieDetails.story;
-                    cap += `📝 *Story:* \n_${story}_\n\n`;
-                }
-                
-                cap += `┌───────── DOWNLOADS ─────────┐\n`;
-                
-                downloads.forEach((dl, i) => {
-                    cap += `┃ 🔥 *[${i + 1}]* Quality: \`${dl.quality || 'HD'}\`\n`;
-                    cap += `┃ └─ 📦 Size: \`${dl.size || 'Unknown'}\`\n`;
-                    if (i !== downloads.length - 1) cap += `┃─────────────────────┃\n`;
-                });
-
-                cap += `└─────────────────────────────┘\n\n`;
-                cap += `⚡ *Reply with a download number* to start downloading.\n\n`;
-                cap += `> *© KAMRAN-MINI-BOT ッ*`;
-
-                const detailImg = movieDetails.posterImage || selected.imageUrl || "https://placehold.co/600x400?text=No+Poster";
-
-                const sentDetail = await client.sendMessage(from, {
-                    image: { url: detailImg },
-                    caption: cap
-                }, { quoted: msg });
-
-                const detailMsgId = sentDetail.key.id;
-
-                // ================= INTERACTIVE STEP: DOWNLOAD HANDLER =================
-                const downloadHandler = async (up) => {
-                    try {
-                        const dlMsg = up.messages[0];
-                        if (!dlMsg?.message || dlMsg.key.remoteJid !== from) return;
-
-                        const dlCtx = dlMsg.message.extendedTextMessage?.contextInfo || dlMsg.message.conversation?.contextInfo;
-                        if (dlCtx?.stanzaId !== detailMsgId) return;
-
-                        const pick = (dlMsg.message.conversation || dlMsg.message.extendedTextMessage?.text || "").trim();
-                        const dlNum = parseInt(pick);
-                        if (isNaN(dlNum) || dlNum < 1 || dlNum > downloads.length) return;
-
-                        const selectedDl = downloads[dlNum - 1];
-                        if (!selectedDl) return;
-
-                        client.ev.off("messages.upsert", downloadHandler);
-                        clearTimeout(downloadTimeout);
-
-                        await client.sendMessage(from, { react: { text: "📥", key: dlMsg.key } });
-                        
-                        // Get direct download URL
-                        let targetFileUrl = selectedDl.pixelDrainUrl || selectedDl.url || selectedDl.downloadUrl;
-                        
-                        if (!targetFileUrl) {
-                            await react("❌");
-                            return reply("❌ *Error:* Direct download link could not be resolved.");
-                        }
-
-                        const cleanFileName = `${(movieDetails.title || selected.title || "Movie").replace(/[^a-zA-Z0-9 ]/g, "_")}_${selectedDl.quality || 'HD'}.mp4`;
-
-                        await reply(`🚀 *Processing Cineflura File...* \nUploading document. Please wait!`);
-
-                        let finalCaption = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
-                        finalCaption += `┃ 🎬 *${movieDetails.title || selected.title}*\n`;
-                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += `┃ 🌟 *Quality:* ${selectedDl.quality || 'HD'}\n`;
-                        finalCaption += `┃ 📦 *Size:* ${selectedDl.size || 'N/A'}\n`;
-                        finalCaption += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
-                        finalCaption += `> *© KAMRAN-MINI-BOT ッ*`;
-
-                        const thumbBuffer = await getThumbnailBuffer(movieDetails.posterImage || selected.imageUrl);
-                        
-                        let documentPayload = {
-                            document: { url: targetFileUrl },
-                            mimetype: "video/mp4",
-                            fileName: cleanFileName,
-                            caption: finalCaption
-                        };
-
-                        if (thumbBuffer && Buffer.isBuffer(thumbBuffer)) {
-                            documentPayload.jpegThumbnail = thumbBuffer;
-                        }
-
-                        await client.sendMessage(from, documentPayload, { quoted: dlMsg });
-                        await client.sendMessage(from, { react: { text: "✅", key: dlMsg.key } });
-
-                    } catch (dlErr) {
-                        console.error("Cineflura download failed:", dlErr.message);
-                        reply(`❌ An error occurred during file delivery: ${dlErr.message}`);
-                    }
-                };
-
-                client.ev.on("messages.upsert", downloadHandler);
-                
-                downloadTimeout = setTimeout(() => {
-                    client.ev.off("messages.upsert", downloadHandler);
-                }, 300000);
-
-            } catch (detErr) {
-                console.error("Cineflura details failed:", detErr.message);
-                reply(`❌ An error occurred while loading details: ${detErr.message}`);
-            }
-        };
-
-        client.ev.on("messages.upsert", detailsHandler);
-        
-        detailsTimeout = setTimeout(() => {
-            client.ev.off("messages.upsert", detailsHandler);
-        }, 300000);
+      // -- NEXT QUESTION --
+      Object.assign(gameAnswer, {
+        question: resultAnswer.question,
+        step: resultAnswer.step,
+        progression: resultAnswer.progression,
+        akitude: resultAnswer.akitude
+      })
+      setSession(m, gameAnswer)
+      return reply(questionText(gameAnswer))
 
     } catch (e) {
-        console.error("Cineflura Downloader error:", e.message);
-        await react("❌");
-        return reply(`❌ *Error Processing Request:* ${e.message}`);
+      return reply(`❌ Terjadi error saat menjawab:\n${e.message}`)
     }
+  }
+
+  // --- START ---
+  if (!sub || sub === 'start' || sub === 'mulai') {
+    if (getSession(m)) {
+      return reply(`⚠️ Kamu masih punya permainan Akinator aktif.\n\nJawab dengan:\n${usedPrefix}${command} 1-5\n\nAtau ketik:\n${usedPrefix}${command} stop`)
+    }
+
+    const theme = args[1] ? String(args[1]).toLowerCase() : 'characters'
+    if (!THEMES[theme]) {
+      return reply(`❌ Tema tidak valid.\n\nTema tersedia:\n• characters\n• animals\n• objects`)
+    }
+
+    await reply('🎩 Memanggil Akinator...')
+
+    try {
+      const newGame = await startGame(theme, false)
+      if (!newGame.status) return reply(`❌ ${newGame.error}`)
+
+      setSession(m, newGame)
+      return reply(questionText(newGame))
+    } catch (e) {
+      return reply(`❌ Gagal memulai Akinator:\n${e.message}`)
+    }
+  }
+
+  // --- HELP ---
+  return reply(`🎩 *AKINATOR*\n\n` +
+                 `Cara bermain:\n${usedPrefix}${command}\n\n` +
+                 `Jawaban:\n1. Ya\n2. Tidak\n3. Tidak tahu\n4. Mungkin\n5. Mungkin tidak\n\n` +
+                 `Perintah:\n${usedPrefix}${command} back\n${usedPrefix}${command} exclude\n${usedPrefix}${command} stop`)
+}
+
+/* ============================================================
+ * AUTO AKINATOR LISTENER (BODY HOOK)
+ * ========================================================== */
+
+cmd({
+  on: "body"
+}, async (conn, mek, m, { from, body }) => {
+  try {
+    if (!body) return;
+    const rawText = body.trim().toLowerCase();
+    const triggers = ['akinator', 'yakinator'];
+
+    const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
+    if (matchedTrigger) {
+      const argsText = body.slice(matchedTrigger.length).trim();
+      const args = argsText ? argsText.split(' ') : [];
+      const prefix = config.PREFIX || '.';
+      await executeAkinator(
+        conn,
+        mek,
+        m,
+        args,
+        (text) => conn.sendMessage(from, { text }, { quoted: mek }),
+        prefix,
+        matchedTrigger
+      );
+    }
+  } catch (error) {
+    console.error("Auto-Body Akinator Error:", error);
+  }
 });
+
+/* ============================================================
+ * AKINATOR COMMAND (Prefix Version)
+ * ========================================================== */
+
+const handler = async (conn, mek, m, extra) => {
+  const { args, reply, usedPrefix, command } = extra;
+  await executeAkinator(conn, mek, m, args, reply, usedPrefix, command);
+}
+
+handler.help = [
+  'akinator', 'akinator 1', 'akinator 2',
+  'akinator 3', 'akinator 4', 'akinator 5',
+  'akinator back', 'akinator exclude', 'akinator stop'
+]
+handler.tags = ['game']
+handler.command = /^(akinator|yakinator)$/i
+handler.limit = true
+
+cmd({
+  pattern: "akinator",
+  alias: ["yakinator"],
+  desc: "Play Akinator game",
+  category: "game",
+  react: "🎩",
+  filename: __filename
+}, handler);
+
+export default handler

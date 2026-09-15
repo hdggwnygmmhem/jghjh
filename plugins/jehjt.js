@@ -6,6 +6,7 @@ import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
+// Yahan Indonesian URL ko English Akinator URL se replace kar diya hai
 const BASE_URL = 'https://en.akinator.com';
 
 const THEMES = {

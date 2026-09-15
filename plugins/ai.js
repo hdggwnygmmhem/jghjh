@@ -6,7 +6,6 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 // ==================== GLOBAL AUTO CHAT STATE ====================
-// True matlab bot sabhi IB (private chats) mein auto-reply karega jab on ho
 let globalAutoChatEnabled = false;
 
 // ==================== AUTO CHAT LISTENER (BODY HOOK) ====================
@@ -19,10 +18,10 @@ cmd({
         // 1. STRICTLY IB ONLY: Groups mein bilkul kaam nahi karega
         if (isGroup) return;
 
-        // 2. INFINITE LOOP PROTECTION: Bot khud ke messages ka reply kabhi nahi dega
+        // 2. INFINITE LOOP PROTECTION: Bot khud ke messages ka reply nahi dega
         if (m.key && m.key.fromMe) return;
 
-        // 3. Ignore if message starts with a command prefix (e.g., '.', '/', '!')
+        // 3. Ignore command prefixes
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
@@ -47,22 +46,21 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { isGroup, args, reply }) => {
     try {
-        // Block inside groups
         if (isGroup) {
-            return await reply("❌ *Auto-Chat can only be controlled in IB, not in groups!*");
+            return await reply("❌ Auto-Chat can only be controlled in IB, not in groups!");
         }
 
         const status = args[0] ? args[0].toLowerCase() : '';
 
         if (status === 'on' || status === 'enable') {
             globalAutoChatEnabled = true;
-            return await reply("✅ *Global Auto AI Chat has been turned ON for all IB chats!* \nBot will now reply to everyone's messages in private chat automatically.");
+            return await reply("✅ Global Auto AI Chat has been turned ON for all IB chats! Bot will now reply in whatever language you type.");
         } else if (status === 'off' || status === 'disable') {
             globalAutoChatEnabled = false;
-            return await reply("❌ *Global Auto AI Chat has been turned OFF.*");
+            return await reply("❌ Global Auto AI Chat has been turned OFF.");
         } else {
             const currentState = globalAutoChatEnabled ? "ON 🟢" : "OFF 🔴";
-            return await reply(`🤖 *Global Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable for all IB\n• \`.autochat off\` to disable`);
+            return await reply(`🤖 Global Auto-Chat Status: ${currentState}\n\nUsage:\n• .autochat on to enable\n• .autochat off to disable`);
         }
     } catch (err) {
         console.error(err);
@@ -80,9 +78,8 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, text, usedPrefix, command, isGroup, reply }) => {
     try {
-        // Block inside groups
         if (isGroup) {
-            return await reply("❌ *AI commands can only be used in IB, not in groups!*");
+            return await reply("❌ AI commands can only be used in IB, not in groups!");
         }
 
         if (!text?.trim()) {
@@ -90,7 +87,7 @@ cmd({
                 `❌ Please provide a prompt or question!\n\n` +
                 `Example:\n` +
                 `• ${usedPrefix + command} Hello, who are you?\n` +
-                `• ${usedPrefix + command} write a short poem about coding`
+                `• ${usedPrefix + command} coding ke baray mein batao`
             );
         }
 
@@ -107,9 +104,10 @@ cmd({
 // ==================== CORE AI FETCH ENGINE ====================
 async function fetchAndReplyAI(conn, mek, from, queryText) {
     try {
-        const encodedQuery = encodeURIComponent(queryText);
+        // Universal instruction taaki AI kisi bhi language/script (Roman Urdu, Urdu, English, Arabic, etc.) ko detect kar ke usi mein reply kare
+        const universalPrompt = `Detect the language or script of the following message and reply ONLY in that exact same language/script: "${queryText}"`;
+        const encodedQuery = encodeURIComponent(universalPrompt);
         
-        // DeepAI first, Blackbox as fallback
         const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
         const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
 
@@ -146,15 +144,14 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
         if (!aiResult || !aiResult.trim() || aiResult.includes("[object Object]")) {
             try {
                 const responseFallback = await axios.get(blackboxUrl, { timeout: 30000 });
-                aiProviderResult = extractText(responseFallback.data);
-                aiResult = aiProviderResult;
+                aiResult = extractText(responseFallback.data);
             } catch (err) {
                 console.error("Blackbox fallback also failed:", err.message);
             }
         }
 
         if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } }, { quoted: mek });
             return await conn.sendMessage(from, { text: "❌ Could not get a valid response from AI." }, { quoted: mek });
         }
 
@@ -162,7 +159,7 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
             text: `🤖 *KAMRAN-MD AI*\n\n${aiResult}` 
         }, { quoted: mek });
 
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } }, { quoted: mek });
 
     } catch (error) {
         console.error("AI Fetch Engine Error:", error.message);

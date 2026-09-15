@@ -38,6 +38,48 @@ const formatCategory = (category, cmds) => {
     return `${title}${body}${footer}`;
 };
 
+// ==================== AUTO MENU LISTENER (BODY HOOK) ====================
+cmd({
+    on: "body"
+}, async (conn, mek, m, extra) => {
+    try {
+        const { body } = extra;
+        if (!body) return;
+
+        // Ignore bot's own messages
+        if (m.key && m.key.fromMe) return;
+
+        const rawText = body.trim().toLowerCase();
+        const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu"];
+        
+        // Triggers automatically in both Inbox and Groups without prefix
+        if (menuTriggers.includes(rawText)) {
+            await sendMenu(conn, mek, m, extra);
+        }
+    } catch (error) {
+        console.error("Auto-Body Menu Error:", error);
+    }
+});
+
+// ==================== COMMAND REGISTRATION (.menu) ====================
+cmd({
+    pattern: "menu",
+    alias: ["m", "help", "allmenu", "fullmenu"],
+    use: '.menu',
+    desc: "Show all bot commands",
+    category: "main",
+    react: "⚡",
+    filename: __filename
+},
+async (conn, mek, m, extra) => {
+    try {
+        await sendMenu(conn, mek, m, extra);
+    } catch (e) {
+        console.error("Error in menu command:", e);
+        extra.reply(`An error occurred: ${e.message}`);
+    }
+});
+
 // ==================== CORE MENU SENDER FUNCTION ====================
 async function sendMenu(conn, mek, m, { from, reply, userConfig }) {
     try {
@@ -111,41 +153,3 @@ ${menuSections}
         reply(`Error: ${e}`); 
     }
 }
-
-// ==================== COMMAND REGISTRATION (.menu) ====================
-cmd({
-    pattern: "menu",
-    alias: ["m", "help", "allmenu", "fullmenu"],
-    use: '.menu',
-    desc: "Show all bot commands",
-    category: "main",
-    react: "⚡",
-    filename: __filename
-},
-async (conn, mek, m, extra) => {
-    await sendMenu(conn, mek, m, extra);
-});
-
-// ==================== BODY AUTO TRIGGER (menu, allmenu, help) ====================
-cmd({
-    on: "body"
-}, async (conn, mek, m, extra) => {
-    try {
-        const { body, from, isGroup } = extra;
-        if (!body) return;
-
-        // Message yourself ya khud ke messages par loop rokne ke liye check
-        if (m.key && m.key.fromMe) return;
-
-        const text = body.trim().toLowerCase();
-        
-        // Aapke saare triggers yahan hain
-        const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu", "menufull"];
-        
-        if (menuTriggers.includes(text)) {
-            await sendMenu(conn, mek, m, extra);
-        }
-    } catch (err) {
-        console.error("Body Menu Trigger Error:", err);
-    }
-});

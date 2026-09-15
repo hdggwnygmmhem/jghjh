@@ -54,7 +54,7 @@ cmd({
 
         if (status === 'on' || status === 'enable') {
             globalAutoChatEnabled = true;
-            return await reply("✅ Global Auto AI Chat has been turned ON for all IB chats! Bot will now reply in whatever language you type.");
+            return await reply("✅ Global Auto AI Chat has been turned ON for all IB chats!");
         } else if (status === 'off' || status === 'disable') {
             globalAutoChatEnabled = false;
             return await reply("❌ Global Auto AI Chat has been turned OFF.");
@@ -104,9 +104,8 @@ cmd({
 // ==================== CORE AI FETCH ENGINE ====================
 async function fetchAndReplyAI(conn, mek, from, queryText) {
     try {
-        // Universal instruction taaki AI kisi bhi language/script (Roman Urdu, Urdu, English, Arabic, etc.) ko detect kar ke usi mein reply kare
-        const universalPrompt = `Detect the language or script of the following message and reply ONLY in that exact same language/script: "${queryText}"`;
-        const encodedQuery = encodeURIComponent(universalPrompt);
+        // Seedha user ka text encode karke bhejnay se AI bilkul theek aur natural jawab dega
+        const encodedQuery = encodeURIComponent(queryText);
         
         const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
         const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;
@@ -151,7 +150,7 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
         }
 
         if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } }, { quoted: mek });
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return await conn.sendMessage(from, { text: "❌ Could not get a valid response from AI." }, { quoted: mek });
         }
 
@@ -159,7 +158,7 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
             text: `🤖 *KAMRAN-MD AI*\n\n${aiResult}` 
         }, { quoted: mek });
 
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } }, { quoted: mek });
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
         console.error("AI Fetch Engine Error:", error.message);

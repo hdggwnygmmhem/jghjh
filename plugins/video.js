@@ -4,16 +4,10 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-cmd({
-    pattern: "video",
-    alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
-    desc: "Search and download videos from YouTube via DR",
-    category: "downloader",
-    react: "📥",
-    filename: __filename
-}, async (conn, mek, m, { from, text, reply }) => {
+// ==================== CORE VIDEO LOGIC ====================
+async function executeVideo(conn, mek, m, query, from, reply) {
     try {
-        if (!text) {
+        if (!query) {
             return reply(
                 `⚠️ Please provide a video name or search query!\n\n` +
                 `Example:\n` +
@@ -25,7 +19,7 @@ cmd({
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
         // Call the API endpoint
-        const encodedQuery = encodeURIComponent(text.trim());
+        const encodedQuery = encodeURIComponent(query.trim());
         const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodedQuery}`;
         
         const response = await axios.get(apiUrl, { timeout: 30000 });
@@ -38,7 +32,7 @@ cmd({
 
         const info = resData.result;
         const videoUrl = info.download_url;
-        const title = info.searched_title || text;
+        const title = info.searched_title || query;
         const videoPageUrl = info.searched_url || '';
 
         if (!videoUrl) {
@@ -78,4 +72,37 @@ cmd({
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
+}
+
+// ==================== AUTO VIDEO LISTENER (BODY HOOK) ====================
+cmd({
+    on: "body"
+}, async (conn, mek, m, { from, body }) => {
+    try {
+        if (!body) return;
+        const rawText = body.trim().toLowerCase();
+        const triggers = ['video', 'ytmp4', 'ytvideo', 'playvid', 'videoz'];
+
+        // Triggers automatically in both Inbox and Groups if it matches the command or starts with it followed by space/query
+        const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
+        if (matchedTrigger) {
+            const query = body.slice(matchedTrigger.length).trim();
+            await executeVideo(conn, mek, m, query, from, (text) => conn.sendMessage(from, { text }, { quoted: mek }));
+        }
+    } catch (error) {
+        console.error("Auto-Body Video Error:", error);
+    }
+});
+
+// ==================== VIDEO COMMAND (Prefix Version) ====================
+cmd({
+    pattern: "video",
+    alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
+    desc: "Search and download videos from YouTube via DR",
+    category: "downloader",
+    react: "📥",
+    filename: __filename
+}, async (conn, mek, m, extra) => {
+    const { from, text, reply } = extra;
+    await executeVideo(conn, mek, m, text, from, reply);
 });

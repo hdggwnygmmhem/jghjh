@@ -78,10 +78,10 @@ async (conn, mek, m, { from, reply }) => {
 // ==================== CORE MENU SENDER LOGIC ====================
 async function executeMenu(conn, mek, from) {
     try {
-        // Reaction Emoji set just like ping command
         const reactionEmojis = ['🔥', '⚡', '🚀', '💨', '🎯', '🎉', '🌟', '💥', '🕐', '🔹'];
         const reactionEmoji = reactionEmojis[Math.floor(Math.random() * reactionEmojis.length)];
 
+        // 1. Send Reaction first
         await conn.sendMessage(from, {
             react: { text: reactionEmoji, key: mek.key }
         });
@@ -127,7 +127,7 @@ async function executeMenu(conn, mek, from) {
 ┌━━━〔 *ɪɴғᴏ ʙᴏx* 〕━━━┈⊷
 ┃ 👑 *${toStylistUpper('Owner')}:* ${OWNER_NAME}
 ┃ 📊 *${toStylistUpper('Commands')}:* ${totalCommands}
-┃ ⏳ *${toStrlistUpper ? toStrlistUpper('Runtime') : 'RUNTIME'}:* ${runtime(process.uptime())}
+┃ ⏳ *${toStylistUpper('Runtime')}:* ${runtime(process.uptime())}
 ┃ 📡 *${toStylistUpper('Prefix')}:* [  ${PREFIX}  ]
 ┃ ⚙️ *${toStylistUpper('Mode')}:* ${MODE}
 ┃ 🏷️ *${toStylistUpper('Version')}:* ${VERSION}
@@ -136,6 +136,7 @@ ${menuSections}
 
 > 💡 _${DESCRIPTION || 'Powered by WhatsApp Bot'}_`;
 
+        // 2. Send Menu Image and Caption properly linked with quoted message
         await conn.sendMessage(from, { 
             image: { url: imageToUse },
             caption: dec, 

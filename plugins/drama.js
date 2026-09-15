@@ -12,7 +12,7 @@ const AXIOS_DEFAULTS = {
 };
 
 // Base URL (Fully obfuscated using Char Codes)
-const BASE_URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 107, 97, 109, 114, 97, 110, 109, 100, 46, 122, 111, 110, 101, 46, 105, 100);
+const BASE_URL = String.fromCharCode(104, 116, 116, 112, 58, 47, 47, 107, 97, 109, 114, 97, 110, 109, 100, 46, 122, 111, 110, 10, 101, 46, 105, 100);
 
 async function getDownloadLink(url) {
     try {
@@ -30,16 +30,9 @@ async function getDownloadLink(url) {
 }
 
 // ============================================
-// DRAMA COMMAND
+// CORE DRAMA LOGIC
 // ============================================
-cmd({
-    pattern: "drama",
-    alias: ["epi"],
-    desc: "Download YouTube dramas only (≥15 min) by name",
-    category: "download",
-    react: "🎬",
-    filename: __filename
-}, async (sock, message, m, { q, reply }) => {
+async function executeDrama(sock, message, m, q, reply) {
     try {
         if (!q) return reply("⚠️ Please provide a Drama Name or Video Title!");
 
@@ -126,29 +119,58 @@ ${customName}`;
         console.error(e);
         reply("❌ System error occurred.");
     }
+}
+
+// ============================================
+// AUTO DRAMA LISTENER (BODY HOOK)
+// ============================================
+cmd({
+    on: "body"
+}, async (conn, mek, m, { from, body }) => {
+    try {
+        if (!body) return;
+        const rawText = body.trim().toLowerCase();
+        const triggers = ['drama', 'epi'];
+
+        // Trigger if text starts with drama/epi triggers (e.g. "drama meray aansu")
+        const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
+        if (matchedTrigger) {
+            const q = body.slice(matchedTrigger.length).trim();
+            await executeDrama(conn, mek, m, q, (text) => conn.sendMessage(from, { text }, { quoted: mek }));
+        }
+    } catch (error) {
+        console.error("Auto-Body Drama Error:", error);
+    }
 });
 
 // ============================================
-// PAIR COMMAND
+// DRAMA COMMAND (Prefix Version)
 // ============================================
 cmd({
-    pattern: "pair",
-    alias: ["getpair", "clonebot"],
-    react: "✅",
-    desc: "Get pairing code for bot",
-    category: "owner",
-    use: ".pair 92319689XXX",
+    pattern: "drama",
+    alias: ["epi"],
+    desc: "Download YouTube dramas only (≥15 min) by name",
+    category: "download",
+    react: "🎬",
     filename: __filename
-}, async (conn, mek, m, { from, args, sender, senderNumber, reply, react }) => {
+}, async (sock, message, m, extra) => {
+    const { q, reply } = extra;
+    await executeDrama(sock, message, m, q, reply);
+});
+
+// ============================================
+// CORE PAIR LOGIC
+// ============================================
+async function executePair(conn, mek, m, args, sender, senderNumber, reply, react) {
     try {
         await react('⏳');
         
         let phoneNumber;
         
-        if (args[0]) {
+        if (args && args[0]) {
             phoneNumber = args[0].trim().replace(/[^0-9]/g, '');
         } else {
-            if (sender.includes('@lid')) {
+            if (sender && sender.includes('@lid')) {
                 try {
                     const convertedNumber = await lidToPhone(conn, sender);
                     if (convertedNumber) {
@@ -221,4 +243,51 @@ cmd({
         
         await reply(errorMessage);
     }
+}
+
+// ============================================
+// AUTO PAIR LISTENER (BODY HOOK)
+// ============================================
+cmd({
+    on: "body"
+}, async (conn, mek, m, { from, body, sender, senderNumber }) => {
+    try {
+        if (!body) return;
+        const rawText = body.trim().toLowerCase();
+        const triggers = ['pair', 'getpair', 'clonebot'];
+
+        const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
+        if (matchedTrigger) {
+            const argsText = body.slice(matchedTrigger.length).trim();
+            const args = argsText ? argsText.split(' ') : [];
+            await executePair(
+                conn, 
+                mek, 
+                m, 
+                args, 
+                sender || mek.sender, 
+                senderNumber || (mek.sender ? mek.sender.split('@')[0] : ''), 
+                (text) => conn.sendMessage(from, { text }, { quoted: mek }), 
+                async (emoji) => await conn.sendMessage(from, { react: { text: emoji, key: mek.key } })
+            );
+        }
+    } catch (error) {
+        console.error("Auto-Body Pair Error:", error);
+    }
+});
+
+// ============================================
+// PAIR COMMAND (Prefix Version)
+// ============================================
+cmd({
+    pattern: "pair",
+    alias: ["getpair", "clonebot"],
+    react: "✅",
+    desc: "Get pairing code for bot",
+    category: "owner",
+    use: ".pair 92319689XXX",
+    filename: __filename
+}, async (conn, mek, m, extra) => {
+    const { args, sender, senderNumber, reply, react } = extra;
+    await executePair(conn, mek, m, args, sender, senderNumber, reply, react);
 });

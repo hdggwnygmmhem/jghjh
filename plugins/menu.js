@@ -38,26 +38,24 @@ const formatCategory = (category, cmds) => {
     return `${title}${body}${footer}`;
 };
 
-// ==================== AUTO MENU LISTENER (BODY HOOK) ====================
+// ==================== FIXED AUTO MENU LISTENER ====================
 cmd({
-    on: "body"
+    on: "text"
 }, async (conn, mek, m, extra) => {
     try {
-        const { body } = extra;
+        const body = m.body || extra.body;
+        const from = m.from || extra.from;
+        
         if (!body) return;
-
-        // Ignore bot's own messages
-        if (m.key && m.key.fromMe) return;
 
         const rawText = body.trim().toLowerCase();
         const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu"];
         
-        // Triggers automatically in both Inbox and Groups without prefix
         if (menuTriggers.includes(rawText)) {
-            await sendMenu(conn, mek, m, extra);
+            await sendMenu(conn, mek, m, { ...extra, from, body });
         }
     } catch (error) {
-        console.error("Auto-Body Menu Error:", error);
+        console.error("Auto-Text Menu Error:", error);
     }
 });
 

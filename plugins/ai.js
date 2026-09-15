@@ -5,9 +5,9 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== AUTO CHAT TOGGLE STATES ====================
-// In-memory toggle storage mapping Chat Id -> boolean
-const autoChatSettings = new Map();
+// ==================== GLOBAL AUTO CHAT STATE ====================
+// True matlab bot sabhi IB (private chats) mein auto-reply karega jab on ho
+let globalAutoChatEnabled = false;
 
 // ==================== AUTO CHAT LISTENER (BODY HOOK) ====================
 cmd({
@@ -16,19 +16,18 @@ cmd({
     try {
         if (!body) return;
 
-        // 1. STRICTLY IB ONLY: Ignore groups completely
+        // 1. STRICTLY IB ONLY: Groups mein bilkul kaam nahi karega
         if (isGroup) return;
 
-        // 2. Ignore command prefixes (e.g., '.', '/', '!')
+        // 2. INFINITE LOOP PROTECTION: Bot khud ke messages ka reply kabhi nahi dega
+        if (m.key && m.key.fromMe) return;
+
+        // 3. Ignore if message starts with a command prefix (e.g., '.', '/', '!')
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
-        // 3. Check if auto chat is enabled for this specific IB chat ID
-        const isEnabled = autoChatSettings.get(from);
-        if (!isEnabled) return;
-
-        // Note: 'Message yourself' mein khud ke messages ko allow karne ke liye 
-        // m.key.fromMe check yahan se hata diya hai taaki aapki chat mein auto-reply chale.
+        // 4. Check if Global Auto Chat is enabled
+        if (!globalAutoChatEnabled) return;
 
         // Process message through AI engine automatically
         await fetchAndReplyAI(conn, mek, from, body);
@@ -42,29 +41,28 @@ cmd({
 cmd({
     pattern: "autochat",
     alias: ["aichat", "chatbot"],
-    desc: "Turn auto AI chat on or off in IB",
+    desc: "Turn global auto AI chat on or off for all IB chats",
     category: "ai",
     react: "🤖",
     filename: __filename
-}, async (conn, mek, m, { from, isGroup, args, reply }) => {
+}, async (conn, mek, m, { isGroup, args, reply }) => {
     try {
         // Block inside groups
         if (isGroup) {
-            return await reply("❌ *Auto-Chat is only allowed in IB (Inbox), not in groups!*");
+            return await reply("❌ *Auto-Chat can only be controlled in IB, not in groups!*");
         }
 
         const status = args[0] ? args[0].toLowerCase() : '';
 
         if (status === 'on' || status === 'enable') {
-            autoChatSettings.set(from, true);
-            return await reply("✅ *Auto AI Chat has been turned ON for this IB chat!* \nBot will now reply to normal messages automatically.");
+            globalAutoChatEnabled = true;
+            return await reply("✅ *Global Auto AI Chat has been turned ON for all IB chats!* \nBot will now reply to everyone's messages in private chat automatically.");
         } else if (status === 'off' || status === 'disable') {
-            autoChatSettings.set(from, false);
-            return await reply("❌ *Auto AI Chat has been turned OFF for this IB chat.*");
+            globalAutoChatEnabled = false;
+            return await reply("❌ *Global Auto AI Chat has been turned OFF.*");
         } else {
-            const current = autoChatSettings.get(from);
-            const currentState = current === true ? "ON 🟢" : "OFF 🔴";
-            return await reply(`🤖 *Auto-Chat Status (IB Only):* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable\n• \`.autochat off\` to disable`);
+            const currentState = globalAutoChatEnabled ? "ON 🟢" : "OFF 🔴";
+            return await reply(`🤖 *Global Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable for all IB\n• \`.autochat off\` to disable`);
         }
     } catch (err) {
         console.error(err);
@@ -84,7 +82,7 @@ cmd({
     try {
         // Block inside groups
         if (isGroup) {
-            return await reply("❌ *AI commands can only be used in IB (Inbox), not in groups!*");
+            return await reply("❌ *AI commands can only be used in IB, not in groups!*");
         }
 
         if (!text?.trim()) {
@@ -145,10 +143,11 @@ async function fetchAndReplyAI(conn, mek, from, queryText) {
         }
 
         // If DeepAI fails, try Blackbox fallback
-        if (!aiResult || aiResult.includes("[object Object]") || aiResult.trim() === "") {
+        if (!aiResult || !aiResult.trim() || aiResult.includes("[object Object]")) {
             try {
                 const responseFallback = await axios.get(blackboxUrl, { timeout: 30000 });
-                aiResult = extractText(responseFallback.data);
+                aiProviderResult = extractText(responseFallback.data);
+                aiResult = aiProviderResult;
             } catch (err) {
                 console.error("Blackbox fallback also failed:", err.message);
             }

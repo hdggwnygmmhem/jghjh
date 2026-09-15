@@ -38,16 +38,8 @@ const formatCategory = (category, cmds) => {
     return `${title}${body}${footer}`;
 };
 
-cmd({
-    pattern: "menu",
-    alias: ["m", "help", "allmenu", "fullmenu"],
-    use: '.menu',
-    desc: "Show all bot commands",
-    category: "main",
-    react: "⚡",
-    filename: __filename
-},
-async (conn, mek, m, { from, reply, userConfig }) => {
+// ==================== CORE MENU SENDER FUNCTION ====================
+async function sendMenu(conn, mek, m, { from, reply, userConfig }) {
     try {
         await conn.sendPresenceUpdate('composing', from);
         
@@ -83,7 +75,6 @@ async (conn, mek, m, { from, reply, userConfig }) => {
         const VERSION = userConfig?.VERSION || config.VERSION || "10.0.0";
         const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
         
-        // Direct image URL set kar diya gaya hai
         const imageToUse = 'https://i.ibb.co/RTWD9M32/jawadmd.jpg';
         
         let dec = `✨ *${toStylistUpper(BOT_NAME)} ᴍᴜʟᴛɪ-ᴅᴇᴠɪᴄᴇ* ✨
@@ -118,5 +109,43 @@ ${menuSections}
     } catch (e) { 
         console.log(e); 
         reply(`Error: ${e}`); 
-    } 
+    }
+}
+
+// ==================== COMMAND REGISTRATION (.menu) ====================
+cmd({
+    pattern: "menu",
+    alias: ["m", "help", "allmenu", "fullmenu"],
+    use: '.menu',
+    desc: "Show all bot commands",
+    category: "main",
+    react: "⚡",
+    filename: __filename
+},
+async (conn, mek, m, extra) => {
+    await sendMenu(conn, mek, m, extra);
+});
+
+// ==================== BODY AUTO TRIGGER (menu, allmenu, help) ====================
+cmd({
+    on: "body"
+}, async (conn, mek, m, extra) => {
+    try {
+        const { body, from, isGroup } = extra;
+        if (!body) return;
+
+        // Agar bot khud ka message ho toh ignore karein
+        if (m.key && m.key.fromMe) return;
+
+        const text = body.trim().toLowerCase();
+        
+        // Match list for auto body trigger
+        const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu"];
+        
+        if (menuTriggers.includes(text)) {
+            await sendMenu(conn, mek, m, extra);
+        }
+    } catch (err) {
+        console.error("Body Menu Trigger Error:", err);
+    }
 });

@@ -6,15 +6,18 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 // ==================== AUTO CHAT TOGGLE STATES ====================
-// In-memory toggle storage mapping Chat/GroupId -> boolean
+// In-memory toggle storage mapping Chat Id -> boolean
 const autoChatSettings = new Map();
 
 // ==================== AUTO CHAT LISTENER (BODY HOOK) ====================
 cmd({
     on: "body"
-}, async (conn, mek, m, { from, body, isGroup, isAdmins, isCreator }) => {
+}, async (conn, mek, m, { from, body, isGroup }) => {
     try {
         if (!body) return;
+
+        // 0. STRICTLY IB ONLY: Ignore if it is a group message
+        if (isGroup) return;
 
         // 1. Prevent bot from replying to its own messages to avoid loops
         if (m.key && m.key.fromMe) return;
@@ -23,7 +26,7 @@ cmd({
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
-        // 3. Check if auto chat is enabled for this chat/group
+        // 3. Check if auto chat is enabled for this IB chat
         const isEnabled = autoChatSettings.get(from);
         if (!isEnabled) return;
 
@@ -39,29 +42,29 @@ cmd({
 cmd({
     pattern: "autochat",
     alias: ["aichat", "chatbot"],
-    desc: "Turn auto AI chat on or off in IB or Group",
+    desc: "Turn auto AI chat on or off in IB",
     category: "ai",
     react: "🤖",
     filename: __filename
-}, async (conn, mek, m, { from, isGroup, isAdmins, isCreator, args, reply }) => {
+}, async (conn, mek, m, { from, isGroup, args, reply }) => {
     try {
-        // If in a group, enforce admin or owner restrictions based on setup
-        if (isGroup && !isAdmins && !isCreator) {
-            return await reply("🔐 Only group admins or owner can toggle auto chat in groups.");
+        // STRICTLY IB ONLY: Block usage inside groups entirely
+        if (isGroup) {
+            return await reply("❌ *Auto-Chat is only allowed in IB (Inbox), not in groups!*");
         }
 
         const status = args[0] ? args[0].toLowerCase() : '';
 
         if (status === 'on' || status === 'enable') {
             autoChatSettings.set(from, true);
-            return await reply("✅ *Auto AI Chat has been turned ON for this chat!* \nBot will now reply to normal messages automatically.");
+            return await reply("✅ *Auto AI Chat has been turned ON for this IB chat!* \nBot will now reply to normal messages automatically.");
         } else if (status === 'off' || status === 'disable') {
             autoChatSettings.set(from, false);
-            return await reply("❌ *Auto AI Chat has been turned OFF for this chat.*");
+            return await reply("❌ *Auto AI Chat has been turned OFF for this IB chat.*");
         } else {
             const current = autoChatSettings.get(from);
             const currentState = current === true ? "ON 🟢" : "OFF 🔴";
-            return await reply(`🤖 *Auto-Chat Status:* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable\n• \`.autochat off\` to disable`);
+            return await reply(`🤖 *Auto-Chat Status (IB Only):* ${currentState}\n\n*Usage:*\n• \`.autochat on\` to enable\n• \`.autochat off\` to disable`);
         }
     } catch (err) {
         console.error(err);
@@ -73,12 +76,17 @@ cmd({
 cmd({
     pattern: "ai",
     alias: ["gpt", "chatgpt", "deepai", "blackbox"],
-    desc: "Ask anything to AI chatbot via FAA APIs.",
+    desc: "Ask anything to AI chatbot via FAA APIs (IB Only).",
     category: "ai",
     react: "🤖",
     filename: __filename
-}, async (conn, mek, m, { from, text, usedPrefix, command, reply }) => {
+}, async (conn, mek, m, { from, text, usedPrefix, command, isGroup, reply }) => {
     try {
+        // STRICTLY IB ONLY: Block usage inside groups entirely
+        if (isGroup) {
+            return await reply("❌ *AI commands can only be used in IB (Inbox), not in groups!*");
+        }
+
         if (!text?.trim()) {
             return reply(
                 `❌ Please provide a prompt or question!\n\n` +

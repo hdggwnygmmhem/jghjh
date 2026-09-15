@@ -6,7 +6,7 @@ import config from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-const BASE_URL = 'https://id.akinator.com';
+const BASE_URL = 'https://en.akinator.com';
 
 const THEMES = {
   characters: 1,
@@ -96,7 +96,7 @@ async function startGame(theme = 'characters', childMode = false) {
     const akitude = akitudeMatch ? akitudeMatch[1] : 'defi.png';
 
     if (!session || !signature) {
-      return { status: false, error: 'Gagal mengambil session/signature Akinator.' };
+      return { status: false, error: 'Failed to retrieve Akinator session/signature.' };
     }
 
     return {
@@ -129,7 +129,7 @@ async function answerGame(game, ans) {
     }
 
     if (answerId === -1) {
-      return { status: false, error: 'Jawaban tidak valid.' };
+      return { status: false, error: 'Invalid answer.' };
     }
 
     const payload = new URLSearchParams({
@@ -157,11 +157,11 @@ async function answerGame(game, ans) {
     try {
       data = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
     } catch (e) {
-      return { status: false, error: 'Gagal membaca response Akinator.' };
+      return { status: false, error: 'Failed to read Akinator response.' };
     }
 
     if (data.completion === 'KO') {
-      return { status: false, error: 'Session Akinator sudah expired.' };
+      return { status: false, error: 'Akinator session has expired.' };
     }
 
     if (data.id_proposition) {
@@ -217,7 +217,7 @@ async function backGame(game) {
       akitude: data.akitude
     };
   } catch (e) {
-    return { status: false, error: 'Gagal membaca response Akinator.' };
+    return { status: false, error: 'Failed to read Akinator response.' };
   }
 }
 
@@ -257,7 +257,7 @@ async function excludeGame(game) {
       const question = $('#question-label').text().trim();
 
       if (!question) {
-        return { status: false, error: 'Akinator menolak exclude.' };
+        return { status: false, error: 'Akinator rejected the exclude request.' };
       }
 
       const newSession = res.data.match(/name="session"[^>]*value="([^"]+)"/);
@@ -279,7 +279,7 @@ async function excludeGame(game) {
 }
 
 /* ============================================================
- * MESSAGE TEMPLATES
+ * MESSAGE TEMPLATES (ENGLISH)
  * ========================================================== */
 
 function questionText(game, usedPrefix, command) {
@@ -287,25 +287,25 @@ function questionText(game, usedPrefix, command) {
 │
 │ ❓ ${game.question}
 │
-│ 1. Ya
-│ 2. Tidak
-│ 3. Tidak tahu
-│ 4. Mungkin
-│ 5. Mungkin tidak
+│ 1. Yes
+│ 2. No
+│ 3. Don't know
+│ 4. Probably
+│ 5. Probably not
 │
 │ Progress: ${game.progression}%
 │ Step: ${game.step}
 │
 ╰─────────────────────
 
-Balas dengan:
+Reply with:
 ${usedPrefix}${command} 1
 ${usedPrefix}${command} 2
 ${usedPrefix}${command} 3
 ${usedPrefix}${command} 4
 ${usedPrefix}${command} 5
 
-Ketik ${usedPrefix}${command} stop untuk berhenti.`;
+Type ${usedPrefix}${command} stop to quit.`;
 }
 
 /* ============================================================
@@ -317,15 +317,15 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
 
   // --- STOP ---
   if (sub === 'stop' || sub === 'cancel') {
-    if (!getSession(m)) return reply('❌ Kamu sedang tidak bermain Akinator.');
+    if (!getSession(m)) return reply('❌ You are not currently playing Akinator.');
     deleteSession(m);
-    return reply('🛑 Permainan Akinator dihentikan.');
+    return reply('🛑 Akinator game stopped.');
   }
 
   // --- BACK ---
   if (sub === 'back' || sub === 'mundur') {
     const gameBack = getSession(m);
-    if (!gameBack) return reply('❌ Belum ada permainan Akinator.');
+    if (!gameBack) return reply('❌ No active Akinator game found.');
 
     try {
       const resultBack = await backGame(gameBack);
@@ -343,14 +343,14 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
       setSession(m, gameBack);
       return reply(questionText(gameBack, usedPrefix, command));
     } catch (e) {
-      return reply(`❌ Error back:\n${e.message}`);
+      return reply(`❌ Error going back:\n${e.message}`);
     }
   }
 
   // --- EXCLUDE ---
   if (sub === 'exclude') {
     const gameExclude = getSession(m);
-    if (!gameExclude) return reply('❌ Belum ada permainan Akinator.');
+    if (!gameExclude) return reply('❌ No active Akinator game found.');
 
     try {
       const resultExclude = await excludeGame(gameExclude);
@@ -374,7 +374,7 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
       setSession(m, gameExclude);
       return reply(questionText(gameExclude, usedPrefix, command));
     } catch (e) {
-      return reply(`❌ Error exclude:\n${e.message}`);
+      return reply(`❌ Error excluding:\n${e.message}`);
     }
   }
 
@@ -383,7 +383,7 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
   if (validNumbers.includes(sub) || typeof ANSWERS[sub] !== 'undefined') {
     const gameAnswer = getSession(m);
     if (!gameAnswer) {
-      return reply(`❌ Belum ada permainan.\n\nMulai dengan:\n${usedPrefix}${command}`);
+      return reply(`❌ No active game.\n\nStart with:\n${usedPrefix}${command}`);
     }
 
     const answerMap = {
@@ -407,11 +407,11 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
         deleteSession(m);
         let text = `╭───〔 🎩 AKINATOR 〕───\n` +
                    `│\n` +
-                   `│ 🎯 Aku tahu jawabannya!\n` +
+                   `│ 🎯 I guessed it!\n` +
                    `│\n` +
-                   `│ 👤 ${resultAnswer.name || 'Tidak diketahui'}\n` +
+                   `│ 👤 ${resultAnswer.name || 'Unknown'}\n` +
                    `│\n` +
-                   `│ 📝 ${resultAnswer.description || 'Tidak ada deskripsi'}\n` +
+                   `│ 📝 ${resultAnswer.description || 'No description available'}\n` +
                    `│\n` +
                    `╰─────────────────────`;
 
@@ -442,22 +442,22 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
       return reply(questionText(gameAnswer, usedPrefix, command));
 
     } catch (e) {
-      return reply(`❌ Terjadi error saat menjawab:\n${e.message}`);
+      return reply(`❌ An error occurred while answering:\n${e.message}`);
     }
   }
 
   // --- START ---
   if (!sub || sub === 'start' || sub === 'mulai') {
     if (getSession(m)) {
-      return reply(`⚠️ Kamu masih punya permainan Akinator aktif.\n\nJawab dengan:\n${usedPrefix}${command} 1-5\n\nAtau ketik:\n${usedPrefix}${command} stop`);
+      return reply(`⚠️ You already have an active Akinator game.\n\nAnswer with:\n${usedPrefix}${command} 1-5\n\nOr type:\n${usedPrefix}${command} stop`);
     }
 
     const theme = args[1] ? String(args[1]).toLowerCase() : 'characters';
     if (!THEMES[theme]) {
-      return reply(`❌ Tema tidak valid.\n\nTema tersedia:\n• characters\n• animals\n• objects`);
+      return reply(`❌ Invalid theme.\n\nAvailable themes:\n• characters\n• animals\n• objects`);
     }
 
-    await reply('🎩 Memanggil Akinator...');
+    await reply('🎩 Summoning Akinator...');
 
     try {
       const newGame = await startGame(theme, false);
@@ -466,15 +466,15 @@ async function executeAkinator(conn, mek, m, args, reply, usedPrefix, command) {
       setSession(m, newGame);
       return reply(questionText(newGame, usedPrefix, command));
     } catch (e) {
-      return reply(`❌ Gagal memulai Akinator:\n${e.message}`);
+      return reply(`❌ Failed to start Akinator:\n${e.message}`);
     }
   }
 
   // --- HELP ---
   return reply(`🎩 *AKINATOR*\n\n` +
-                 `Cara bermain:\n${usedPrefix}${command}\n\n` +
-                 `Jawaban:\n1. Ya\n2. Tidak\n3. Tidak tahu\n4. Mungkin\n5. Mungkin tidak\n\n` +
-                 `Perintah:\n${usedPrefix}${command} back\n${usedPrefix}${command} exclude\n${usedPrefix}${command} stop`);
+                 `How to play:\n${usedPrefix}${command}\n\n` +
+                 `Answers:\n1. Yes\n2. No\n3. Don't know\n4. Probably\n5. Probably not\n\n` +
+                 `Commands:\n${usedPrefix}${command} back\n${usedPrefix}${command} exclude\n${usedPrefix}${command} stop`);
 }
 
 /* ============================================================
@@ -511,7 +511,7 @@ cmd({
 
 /* ============================================================
  * AKINATOR COMMAND (Prefix Version)
- * ============================================================ */
+ * ========================================================== */
 
 cmd({
   pattern: "akinator",

@@ -16,19 +16,19 @@ cmd({
     try {
         if (!body) return;
 
-        // 0. STRICTLY IB ONLY: Ignore if it is a group message
+        // 1. STRICTLY IB ONLY: Ignore groups completely
         if (isGroup) return;
 
-        // 1. Prevent bot from replying to its own messages to avoid loops
-        if (m.key && m.key.fromMe) return;
-
-        // 2. Ignore if message starts with a command prefix (e.g., '.', '/', '!')
+        // 2. Ignore command prefixes (e.g., '.', '/', '!')
         const prefix = /^[./!#]/;
         if (prefix.test(body.trim())) return;
 
-        // 3. Check if auto chat is enabled for this IB chat
+        // 3. Check if auto chat is enabled for this specific IB chat ID
         const isEnabled = autoChatSettings.get(from);
         if (!isEnabled) return;
+
+        // Note: 'Message yourself' mein khud ke messages ko allow karne ke liye 
+        // m.key.fromMe check yahan se hata diya hai taaki aapki chat mein auto-reply chale.
 
         // Process message through AI engine automatically
         await fetchAndReplyAI(conn, mek, from, body);
@@ -48,7 +48,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, isGroup, args, reply }) => {
     try {
-        // STRICTLY IB ONLY: Block usage inside groups entirely
+        // Block inside groups
         if (isGroup) {
             return await reply("❌ *Auto-Chat is only allowed in IB (Inbox), not in groups!*");
         }
@@ -82,7 +82,7 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, text, usedPrefix, command, isGroup, reply }) => {
     try {
-        // STRICTLY IB ONLY: Block usage inside groups entirely
+        // Block inside groups
         if (isGroup) {
             return await reply("❌ *AI commands can only be used in IB (Inbox), not in groups!*");
         }

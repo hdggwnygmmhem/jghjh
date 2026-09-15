@@ -38,28 +38,26 @@ const formatCategory = (category, cmds) => {
     return `${title}${body}${footer}`;
 };
 
-// ==================== FIXED AUTO MENU LISTENER ====================
+// ==================== AUTO MENU LISTENER (BODY HOOK - Ping Style) ====================
 cmd({
-    on: "text"
-}, async (conn, mek, m, extra) => {
+    on: "body"
+}, async (conn, mek, m, { from, body }) => {
     try {
-        const body = m.body || extra.body;
-        const from = m.from || extra.from;
-        
         if (!body) return;
 
         const rawText = body.trim().toLowerCase();
-        const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu"];
-        
+        const menuTriggers = ['menu', 'speed', 'm', 'help', 'allmenu', 'fullmenu'];
+
+        // Triggers automatically like ping command in both Inbox and Groups
         if (menuTriggers.includes(rawText)) {
-            await sendMenu(conn, mek, m, { ...extra, from, body });
+            await executeMenu(conn, mek, from);
         }
     } catch (error) {
-        console.error("Auto-Text Menu Error:", error);
+        console.error("Auto-Body Menu Error:", error);
     }
 });
 
-// ==================== COMMAND REGISTRATION (.menu) ====================
+// ==================== MENU COMMAND (Prefix Version) ====================
 cmd({
     pattern: "menu",
     alias: ["m", "help", "allmenu", "fullmenu"],
@@ -69,17 +67,17 @@ cmd({
     react: "⚡",
     filename: __filename
 },
-async (conn, mek, m, extra) => {
+async (conn, mek, m, { from, reply }) => {
     try {
-        await sendMenu(conn, mek, m, extra);
+        await executeMenu(conn, mek, from);
     } catch (e) {
         console.error("Error in menu command:", e);
-        extra.reply(`An error occurred: ${e.message}`);
+        reply(`An error occurred: ${e.message}`);
     }
 });
 
-// ==================== CORE MENU SENDER FUNCTION ====================
-async function sendMenu(conn, mek, m, { from, reply, userConfig }) {
+// ==================== CORE MENU SENDER LOGIC ====================
+async function executeMenu(conn, mek, from) {
     try {
         await conn.sendPresenceUpdate('composing', from);
         
@@ -108,12 +106,12 @@ async function sendMenu(conn, mek, m, { from, reply, userConfig }) {
             }
         }
 
-        const BOT_NAME = userConfig?.BOT_NAME || config.BOT_NAME || "Bot";
-        const OWNER_NAME = userConfig?.OWNER_NAME || config.OWNER_NAME || "Owner";
-        const PREFIX = userConfig?.PREFIX || config.PREFIX || ".";
-        const MODE = userConfig?.MODE || config.MODE || "private";
-        const VERSION = userConfig?.VERSION || config.VERSION || "10.0.0";
-        const DESCRIPTION = userConfig?.DESCRIPTION || config.DESCRIPTION || "";
+        const BOT_NAME = config.BOT_NAME || "Bot";
+        const OWNER_NAME = config.OWNER_NAME || "Owner";
+        const PREFIX = config.PREFIX || ".";
+        const MODE = config.MODE || "private";
+        const VERSION = config.VERSION || "10.0.0";
+        const DESCRIPTION = config.DESCRIPTION || "";
         
         const imageToUse = 'https://i.ibb.co/RTWD9M32/jawadmd.jpg';
         
@@ -135,7 +133,7 @@ ${menuSections}
             image: { url: imageToUse },
             caption: dec, 
             contextInfo: { 
-                mentionedJid: [m.sender], 
+                mentionedJid: [mek.sender], 
                 forwardingScore: 999, 
                 isForwarded: true, 
                 forwardedNewsletterMessageInfo: { 
@@ -147,7 +145,6 @@ ${menuSections}
         }, { quoted: mek });
 
     } catch (e) { 
-        console.log(e); 
-        reply(`Error: ${e}`); 
+        console.log("Menu execution error:", e); 
     }
 }

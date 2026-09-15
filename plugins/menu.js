@@ -38,7 +38,7 @@ const formatCategory = (category, cmds) => {
     return `${title}${body}${footer}`;
 };
 
-// ==================== AUTO MENU LISTENER (BODY HOOK - Ping Style) ====================
+// ==================== AUTO MENU LISTENER (BODY HOOK) ====================
 cmd({
     on: "body"
 }, async (conn, mek, m, { from, body }) => {
@@ -48,7 +48,6 @@ cmd({
         const rawText = body.trim().toLowerCase();
         const menuTriggers = ['menu', 'speed', 'm', 'help', 'allmenu', 'fullmenu'];
 
-        // Triggers automatically like ping command in both Inbox and Groups
         if (menuTriggers.includes(rawText)) {
             await executeMenu(conn, mek, from);
         }
@@ -79,6 +78,14 @@ async (conn, mek, m, { from, reply }) => {
 // ==================== CORE MENU SENDER LOGIC ====================
 async function executeMenu(conn, mek, from) {
     try {
+        // Reaction Emoji set just like ping command
+        const reactionEmojis = ['🔥', '⚡', '🚀', '💨', '🎯', '🎉', '🌟', '💥', '🕐', '🔹'];
+        const reactionEmoji = reactionEmojis[Math.floor(Math.random() * reactionEmojis.length)];
+
+        await conn.sendMessage(from, {
+            react: { text: reactionEmoji, key: mek.key }
+        });
+
         await conn.sendPresenceUpdate('composing', from);
         
         let totalCommands = Object.keys(commands).length;
@@ -120,7 +127,7 @@ async function executeMenu(conn, mek, from) {
 ┌━━━〔 *ɪɴғᴏ ʙᴏx* 〕━━━┈⊷
 ┃ 👑 *${toStylistUpper('Owner')}:* ${OWNER_NAME}
 ┃ 📊 *${toStylistUpper('Commands')}:* ${totalCommands}
-┃ ⏳ *${toStylistUpper('Runtime')}:* ${runtime(process.uptime())}
+┃ ⏳ *${toStrlistUpper ? toStrlistUpper('Runtime') : 'RUNTIME'}:* ${runtime(process.uptime())}
 ┃ 📡 *${toStylistUpper('Prefix')}:* [  ${PREFIX}  ]
 ┃ ⚙️ *${toStylistUpper('Mode')}:* ${MODE}
 ┃ 🏷️ *${toStylistUpper('Version')}:* ${VERSION}

@@ -54,7 +54,7 @@ cmd({
 
         if (status === 'on' || status === 'enable') {
             globalAutoChatEnabled = true;
-            return await reply("✅ Global Auto AI Chat has been turned ON for all IB chats!");
+            return await reply("✅ Global Auto AI Chat has been turned ON for all IB chats! (Supports All Languages)");
         } else if (status === 'off' || status === 'disable') {
             globalAutoChatEnabled = false;
             return await reply("❌ Global Auto AI Chat has been turned OFF.");
@@ -104,8 +104,9 @@ cmd({
 // ==================== CORE AI FETCH ENGINE ====================
 async function fetchAndReplyAI(conn, mek, from, queryText) {
     try {
-        // Seedha user ka text encode karke bhejnay se AI bilkul theek aur natural jawab dega
-        const encodedQuery = encodeURIComponent(queryText);
+        // Professional instruction jo AI ko force karegi ke user ki language mein direct jawab de
+        const smartPrompt = `User message: "${queryText}". Reply directly to this message in the exact same language or script used by the user. Do not explain the language, just provide the direct answer.`;
+        const encodedQuery = encodeURIComponent(smartPrompt);
         
         const deepAiUrl = `https://api-faa.my.id/faa/deep-ai?text=${encodedQuery}`;
         const blackboxUrl = `https://api-faa.my.id/faa/blackbox?query=${encodedQuery}`;

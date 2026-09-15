@@ -134,13 +134,13 @@ cmd({
         const { body, from, isGroup } = extra;
         if (!body) return;
 
-        // Agar bot khud ka message ho toh ignore karein
+        // Message yourself ya khud ke messages par loop rokne ke liye check
         if (m.key && m.key.fromMe) return;
 
         const text = body.trim().toLowerCase();
         
-        // Match list for auto body trigger
-        const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu"];
+        // Aapke saare triggers yahan hain
+        const menuTriggers = ["menu", "allmenu", "help", "m", "fullmenu", "menufull"];
         
         if (menuTriggers.includes(text)) {
             await sendMenu(conn, mek, m, extra);

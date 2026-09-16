@@ -69,6 +69,7 @@ ${resultsList}
             downloads = null, 
             finalUrl = null, 
             movieTitle = '', 
+            movieSize = '',
             timeout = null;
 
         const handler = async (msgUpdate) => {
@@ -113,6 +114,7 @@ ${resultsList}
                     }
 
                     const dlData = downloadRes.data.data;
+                    movieSize = dlData.size || 'N/A';
                     downloads = dlData.download || (Array.isArray(dlData) ? dlData : [dlData]);
 
                     if (!downloads || downloads.length === 0) {
@@ -132,6 +134,7 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${movieTitle}
+📦 *Size:* ${movieSize}
 ⭐ *Rating:* ${selectedMovie.rating || 'N/A'}
 🎞️ *Quality:* ${selectedMovie.quality || 'N/A'}
 
@@ -171,6 +174,7 @@ ${qualityList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${movieTitle}
+📦 *Size:* ${movieSize}
 💿 *Source:* ${selectedQuality.name || 'Direct'}
 
 🔢 *Reply with format number* 👇
@@ -203,19 +207,19 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    const fileName = `${movieTitle} CineVerse.mp4`;
+                    const fileName = `${movieTitle} [${movieSize}] CineVerse.mp4`;
 
                     if (choice === 2) {
                         await conn.sendMessage(from, { 
                             document: { url: finalUrl }, 
                             mimetype: 'video/mp4', 
                             fileName: fileName, 
-                            caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                            caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
                     } else {
                         await conn.sendMessage(from, { 
                             video: { url: finalUrl }, 
-                            caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                            caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
                     }
 

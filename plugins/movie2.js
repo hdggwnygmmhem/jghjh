@@ -115,9 +115,21 @@ ${resultsList}
                 }
 
                 const dlData = downloadRes.data.data;
-                const finalUrl = dlData.download_url || dlData.url || dlData.link || (Array.isArray(dlData) ? dlData[0]?.url : null);
+                
+                // Advanced Link Extractor for various API responses
+                let finalUrl = null;
+                if (typeof dlData === 'string') {
+                    finalUrl = dlData;
+                } else if (Array.isArray(dlData)) {
+                    finalUrl = dlData[0]?.url || dlData[0]?.link || dlData[0];
+                } else {
+                    finalUrl = dlData.download_url || dlData.url || dlData.link || dlData.dl_link || dlData.result;
+                    if (!finalUrl && dlData.downloads && Array.isArray(dlData.downloads)) {
+                        finalUrl = dlData.downloads[0]?.url || dlData.downloads[0]?.link;
+                    }
+                }
 
-                if (!finalUrl) {
+                if (!finalUrl || typeof finalUrl !== 'string') {
                     await conn.sendMessage(from, { text: '❎ Direct video link extraction failed.' }, { quoted: received });
                     cleanup();
                     return;

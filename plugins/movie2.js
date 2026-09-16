@@ -215,33 +215,40 @@ ${qualityList}
                         return;
                     }
 
-                    // Agar URL redirect wala hai toh real file link trace karne ke liye HEAD/GET request
-                    try {
-                        const headRes = await axios.head(finalDownloadUrl, { maxRedirects: 5, validateStatus: () => true });
-                        if (headRes.request?.res?.responseUrl) {
-                            finalDownloadUrl = headRes.request.res.responseUrl;
-                        }
-                    } catch (_) {}
-
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    const fileName = `${movieTitle} [${movieSize}] CineVerse.mp4`;
+                    // Fix: Download video buffer directly to prevent local ENOENT error and correct size issue
+                    try {
+                        const videoBufferRes = await axios.get(finalDownloadUrl, { 
+                            responseType: 'arraybuffer', 
+                            timeout: 120000,
+                            maxContentLength: Infinity,
+                            maxBodyLength: Infinity
+                        });
+                        const videoBuffer = Buffer.from(videoBufferRes.data);
 
-                    if (choice === 2) {
-                        await conn.sendMessage(from, { 
-                            document: { url: finalDownloadUrl }, 
-                            mimetype: 'video/mp4', 
-                            fileName: fileName, 
-                            caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    } else {
-                        await conn.sendMessage(from, { 
-                            video: { url: finalDownloadUrl }, 
-                            caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
+                        const fileName = `${movieTitle} [${movieSize}] CineVerse.mp4`;
+
+                        if (choice === 2) {
+                            await conn.sendMessage(from, { 
+                                document: videoBuffer, 
+                                mimetype: 'video/mp4', 
+                                fileName: fileName, 
+                                caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
+                            }, { quoted: received });
+                        } else {
+                            await conn.sendMessage(from, { 
+                                video: videoBuffer, 
+                                caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
+                            }, { quoted: received });
+                        }
+
+                        await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                    } catch (dlErr) {
+                        console.error('Buffer download error:', dlErr);
+                        await conn.sendMessage(from, { text: '❎ Failed to download movie buffer from source!' }, { quoted: received });
                     }
 
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
                 }
 

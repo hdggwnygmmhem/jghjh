@@ -97,10 +97,12 @@ ${resultsList}
 
                 selectedMovie = results[choice - 1];
                 movieTitle = selectedMovie.title || selectedMovie.name || 'Movie';
-                const movieLink = selectedMovie.link || selectedMovie.url;
+                
+                // Fixed: Check all possible properties for movie link/url from search result
+                const movieLink = selectedMovie.url || selectedMovie.link || selectedMovie.href;
 
                 if (!movieLink) {
-                    await conn.sendMessage(from, { text: '❎ Movie link not found.' }, { quoted: received });
+                    await conn.sendMessage(from, { text: '❎ Movie link not found in object.' }, { quoted: received });
                     cleanup();
                     return;
                 }
@@ -116,17 +118,14 @@ ${resultsList}
 
                 const dlData = downloadRes.data.data;
                 
-                // Advanced Link Extractor for various API responses
+                // Robust extraction for download link
                 let finalUrl = null;
                 if (typeof dlData === 'string') {
                     finalUrl = dlData;
                 } else if (Array.isArray(dlData)) {
-                    finalUrl = dlData[0]?.url || dlData[0]?.link || dlData[0];
+                    finalUrl = dlData[0]?.url || dlData[0]?.link || dlData[0]?.download_url || dlData[0];
                 } else {
                     finalUrl = dlData.download_url || dlData.url || dlData.link || dlData.dl_link || dlData.result;
-                    if (!finalUrl && dlData.downloads && Array.isArray(dlData.downloads)) {
-                        finalUrl = dlData.downloads[0]?.url || dlData.downloads[0]?.link;
-                    }
                 }
 
                 if (!finalUrl || typeof finalUrl !== 'string') {

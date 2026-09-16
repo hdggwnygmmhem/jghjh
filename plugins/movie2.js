@@ -2,272 +2,179 @@
 
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import FormData from 'form-data';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cineverse",
-    desc: "Search and download movies from CineVerse with interactive steps",
-    category: "download",
-    react: "🎬",
+    pattern: "tourl3",
+    alias: ["url", "upload"],
+    desc: "Upload quoted media (image, video, audio, document) to Catbox and ImgBB",
+    category: "tools",
+    react: "🔗",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        if (!q) {
-            return reply(
-                `╔════════════════════════╗\n` +
-                `║   🎬 KAMRAN-MD CINEVERSE 🎬   \n` +
-                `╚════════════════════════╝\n\n` +
-                `❌ *Kripya movie ka naam dein!*\n\n` +
-                `> 📌 *Example:* \`.cineverse Avatar\`\n` +
-                `> ⚡ *Version:* \`12.00\``
-            );
+        if (!quoted) {
+            return reply('❌ *Kripya kisi image, video, audio ya document ko quote karke .tourl likhein!*');
+        }
+
+        const mime = quoted.mimetype || '';
+        if (!mime) {
+            return reply('❌ *Quoted message me koi media nahi mili!*');
         }
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const BASE_URL = 'https://api-dark-shan-yt.koyeb.app/movie';
+        // Determine media type and message reference
+        let mediaType = '';
+        let msgKey = null;
 
-        const searchUrl = `${BASE_URL}/cineverse-search?q=${encodeURIComponent(q)}`;
-        const searchRes = await axios.get(searchUrl, { timeout: 60000 });
-
-        if (!searchRes.data?.status || !searchRes.data.data?.length) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ *Koi movie nahi mili!*");
+        if (mime.includes('image')) {
+            mediaType = 'image';
+            msgKey = quoted.message?.imageMessage || quoted;
+        } else if (mime.includes('video')) {
+            mediaType = 'video';
+            msgKey = quoted.message?.videoMessage || quoted;
+        } else if (mime.includes('audio')) {
+            mediaType = 'audio';
+            msgKey = quoted.message?.audioMessage || quoted;
+        } else {
+            mediaType = 'document';
+            msgKey = quoted.message?.documentMessage || quoted;
         }
 
-        const results = searchRes.data.data.slice(0, 5);
-        const firstImage = results[0].image || results[0].thumbnail || '';
-        
-        const resultsList = results.map((movie, i) => { 
-            const title = movie.title ? movie.title.split('|')[0].trim() : (movie.name || 'Unknown'); 
-            return `*${i + 1} ┃ ${title}*\n   🎬 Type • ${movie.type || 'Movie'} • ${movie.quality || 'N/A'}`; 
-        }).join('\n\n');
+        // Download media buffer using Baileys downloadContentFromMessage or direct download
+        let buffer;
+        try {
+            buffer = await conn.downloadMediaMessage(quoted);
+        } catch (_) {
+            try {
+                const stream = await downloadContentFromMessage(msgKey, mediaType);
+                let chunks = [];
+                for await (const chunk of stream) {
+                    chunks.push(chunk);
+                }
+                buffer = Buffer.concat(chunks);
+            } catch (err) {
+                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+                return reply('❌ *Media download karne me asamarth!*');
+            }
+        }
 
-        const searchCaption = `
+        if (!buffer || buffer.length === 0) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply('❌ *Media buffer empty hai!*');
+        }
+
+        const ext = mime.split('/')[1] || 'tmp';
+        const tempFilePath = path.join(os.tmpdir(), `upload_${Date.now()}.${ext}`);
+        fs.writeFileSync(tempFilePath, buffer);
+
+        const fileSize = (buffer.length / 1024 / 1024).toFixed(2) + ' MB';
+        const typeStr = mediaType.charAt(0).toUpperCase() + mediaType.slice(1);
+
+        let catboxUrl = '';
+        let imgbbUrl = '';
+
+        // Upload to Catbox
+        try {
+            const catboxForm = new FormData();
+            catboxForm.append('fileToUpload', fs.createReadStream(tempFilePath));
+            catboxForm.append('reqtype', 'fileupload');
+
+            const catboxResponse = await axios.post('https://catbox.moe/user/api.php', catboxForm, {
+                headers: catboxForm.getHeaders(),
+                timeout: 30000
+            });
+            catboxUrl = catboxResponse.data.trim();
+        } catch (catboxError) {
+            console.error('Catbox upload error:', catboxError);
+            catboxUrl = '❌ Upload failed';
+        }
+
+        // Upload to ImgBB
+        try {
+            const base64Data = buffer.toString('base64');
+            const imgbbForm = new FormData();
+            imgbbForm.append('key', 'e4b536bbf102cfccc5d8758489052547');
+            imgbbForm.append('image', base64Data);
+
+            const imgbbResponse = await axios.post('https://api.imgbb.com/1/upload', imgbbForm, {
+                headers: imgbbForm.getHeaders(),
+                timeout: 30000
+            });
+
+            if (imgbbResponse.data.success) {
+                imgbbUrl = imgbbResponse.data.data.url;
+            } else {
+                imgbbUrl = '❌ Upload failed';
+            }
+        } catch (imgbbError) {
+            console.error('ImgBB upload error:', imgbbError);
+            imgbbUrl = '❌ Upload failed';
+        }
+
+        // Cleanup temp file
+        try {
+            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        } catch (_) {}
+
+        const txt = `
 ╔════════════════════════╗
-║   🎬 CINEVERSE SEARCH 🎬   
+║   🔗 KAMRAN-MD URL UPLOADER 🔗   
 ╚════════════════════════╝
 
-${resultsList}
+📂 *Type:* ${typeStr}
+📊 *Size:* ${fileSize}
 
-🔢 *Reply with a number to select movie* 👇
+📦 *Catbox URL:*
+\`${catboxUrl}\`
+
+📦 *ImgBB URL:*
+\`${imgbbUrl}\`
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
 
-        const searchMsg = await conn.sendMessage(from, { 
-            image: { url: firstImage || 'https://i.imgur.com/3932mio.jpeg' }, 
-            caption: searchCaption 
+        let thumbnailUrl = "https://cdn-icons-png.flaticon.com/512/337/337946.png";
+        if (catboxUrl && !catboxUrl.includes('❌') && catboxUrl.match(/\.(jpeg|jpg|gif|png)$/i)) {
+            thumbnailUrl = catboxUrl;
+        } else if (imgbbUrl && !imgbbUrl.includes('❌')) {
+            thumbnailUrl = imgbbUrl;
+        }
+
+        await conn.sendMessage(from, {
+            text: txt,
+            contextInfo: {
+                externalAdReply: {
+                    title: "Media Uploaded Successfully!",
+                    body: "KAMRAN-MD Dual Upload Service",
+                    thumbnailUrl: thumbnailUrl,
+                    sourceUrl: catboxUrl && !catboxUrl.includes('❌') ? catboxUrl : (imgbbUrl && !imgbbUrl.includes('❌') ? imgbbUrl : 'https://whatsapp.com/channel/1203634120312190'),
+                    mediaType: 1,
+                    renderLargerThumbnail: true
+                },
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: '1203634120312190@newsletter',
+                    newsletterName: 'DR KAMRAN',
+                    serverMessageId: 143
+                }
+            }
         }, { quoted: mek });
 
-        let step = 'movie', 
-            lastMsgId = searchMsg.key.id, 
-            selectedMovie = null, 
-            downloads = null, 
-            movieLinksMap = {}, 
-            movieTitle = '', 
-            movieSize = '',
-            timeout = null;
-
-        const handler = async (msgUpdate) => {
-            try {
-                const received = msgUpdate.messages[0];
-                if (!received) return;
-                
-                const fromId = received.key.remoteJid || received.key.participant;
-                if (fromId !== from) return;
-
-                const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                if (!quotedId || quotedId !== lastMsgId) return;
-
-                const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
-                if (!text) return;
-
-                const choice = parseInt(text.trim());
-                if (isNaN(choice)) { 
-                    await conn.sendMessage(from, { text: '❎ Please enter a valid number.' }, { quoted: received }); 
-                    return; 
-                }
-
-                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
-
-                if (step === 'movie') {
-                    if (choice < 1 || choice > results.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    selectedMovie = results[choice - 1];
-                    movieTitle = selectedMovie.title ? selectedMovie.title.split('|')[0].trim() : 'Movie';
-                    const movieLink = selectedMovie.url || selectedMovie.link || selectedMovie.href;
-
-                    const downloadUrl = `${BASE_URL}/cineverse-download?url=${encodeURIComponent(movieLink)}`;
-                    const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
-
-                    if (!downloadRes.data?.status || !downloadRes.data.data) { 
-                        await conn.sendMessage(from, { text: '❎ Failed to retrieve download links.' }, { quoted: received }); 
-                        cleanup(); 
-                        return; 
-                    }
-
-                    const dlData = downloadRes.data.data;
-                    movieSize = dlData.size || 'N/A';
-                    downloads = dlData.download || (Array.isArray(dlData) ? dlData : [dlData]);
-
-                    if (!downloads || downloads.length === 0) {
-                        await conn.sendMessage(from, { text: '❎ No download links found.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    movieLinksMap = {};
-                    downloads.forEach((qItem, index) => {
-                        movieLinksMap[index + 1] = {
-                            url: qItem.url || qItem.link,
-                            name: qItem.name || 'Quality'
-                        };
-                    });
-
-                    const qualityList = downloads.map((qItem, i) => { 
-                        const name = qItem.name || 'Quality';
-                        return `*${i + 1} ┃📥 ${name.toUpperCase()} • ${movieSize}*`; 
-                    }).join('\n\n');
-
-                    const qualityCaption = `
-╔════════════════════════╗
-║   🎬 CINEVERSE INFO 🎬   
-╚════════════════════════╝
-
-🎬 *Title:* ${movieTitle}
-📦 *Size:* ${movieSize}
-⭐ *Rating:* ${selectedMovie.rating || 'N/A'}
-🎞️ *Quality:* ${selectedMovie.quality || 'N/A'}
-
-🔢 *Reply with quality number* 👇
-
-${qualityList}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedMovie.image || firstImage }, 
-                        caption: qualityCaption 
-                    }, { quoted: received });
-
-                    step = 'quality'; 
-                    lastMsgId = qualityMsg.key.id;
-
-                } else if (step === 'quality') {
-                    if (!movieLinksMap[choice]) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid quality number!` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    const selectedQuality = movieLinksMap[choice];
-                    global.tempFinalUrl = selectedQuality.url;
-                    global.tempSourceName = selectedQuality.name;
-
-                    if (!global.tempFinalUrl) {
-                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    const formatCaption = `
-╔════════════════════════╗
-║   🎬 CINEVERSE FORMAT 🎬   
-╚════════════════════════╝
-
-🎬 *Title:* ${movieTitle}
-📦 *Size:* ${movieSize}
-💿 *Source:* ${global.tempSourceName.toUpperCase()}
-
-🔢 *Reply with format number* 👇
-
-*1 ┃ 📽️ Video Format*
-*2 ┃ 📁 Document Format*
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const formatMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedMovie.image || firstImage }, 
-                        caption: formatCaption 
-                    }, { quoted: received });
-
-                    step = 'format'; 
-                    lastMsgId = formatMsg.key.id;
-
-                } else if (step === 'format') {
-                    if (choice !== 1 && choice !== 2) { 
-                        await conn.sendMessage(from, { text: 'Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
-                        return; 
-                    }
-
-                    let finalDownloadUrl = global.tempFinalUrl;
-                    if (!finalDownloadUrl) {
-                        await conn.sendMessage(from, { text: '❎ Direct link missing, please search again.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                    // Fix: Download video buffer directly to prevent local ENOENT error and correct size issue
-                    try {
-                        const videoBufferRes = await axios.get(finalDownloadUrl, { 
-                            responseType: 'arraybuffer', 
-                            timeout: 120000,
-                            maxContentLength: Infinity,
-                            maxBodyLength: Infinity
-                        });
-                        const videoBuffer = Buffer.from(videoBufferRes.data);
-
-                        const fileName = `${movieTitle} [${movieSize}] CineVerse.mp4`;
-
-                        if (choice === 2) {
-                            await conn.sendMessage(from, { 
-                                document: videoBuffer, 
-                                mimetype: 'video/mp4', 
-                                fileName: fileName, 
-                                caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                            }, { quoted: received });
-                        } else {
-                            await conn.sendMessage(from, { 
-                                video: videoBuffer, 
-                                caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                            }, { quoted: received });
-                        }
-
-                        await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                    } catch (dlErr) {
-                        console.error('Buffer download error:', dlErr);
-                        await conn.sendMessage(from, { text: '❎ Failed to download movie buffer from source!' }, { quoted: received });
-                    }
-
-                    cleanup();
-                }
-
-            } catch (err) { 
-                console.error('CineVerse handler error:', err); 
-                cleanup(); 
-            }
-        };
-
-        const cleanup = () => { 
-            if (timeout) clearTimeout(timeout); 
-            conn.ev.off('messages.upsert', handler); 
-        };
-
-        conn.ev.on('messages.upsert', handler);
-        timeout = setTimeout(() => cleanup(), 60 * 1000);
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
+        console.error('ToUrl command error:', e);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
+        return reply("❌ *Media upload karne me error aa gaya!*");
     }
 });

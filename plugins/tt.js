@@ -1,146 +1,125 @@
-// KAMRAN MD
+// DR KAMRAN 
 
-import { cmd } from "../command.js";
-import fetch from "node-fetch";
 import { fileURLToPath } from 'url';
+import axios from 'axios';
+import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
-cmd({
-    pattern: "tiktoksearch",
-    alias: ["tiktoks", "tiks", "ttsearch"],
-    desc: "Search for TikTok videos using a query",
-    react: '🚀',
-    category: 'download',
-    use: ".tiktoksearch <query>",
-    filename: __filename
-}, async (conn, mek, m, { reply, args, from }) => {
-    try {
-        const query = args.join(" ");
-        if (!query) {
-            return reply("🔍 Please provide a search query\nExample: .tiktoksearch Moye Moye");
-        }
+const headers = {
+    'user-agent': 'Mozilla/5.0'
+};
 
-        await reply(`🔎 Searching TikTok for: "${query}"...`);
-        
-        // Using the new API endpoint
-        const url = `https://delirius-apiofc.vercel.app/search/tiktoksearch?query=${encodeURIComponent(query)}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Validate response based on the provided JSON structure
-        if (!data?.meta || !data.meta.length) {
-            return reply("❌ No TikTok videos found. Try different keywords");
-        }
-        
-        const results = data.meta;
-        
-        // Get up to 5 random videos
-        const selectedVideos = results
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 5);
-        
-        for (const video of selectedVideos) {
-            // Format the caption
-            const caption = `📱 *TikTok Video*\n\n` +
-                          `*🎵 Title*: ${video.title || 'No Title'}\n` +
-                          `*👤 Author*: ${video.author?.nickname || 'Unknown'}\n` +
-                          `*⏱️ Duration*: ${video.duration || 0}s\n` +
-                          `*❤️ Likes*: ${video.like?.toLocaleString() || '0'}\n` +
-                          `*💬 Comments*: ${video.coment?.toLocaleString() || '0'}\n` +
-                          `*🔁 Shares*: ${video.share?.toLocaleString() || '0'}\n` +
-                          `*🌐 Region*: ${video.region || 'Unknown'}\n\n` +
-                          `> *© Powered by KAMRAN-MD*`;
-            
-            if (video.hd) {
-                await conn.sendMessage(
-                    from,
-                    { 
-                        video: { url: video.hd },
-                        caption: caption
-                    },
-                    { quoted: mek }
-                );
-            } else {
-                reply(`❌ Failed to retrieve video for: "${video.title || 'Unknown'}"`);
+async function sendCustomMessage(client, jid, content, options = {}) {
+    const isMedia = content.video || content.image;
+
+    const customContent = {
+        ...content,
+        mentions: content.mentions || client.parseMention?.(content?.text || content?.caption || '') || []
+    };
+
+    if (isMedia) {
+        customContent.streamingSidecar = Buffer.from('Omw4hLediba3yg==', 'base64');
+        customContent.annotations = [
+            {
+                polygonVertices: [
+                    { x: 0, y: 0 },
+                    { x: 1000, y: 0 },
+                    { x: 1000, y: 1000 },
+                    { x: 0, y: 1000 }
+                ],
+                shouldSkipConfirmation: true,
+                embeddedContent: {
+                    embeddedMusic: {
+                        musicContentMediaId: "1409620227516822",
+                        songId: "244215252974958",
+                        author: global.author || "DR KAMRAN",
+                        title: global.namebot || "KAMRAN-MD",
+                        artistAttribution: "https://whatsapp.com/channel/0029VbAhxYY90x2vgwhXJV3O/6707",
+                        countryBlocklist: "",
+                        isExplicit: false
+                    }
+                },
+                embeddedAction: true
             }
-            
-            // Add delay between sends to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1500));
-        }
-        
-    } catch (error) {
-        console.error('TikTok Search Error:', error);
-        reply(`❌ Error: ${error.message || "Failed to fetch TikTok videos"}`);
+        ];
     }
-});
+
+    return await client.sendMessage(jid, customContent, options);
+}
 
 cmd({
-    pattern: "tiktoksearch2",
-    alias: ["tiktoks2", "tiks2"],
-    react: "🔍",
-    desc: "🔎 Search for TikTok videos",
-    category: "download",
+    pattern: "ttsearch",
+    alias: ["tiktoksearch"],
+    desc: "Search videos from TikTok",
+    category: "search",
+    react: "🎬",
     filename: __filename
 },
-async (conn, mek, m, { from, q, reply }) => {
+async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        if (!q) return await reply("❌ *Please provide a search query!*\n\nExample: `.tiktoksearch trending songs`");
-
-        // ⏳ React - processing
-        await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
-
-        await reply(`🔍 *Searching TikTok for:* ${q}`);
-
-        const response = await fetch(`https://apis-starlights-team.koyeb.app/starlight/tiktoksearch?text=${encodeURIComponent(q)}`);
-        const data = await response.json();
-
-        if (!data || !data.data || data.data.length === 0) {
-            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            return await reply("❌ *No TikTok videos found for your query.*\nTry a different keyword.");
+        if (!q) {
+            return reply(
+                `╔════════════════════════╗\n` +
+                `║   🎬 KAMRAN-MD TIKTOK SEARCH 🎬   \n` +
+                `╚════════════════════════╝\n\n` +
+                `❌ *Kripya TikTok search ke liye query dein!*\n\n` +
+                `> 📌 *Example:* \`.ttsearch Makima edit\`\n` +
+                `> ⚡ *Version:* \`12.00\``
+            );
         }
 
-        // Get up to 5 random results
-        const results = data.data.slice(0, 5).sort(() => Math.random() - 0.5);
-        
-        let successCount = 0;
-        
-        for (const video of results) {
-            try {
-                const caption = `🎵 *${video.title || 'TikTok Video'}*\n\n👤 Author: ${video.author || 'Unknown'}\n⏱️ Duration: ${video.duration || "Unknown"}\n🔗 URL: ${video.link}\n\n_Powered by KAMRAN-MD-BOT_`;
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-                if (video.nowm) {
-                    await conn.sendMessage(from, {
-                        video: { url: video.nowm },
-                        caption: caption
-                    }, { quoted: mek });
-                    successCount++;
-                    
-                    // Small delay between sends
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            } catch (videoError) {
-                console.error(`Error sending video ${video.title}:`, videoError);
-                // Continue with next video
+        const { data } = await axios.get('https://api.nexray.eu.cc/search/tiktok', {
+            params: {
+                q: q
+            },
+            headers
+        });
+
+        if (!data?.status || !Array.isArray(data.result) || data.result.length === 0) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ *Video TikTok nahi mili!*");
+        }
+
+        const result = data.result.find(v => v?.data);
+
+        if (!result) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ *Media video nahi mili!*");
+        }
+
+        const caption = `
+╔════════════════════════╗
+║   🎬 TIKTOK SEARCH RESULT   
+╚════════════════════════╝
+
+❀ *Judul:* ${result.title || 'TikTok Video'}
+❀ *Uploader:* ${result.author?.nickname || 'Unknown'}
+
+> ⚡ *Version:* \`10.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+        await sendCustomMessage(
+            conn,
+            from,
+            {
+                video: {
+                    url: result.data
+                },
+                mimetype: 'video/mp4',
+                caption: caption
+            },
+            {
+                quoted: mek
             }
-        }
+        );
 
-        if (successCount > 0) {
-            // ✅ React - success
-            await conn.sendMessage(from, { react: { text: '✅', key: m.key } });
-        } else {
-            await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-            await reply("❌ *Failed to download any videos.*\nThe API might be temporarily unavailable.");
-        }
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
-    } catch (error) {
-        console.error("Error in TikTokSearch command:", error);
-        await conn.sendMessage(from, { react: { text: '❌', key: m.key } });
-        await reply("❌ *An error occurred while searching TikTok.*\nPlease try again later.");
+    } catch (e) {
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
     }
 });

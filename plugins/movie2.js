@@ -67,7 +67,7 @@ ${resultsList}
             lastMsgId = searchMsg.key.id, 
             selectedMovie = null, 
             downloads = null, 
-            finalUrl = null, 
+            movieLinksMap = {}, 
             movieTitle = '', 
             movieSize = '',
             timeout = null;
@@ -123,7 +123,14 @@ ${resultsList}
                         return;
                     }
 
-                    // Har quality option ke sath size show karne ke liye update
+                    // Store links securely in a map indexed by choice number
+                    downloads.forEach((qItem, index) => {
+                        movieLinksMap[index + 1] = {
+                            url: qItem.url || qItem.link,
+                            name: qItem.name || 'Quality'
+                        };
+                    });
+
                     const qualityList = downloads.map((qItem, i) => { 
                         const name = qItem.name || 'Quality';
                         return `*${i + 1} ┃📥 ${name.toUpperCase()} • ${movieSize}*`; 
@@ -155,15 +162,16 @@ ${qualityList}
                     lastMsgId = qualityMsg.key.id;
 
                 } else if (step === 'quality') {
-                    if (!downloads || choice < 1 || choice > downloads.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloads.length})` }, { quoted: received }); 
+                    if (!movieLinksMap[choice]) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid quality number!` }, { quoted: received }); 
                         return; 
                     }
 
-                    const selectedQuality = downloads[choice - 1];
-                    finalUrl = selectedQuality.url || selectedQuality.link;
+                    const selectedQuality = movieLinksMap[choice];
+                    global.tempFinalUrl = selectedQuality.url;
+                    global.tempSourceName = selectedQuality.name;
 
-                    if (!finalUrl) {
+                    if (!global.tempFinalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
                         cleanup();
                         return;
@@ -176,7 +184,7 @@ ${qualityList}
 
 🎬 *Title:* ${movieTitle}
 📦 *Size:* ${movieSize}
-💿 *Source:* ${selectedQuality.name || 'Direct'}
+💿 *Source:* ${global.tempSourceName.toUpperCase()}
 
 🔢 *Reply with format number* 👇
 
@@ -195,12 +203,13 @@ ${qualityList}
                     lastMsgId = formatMsg.key.id;
 
                 } else if (step === 'format') {
-                    if (choice < 1 || choice > 2) { 
+                    if (choice !== 1 && choice !== 2) { 
                         await conn.sendMessage(from, { text: 'Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
                         return; 
                     }
 
-                    if (!finalUrl) {
+                    const finalDownloadUrl = global.tempFinalUrl;
+                    if (!finalDownloadUrl) {
                         await conn.sendMessage(from, { text: '❎ Direct link missing, please search again.' }, { quoted: received });
                         cleanup();
                         return;
@@ -212,14 +221,14 @@ ${qualityList}
 
                     if (choice === 2) {
                         await conn.sendMessage(from, { 
-                            document: { url: finalUrl }, 
+                            document: { url: finalDownloadUrl }, 
                             mimetype: 'video/mp4', 
                             fileName: fileName, 
                             caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
                     } else {
                         await conn.sendMessage(from, { 
-                            video: { url: finalUrl }, 
+                            video: { url: finalDownloadUrl }, 
                             caption: `*${movieTitle}*\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
                     }

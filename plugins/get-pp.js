@@ -21,7 +21,7 @@ cmd({
         if ((!args || args.length === 0 || !args.join(" ").trim()) &&
             (!m.mentionedJid || m.mentionedJid.length === 0) &&
             !m.quoted) {
-            return reply(`ℹ️ *Usage:*\n• .getpp <phone number> (e.g., .getpp 923427582273)\n• Reply to someone's message\n• Mention someone (@user) in a group`);
+            return reply(`ℹ️ *Usage:*\n• .getpp <phone number> (e.g., .getpp 923036338918)\n• Reply to someone's message\n• Mention someone (@user) in a group`);
         }
 
         // 1. Phone number argument (any text that contains digits)
@@ -45,7 +45,7 @@ cmd({
 
         // If still no target (e.g., invalid input), show usage again
         if (!targetJid) {
-            return reply(`ℹ️ *Usage:*\n• .getpp <phone number> (e.g., .getpp 923427582273)\n• Reply to someone's message\n• Mention someone (@user) in a group`);
+            return reply(`ℹ️ *Usage:*\n• .getpp <phone number> (e.g., .getpp 923036338918)\n• Reply to someone's message\n• Mention someone (@user) in a group`);
         }
 
         // Handle LID conversion if needed

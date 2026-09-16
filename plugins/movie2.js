@@ -123,7 +123,7 @@ ${resultsList}
                         return;
                     }
 
-                    // Store links securely in a map indexed by choice number
+                    movieLinksMap = {};
                     downloads.forEach((qItem, index) => {
                         movieLinksMap[index + 1] = {
                             url: qItem.url || qItem.link,
@@ -208,12 +208,20 @@ ${qualityList}
                         return; 
                     }
 
-                    const finalDownloadUrl = global.tempFinalUrl;
+                    let finalDownloadUrl = global.tempFinalUrl;
                     if (!finalDownloadUrl) {
                         await conn.sendMessage(from, { text: '❎ Direct link missing, please search again.' }, { quoted: received });
                         cleanup();
                         return;
                     }
+
+                    // Agar URL redirect wala hai toh real file link trace karne ke liye HEAD/GET request
+                    try {
+                        const headRes = await axios.head(finalDownloadUrl, { maxRedirects: 5, validateStatus: () => true });
+                        if (headRes.request?.res?.responseUrl) {
+                            finalDownloadUrl = headRes.request.res.responseUrl;
+                        }
+                    } catch (_) {}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 

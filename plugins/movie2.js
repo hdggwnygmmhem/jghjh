@@ -68,7 +68,6 @@ ${resultsList}
             selectedMovie = null, 
             downloads = null, 
             finalUrl = null, 
-            selectedQuality = null, 
             movieTitle = '', 
             timeout = null;
 
@@ -157,7 +156,7 @@ ${qualityList}
                         return; 
                     }
 
-                    selectedQuality = downloads[choice - 1];
+                    const selectedQuality = downloads[choice - 1];
                     finalUrl = selectedQuality.url || selectedQuality.link;
 
                     if (!finalUrl) {
@@ -194,6 +193,12 @@ ${qualityList}
                     if (choice < 1 || choice > 2) { 
                         await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
                         return; 
+                    }
+
+                    if (!finalUrl) {
+                        await conn.sendMessage(from, { text: '❎ Direct link missing, please search again.' }, { quoted: received });
+                        cleanup();
+                        return;
                     }
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });

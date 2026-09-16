@@ -49,8 +49,8 @@ async function sendCustomMessage(client, jid, content, options = {}) {
 }
 
 cmd({
-    pattern: "ttsearch2",
-    alias: ["tiktoksearch2"],
+    pattern: "ttsearch",
+    alias: ["tiktoksearch"],
     desc: "Search videos from TikTok",
     category: "search",
     react: "🎬",
@@ -83,27 +83,27 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             return reply("❌ *Video TikTok nahi mili!*");
         }
 
-        // Filter out items that have valid video data
-        const validVideos = data.result.filter(v => v?.data).slice(0, 9);
+        // Top 5 valid videos ko select karna
+        const validVideos = data.result.filter(v => v?.data).slice(0, 5);
 
         if (validVideos.length === 0) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *Koi bhi valid video nahi mili!*");
         }
 
-        // Agar sirf 1 video ho toh direct bhej dein
-        if (validVideos.length === 1 || !args.join(" ").includes("|")) {
-            const result = validVideos[0];
+        // Ek ek karke 5 videos bhejne ke liye loop
+        for (let i = 0; i < validVideos.length; i++) {
+            const result = validVideos[i];
             const caption = `
 ╔════════════════════════╗
-║   🎬 TIKTOK SEARCH RESULT   
+║   🎬 TIKTOK SEARCH RESULT (${i + 1}/5)   
 ╚════════════════════════╝
 
 ❀ *Judul:* ${result.title || 'TikTok Video'}
 ❀ *Uploader:* ${result.author?.nickname || 'Unknown'}
 
 > ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
+> 👑 *Powered by KAMRAN-MD*`.trim();
 
             await sendCustomMessage(
                 conn,
@@ -115,22 +115,9 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
                 },
                 { quoted: mek }
             );
-            return await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
         }
 
-        // Multiple videos list generation
-        let listText = `╔════════════════════════╗\n║   🎬 TIKTOK MULTI SEARCH   \n╚════════════════════════╝\n\n*Yahan top ${validVideos.length} videos hain. Kisi ek ko download karne ke liye reply karein:* \n\n`;
-
-        validVideos.forEach((vid, index) => {
-            listText += `*${index + 1}.* ${vid.title || 'TikTok Video'} _(${vid.author?.nickname || 'Unknown'})_\n`;
-        });
-
-        listText += `\n> 📌 *Example:* \`.ttsearch <query> | 1\` ya seedha number reply karein.\n> ⚡ *Powered by DOCTOR MD*`;
-
-        const sentMsg = await reply(listText);
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
-        // Store videos temporarily in context if needed, or handle selection via quoted message listener in your bot base.
 
     } catch (e) {
         console.error(e);

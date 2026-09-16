@@ -123,9 +123,10 @@ ${resultsList}
                         return;
                     }
 
+                    // Har quality option ke sath size show karne ke liye update
                     const qualityList = downloads.map((qItem, i) => { 
                         const name = qItem.name || 'Quality';
-                        return `*${i + 1} ┃📥 ${name.toUpperCase()}*`; 
+                        return `*${i + 1} ┃📥 ${name.toUpperCase()} • ${movieSize}*`; 
                     }).join('\n\n');
 
                     const qualityCaption = `
@@ -195,7 +196,7 @@ ${qualityList}
 
                 } else if (step === 'format') {
                     if (choice < 1 || choice > 2) { 
-                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
+                        await conn.sendMessage(from, { text: 'Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
                         return; 
                     }
 

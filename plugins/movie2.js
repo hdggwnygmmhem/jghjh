@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "cineverse",
-    desc: "Search and download movies from CineVerse without API key",
+    desc: "Search and download movies from CineVerse with interactive steps",
     category: "download",
     react: "🎬",
     filename: __filename
@@ -42,8 +42,8 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const firstImage = results[0].image || results[0].thumbnail || '';
         
         const resultsList = results.map((movie, i) => { 
-            const title = movie.title || movie.name || 'Unknown'; 
-            return `*${i + 1} ┃ ${title}*`; 
+            const title = movie.title ? movie.title.split('|')[0].trim() : (movie.name || 'Unknown'); 
+            return `*${i + 1} ┃ ${title}*\n   🎬 Type • ${movie.type || 'Movie'} • ${movie.quality || 'N/A'}`; 
         }).join('\n\n');
 
         const searchCaption = `
@@ -63,8 +63,12 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let lastMsgId = searchMsg.key.id, 
+        let step = 'movie', 
+            lastMsgId = searchMsg.key.id, 
             selectedMovie = null, 
+            downloads = null, 
+            finalUrl = null, 
+            selectedQuality = null, 
             movieTitle = '', 
             timeout = null;
 
@@ -88,65 +92,131 @@ ${resultsList}
                     return; 
                 }
 
-                if (choice < 1 || choice > results.length) { 
-                    await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                    return; 
-                }
-
                 await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
 
-                selectedMovie = results[choice - 1];
-                movieTitle = selectedMovie.title || selectedMovie.name || 'Movie';
-                
-                // Fixed: Check all possible properties for movie link/url from search result
-                const movieLink = selectedMovie.url || selectedMovie.link || selectedMovie.href;
+                if (step === 'movie') {
+                    if (choice < 1 || choice > results.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
+                        return; 
+                    }
 
-                if (!movieLink) {
-                    await conn.sendMessage(from, { text: '❎ Movie link not found in object.' }, { quoted: received });
+                    selectedMovie = results[choice - 1];
+                    movieTitle = selectedMovie.title ? selectedMovie.title.split('|')[0].trim() : 'Movie';
+                    const movieLink = selectedMovie.url || selectedMovie.link || selectedMovie.href;
+
+                    const downloadUrl = `${BASE_URL}/cineverse-download?url=${encodeURIComponent(movieLink)}`;
+                    const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
+
+                    if (!downloadRes.data?.status || !downloadRes.data.data) { 
+                        await conn.sendMessage(from, { text: '❎ Failed to retrieve download links.' }, { quoted: received }); 
+                        cleanup(); 
+                        return; 
+                    }
+
+                    const dlData = downloadRes.data.data;
+                    downloads = dlData.download || (Array.isArray(dlData) ? dlData : [dlData]);
+
+                    if (!downloads || downloads.length === 0) {
+                        await conn.sendMessage(from, { text: '❎ No download links found.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const qualityList = downloads.map((qItem, i) => { 
+                        const name = qItem.name || 'Quality';
+                        return `*${i + 1} ┃📥 ${name.toUpperCase()}*`; 
+                    }).join('\n\n');
+
+                    const qualityCaption = `
+╔════════════════════════╗
+║   🎬 CINEVERSE INFO 🎬   
+╚════════════════════════╝
+
+🎬 *Title:* ${movieTitle}
+⭐ *Rating:* ${selectedMovie.rating || 'N/A'}
+🎞️ *Quality:* ${selectedMovie.quality || 'N/A'}
+
+🔢 *Reply with quality number* 👇
+
+${qualityList}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const qualityMsg = await conn.sendMessage(from, { 
+                        image: { url: selectedMovie.image || firstImage }, 
+                        caption: qualityCaption 
+                    }, { quoted: received });
+
+                    step = 'quality'; 
+                    lastMsgId = qualityMsg.key.id;
+
+                } else if (step === 'quality') {
+                    if (!downloads || choice < 1 || choice > downloads.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloads.length})` }, { quoted: received }); 
+                        return; 
+                    }
+
+                    selectedQuality = downloads[choice - 1];
+                    finalUrl = selectedQuality.url || selectedQuality.link;
+
+                    if (!finalUrl) {
+                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const formatCaption = `
+╔════════════════════════╗
+║   🎬 CINEVERSE FORMAT 🎬   
+╚════════════════════════╝
+
+🎬 *Title:* ${movieTitle}
+💿 *Source:* ${selectedQuality.name || 'Direct'}
+
+🔢 *Reply with format number* 👇
+
+*1 ┃ 📽️ Video Format*
+*2 ┃ 📁 Document Format*
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const formatMsg = await conn.sendMessage(from, { 
+                        image: { url: selectedMovie.image || firstImage }, 
+                        caption: formatCaption 
+                    }, { quoted: received });
+
+                    step = 'format'; 
+                    lastMsgId = formatMsg.key.id;
+
+                } else if (step === 'format') {
+                    if (choice < 1 || choice > 2) { 
+                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
+                        return; 
+                    }
+
+                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
+
+                    const fileName = `${movieTitle} CineVerse.mp4`;
+
+                    if (choice === 2) {
+                        await conn.sendMessage(from, { 
+                            document: { url: finalUrl }, 
+                            mimetype: 'video/mp4', 
+                            fileName: fileName, 
+                            caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    } else {
+                        await conn.sendMessage(from, { 
+                            video: { url: finalUrl }, 
+                            caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    }
+
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
-                    return;
                 }
-
-                const downloadUrl = `${BASE_URL}/cineverse-download?url=${encodeURIComponent(movieLink)}`;
-                const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
-
-                if (!downloadRes.data?.status || !downloadRes.data.data) {
-                    await conn.sendMessage(from, { text: '❎ Failed to retrieve download links.' }, { quoted: received });
-                    cleanup();
-                    return;
-                }
-
-                const dlData = downloadRes.data.data;
-                
-                // Robust extraction for download link
-                let finalUrl = null;
-                if (typeof dlData === 'string') {
-                    finalUrl = dlData;
-                } else if (Array.isArray(dlData)) {
-                    finalUrl = dlData[0]?.url || dlData[0]?.link || dlData[0]?.download_url || dlData[0];
-                } else {
-                    finalUrl = dlData.download_url || dlData.url || dlData.link || dlData.dl_link || dlData.result;
-                }
-
-                if (!finalUrl || typeof finalUrl !== 'string') {
-                    await conn.sendMessage(from, { text: '❎ Direct video link extraction failed.' }, { quoted: received });
-                    cleanup();
-                    return;
-                }
-
-                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                const fileName = `${movieTitle} CineVerse.mp4`;
-
-                await conn.sendMessage(from, { 
-                    document: { url: finalUrl }, 
-                    mimetype: 'video/mp4', 
-                    fileName: fileName, 
-                    caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                }, { quoted: received });
-
-                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                cleanup();
 
             } catch (err) { 
                 console.error('CineVerse handler error:', err); 

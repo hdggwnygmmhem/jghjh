@@ -49,8 +49,8 @@ async function sendCustomMessage(client, jid, content, options = {}) {
 }
 
 cmd({
-    pattern: "ttsearch",
-    alias: ["tiktoksearch"],
+    pattern: "ttsearch2",
+    alias: ["tiktoksearch2"],
     desc: "Search videos from TikTok",
     category: "search",
     react: "🎬",

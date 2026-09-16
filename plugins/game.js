@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "games",
-    alias: ["nixelgames"],
+    alias: ["nixelgames", "game"],
     desc: "Interactive Mini Games Hub",
     category: "fun",
     react: "🎮",

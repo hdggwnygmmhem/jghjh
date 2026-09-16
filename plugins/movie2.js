@@ -7,8 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz",
-    desc: "Search and download movies from CineSubz without API key",
+    pattern: "cineverse",
+    desc: "Search and download movies from CineVerse without API key",
     category: "download",
     react: "🎬",
     filename: __filename
@@ -18,10 +18,10 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
-                `║   🎬 KAMRAN-MD CINESUBZ 🎬   \n` +
+                `║   🎬 KAMRAN-MD CINEVERSE 🎬   \n` +
                 `╚════════════════════════╝\n\n` +
                 `❌ *Kripya movie ka naam dein!*\n\n` +
-                `> 📌 *Example:* \`.cinesubz Avatar\`\n` +
+                `> 📌 *Example:* \`.cineverse Avatar\`\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
         }
@@ -30,8 +30,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         const BASE_URL = 'https://api-dark-shan-yt.koyeb.app/movie';
 
-        // Free endpoints without API key requirement
-        const searchUrl = `${BASE_URL}/cinesubz-search?q=${encodeURIComponent(q)}`;
+        const searchUrl = `${BASE_URL}/cineverse-search?q=${encodeURIComponent(q)}`;
         const searchRes = await axios.get(searchUrl, { timeout: 60000 });
 
         if (!searchRes.data?.status || !searchRes.data.data?.length) {
@@ -43,13 +42,13 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const firstImage = results[0].image || results[0].thumbnail || '';
         
         const resultsList = results.map((movie, i) => { 
-            const title = movie.title ? movie.title.split('|')[0].trim() : (movie.name || 'Unknown'); 
-            return `*${i + 1} ┃ ${title}*\n   🎬 Quality • ${movie.quality || 'N/A'}`; 
+            const title = movie.title || movie.name || 'Unknown'; 
+            return `*${i + 1} ┃ ${title}*`; 
         }).join('\n\n');
 
         const searchCaption = `
 ╔════════════════════════╗
-║   🎬 CINESUBZ SEARCH 🎬   
+║   🎬 CINEVERSE SEARCH 🎬   
 ╚════════════════════════╝
 
 ${resultsList}
@@ -64,11 +63,8 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let step = 'movie',
-            lastMsgId = searchMsg.key.id, 
+        let lastMsgId = searchMsg.key.id, 
             selectedMovie = null, 
-            downloads = null, 
-            selectedQuality = null, 
             movieTitle = '', 
             timeout = null;
 
@@ -92,104 +88,57 @@ ${resultsList}
                     return; 
                 }
 
-                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
-
-                if (step === 'movie') {
-                    if (choice < 1 || choice > results.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    selectedMovie = results[choice - 1];
-                    movieTitle = selectedMovie.title ? selectedMovie.title.split('|')[0].trim() : 'Movie';
-                    const movieLink = selectedMovie.link || selectedMovie.url;
-
-                    const infoUrl = `${BASE_URL}/cinesubz-info?url=${encodeURIComponent(movieLink)}`;
-                    const infoRes = await axios.get(infoUrl, { timeout: 60000 });
-
-                    if (!infoRes.data?.status || !infoRes.data.data?.downloads) { 
-                        await conn.sendMessage(from, { text: '❎ No download links found for this movie.' }, { quoted: received }); 
-                        cleanup(); 
-                        return; 
-                    }
-
-                    downloads = infoRes.data.data.downloads;
-                    const info = infoRes.data.data;
-
-                    const qualityList = downloads.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem.quality} • ${qItem.size} • ${qItem.language || 'English'}*`; 
-                    }).join('\n\n');
-
-                    const qualityCaption = `
-╔════════════════════════╗
-║   🎬 CINESUBZ INFO 🎬   
-╚════════════════════════╝
-
-🎬 *Title:* ${movieTitle}
-⭐ *Rating:* ${info.rating || 'N/A'}
-📅 *Year:* ${info.year || 'N/A'}
-⏱️ *Duration:* ${info.duration || 'N/A'}
-
-🔢 *Reply with quality number* 👇
-
-${qualityList}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedMovie.image || firstImage }, 
-                        caption: qualityCaption 
-                    }, { quoted: received });
-
-                    step = 'quality'; 
-                    lastMsgId = qualityMsg.key.id;
-
-                } else if (step === 'quality') {
-                    if (!downloads || choice < 1 || choice > downloads.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloads.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    selectedQuality = downloads[choice - 1];
-                    const linkToFetch = Array.isArray(selectedQuality.link) ? selectedQuality.link[0] : selectedQuality.link;
-
-                    const downloadUrl = `${BASE_URL}/cinesubz-download?url=${encodeURIComponent(linkToFetch)}`;
-                    const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
-
-                    if (!downloadRes.data?.status || !downloadRes.data.data?.download) { 
-                        await conn.sendMessage(from, { text: '❎ Failed to retrieve the download link.' }, { quoted: received }); 
-                        cleanup(); 
-                        return; 
-                    }
-
-                    const downloadInfo = downloadRes.data.data.download;
-                    const directItem = (Array.isArray(downloadInfo) ? downloadInfo.find(d => d.name === 'unknown' || d.url) : downloadInfo) || downloadInfo[0];
-                    const finalUrl = directItem?.url || directItem;
-
-                    if (!finalUrl) {
-                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                    const fileName = `${movieTitle} [${selectedQuality.quality}] CineSubz.mp4`;
-
-                    await conn.sendMessage(from, { 
-                        document: { url: finalUrl }, 
-                        mimetype: 'video/mp4', 
-                        fileName: fileName, 
-                        caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                    }, { quoted: received });
-
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                    cleanup();
+                if (choice < 1 || choice > results.length) { 
+                    await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
+                    return; 
                 }
 
+                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
+
+                selectedMovie = results[choice - 1];
+                movieTitle = selectedMovie.title || selectedMovie.name || 'Movie';
+                const movieLink = selectedMovie.link || selectedMovie.url;
+
+                if (!movieLink) {
+                    await conn.sendMessage(from, { text: '❎ Movie link not found.' }, { quoted: received });
+                    cleanup();
+                    return;
+                }
+
+                const downloadUrl = `${BASE_URL}/cineverse-download?url=${encodeURIComponent(movieLink)}`;
+                const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
+
+                if (!downloadRes.data?.status || !downloadRes.data.data) {
+                    await conn.sendMessage(from, { text: '❎ Failed to retrieve download links.' }, { quoted: received });
+                    cleanup();
+                    return;
+                }
+
+                const dlData = downloadRes.data.data;
+                const finalUrl = dlData.download_url || dlData.url || dlData.link || (Array.isArray(dlData) ? dlData[0]?.url : null);
+
+                if (!finalUrl) {
+                    await conn.sendMessage(from, { text: '❎ Direct video link extraction failed.' }, { quoted: received });
+                    cleanup();
+                    return;
+                }
+
+                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
+
+                const fileName = `${movieTitle} CineVerse.mp4`;
+
+                await conn.sendMessage(from, { 
+                    document: { url: finalUrl }, 
+                    mimetype: 'video/mp4', 
+                    fileName: fileName, 
+                    caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                }, { quoted: received });
+
+                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                cleanup();
+
             } catch (err) { 
-                console.error('CineSubz handler error:', err); 
+                console.error('CineVerse handler error:', err); 
                 cleanup(); 
             }
         };

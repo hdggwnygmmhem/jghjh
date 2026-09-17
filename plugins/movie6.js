@@ -7,8 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz2",
-    desc: "Search and download movies or episodes from CineSubz using Vajira API",
+    pattern: "cinesubz3",
+    desc: "Search and download movies or episodes from CineSubz with interactive steps",
     category: "download",
     react: "🎬",
     filename: __filename
@@ -65,7 +65,14 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let lastMsgId = searchMsg.key.id, 
+        let step = 'movie', 
+            lastMsgId = searchMsg.key.id, 
+            selectedItem = null, 
+            downloads = null, 
+            finalUrl = null, 
+            selectedQuality = null, 
+            itemTitle = '', 
+            itemSize = 'N/A',
             timeout = null;
 
         const handler = async (msgUpdate) => {
@@ -83,74 +90,149 @@ ${resultsList}
                 if (!text) return;
 
                 const choice = parseInt(text.trim());
-                if (isNaN(choice) || choice < 1 || choice > results.length) { 
-                    await conn.sendMessage(from, { text: `❎ Please enter a valid number (1-${results.length}).` }, { quoted: received }); 
+                if (isNaN(choice)) { 
+                    await conn.sendMessage(from, { text: '❎ Please enter a valid number.' }, { quoted: received }); 
                     return; 
                 }
 
                 await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
 
-                const selectedItem = results[choice - 1];
-                const itemTitle = selectedItem.title || 'Media';
-                const itemUrl = selectedItem.url || selectedItem.link;
+                if (step === 'movie') {
+                    if (choice < 1 || choice > results.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
+                        return; 
+                    }
 
-                if (!itemUrl) {
-                    await conn.sendMessage(from, { text: '❎ Item link not found.' }, { quoted: received });
+                    selectedItem = results[choice - 1];
+                    itemTitle = selectedItem.title || 'Media';
+                    const itemUrl = selectedItem.url || selectedItem.link;
+
+                    const isEpisodeOrSeries = itemUrl.includes('/episodes/') || itemUrl.includes('/series/') || selectedItem.type?.toLowerCase().includes('series');
+
+                    let detailsUrl = '';
+                    if (isEpisodeOrSeries && itemUrl.includes('/episodes/')) {
+                        detailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                    } else {
+                        detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                    }
+
+                    const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+
+                    if (!detailsRes.data?.status || !detailsRes.data.result) { 
+                        await conn.sendMessage(from, { text: '❎ No download links found for this item.' }, { quoted: received }); 
+                        cleanup(); 
+                        return; 
+                    }
+
+                    const details = detailsRes.data.result;
+                    downloads = details.download || details.downloads || details.links || [];
+                    itemSize = details.size || selectedItem.size || 'N/A';
+
+                    if (!downloads.length) {
+                        await conn.sendMessage(from, { text: '❎ No download links available.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const qualityList = downloads.map((qItem, i) => { 
+                        const qName = qItem.quality || qItem.name || 'Quality';
+                        const qSize = qItem.size || itemSize;
+                        return `*${i + 1} ┃📥 ${qName} • ${qSize}*`; 
+                    }).join('\n\n');
+
+                    const qualityCaption = `
+╔════════════════════════╗
+║   🎬 CINESUBZ INFO 🎬   
+╚════════════════════════╝
+
+🎬 *Title:* ${itemTitle}
+📦 *Size:* ${itemSize}
+⭐ *Rating:* ${details.rating || selectedItem.rating || 'N/A'}
+📅 *Year:* ${details.year || 'N/A'}
+
+🔢 *Reply with quality number* 👇
+
+${qualityList}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const qualityMsg = await conn.sendMessage(from, { 
+                        image: { url: selectedItem.image || firstImage }, 
+                        caption: qualityCaption 
+                    }, { quoted: received });
+
+                    step = 'quality'; 
+                    lastMsgId = qualityMsg.key.id;
+
+                } else if (step === 'quality') {
+                    if (!downloads || choice < 1 || choice > downloads.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloads.length})` }, { quoted: received }); 
+                        return; 
+                    }
+
+                    selectedQuality = downloads[choice - 1];
+                    finalUrl = selectedQuality.url || selectedQuality.link;
+
+                    if (!finalUrl) {
+                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const formatCaption = `
+╔════════════════════════╗
+║   🎬 CINESUBZ FORMAT 🎬   
+╚════════════════════════╝
+
+🎬 *Title:* ${itemTitle}
+💿 *Quality:* ${selectedQuality.quality || selectedQuality.name || 'N/A'}
+📦 *Size:* ${selectedQuality.size || itemSize}
+
+🔢 *Reply with format number* 👇
+
+*1 ┃ 📽️ Video Format*
+*2 ┃ 📁 Document Format*
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const formatMsg = await conn.sendMessage(from, { 
+                        image: { url: selectedItem.image || firstImage }, 
+                        caption: formatCaption 
+                    }, { quoted: received });
+
+                    step = 'format'; 
+                    lastMsgId = formatMsg.key.id;
+
+                } else if (step === 'format') {
+                    if (choice !== 1 && choice !== 2) { 
+                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
+                        return; 
+                    }
+
+                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
+
+                    const qSize = selectedQuality.size || itemSize;
+                    const fileName = `${itemTitle} [${qSize}] CineSubz.mp4`;
+
+                    if (choice === 2) {
+                        await conn.sendMessage(from, { 
+                            document: { url: finalUrl }, 
+                            mimetype: 'video/mp4', 
+                            fileName: fileName, 
+                            caption: `*${itemTitle}*\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    } else {
+                        await conn.sendMessage(from, { 
+                            video: { url: finalUrl }, 
+                            caption: `*${itemTitle}*\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    }
+
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
-                    return;
                 }
-
-                // Check if it's series/episode or movie based on URL or type
-                const isEpisodeOrSeries = itemUrl.includes('/episodes/') || itemUrl.includes('/series/') || selectedItem.type?.toLowerCase().includes('series');
-
-                let detailsUrl = '';
-                if (isEpisodeOrSeries && itemUrl.includes('/episodes/')) {
-                    detailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                } else {
-                    detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                }
-
-                const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
-
-                if (!detailsRes.data?.status || !detailsRes.data.result) {
-                    await conn.sendMessage(from, { text: '❎ Failed to fetch download details.' }, { quoted: received });
-                    cleanup();
-                    return;
-                }
-
-                const details = detailsRes.data.result;
-                const downloadLinks = details.download || details.downloads || details.links || [];
-
-                if (!downloadLinks.length) {
-                    await conn.sendMessage(from, { text: '❎ No download links available for this item.' }, { quoted: received });
-                    cleanup();
-                    return;
-                }
-
-                // Extract direct video link
-                let finalUrl = '';
-                const directDl = downloadLinks.find(d => d.quality === '1080p' || d.quality === '720p' || d.name === 'direct') || downloadLinks[0];
-                finalUrl = directDl.url || directDl.link;
-
-                if (!finalUrl) {
-                    await conn.sendMessage(from, { text: '❎ Direct video link extraction failed.' }, { quoted: received });
-                    cleanup();
-                    return;
-                }
-
-                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                const fileName = `${itemTitle} CineSubz.mp4`;
-
-                await conn.sendMessage(from, { 
-                    document: { url: finalUrl }, 
-                    mimetype: 'video/mp4', 
-                    fileName: fileName, 
-                    caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                }, { quoted: received });
-
-                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                cleanup();
 
             } catch (err) { 
                 console.error('CineSubz handler error:', err); 

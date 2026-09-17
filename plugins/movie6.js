@@ -70,8 +70,6 @@ ${resultsList}
             selectedItem = null, 
             episodesList = [],
             downloadsList = [], 
-            finalUrl = null, 
-            selectedQuality = null, 
             itemTitle = '', 
             itemPoster = firstImage,
             timeout = null;
@@ -275,8 +273,8 @@ ${qualityList}
                         return; 
                     }
 
-                    selectedQuality = downloadsList[choice - 1];
-                    finalUrl = selectedQuality?.url || selectedQuality?.link;
+                    const selectedQuality = downloadsList[choice - 1];
+                    const finalUrl = selectedQuality?.url || selectedQuality?.link;
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
@@ -284,29 +282,21 @@ ${qualityList}
                         return;
                     }
 
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // Safe direct link delivery to prevent WhatsApp media upload crash (500 error)
-                    const resultText = `
-╔════════════════════════╗
-║   🎬 CINESUBZ DOWNLOAD 🎬  
-╚════════════════════════╝
+                    const qSize = selectedQuality?.size || 'N/A';
+                    const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';
+                    const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qQuality}] CineSubz.mp4`;
 
-🎬 *Title:* ${itemTitle}
-💿 *Quality:* ${selectedQuality?.quality || selectedQuality?.name || 'N/A'}
-📦 *Size:* ${selectedQuality?.size || 'N/A'}
-
-🔗 *Direct Download Link:*
-${finalUrl}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
+                    // Send directly as document file once quality is selected
                     await conn.sendMessage(from, { 
-                        image: { url: itemPoster }, 
-                        caption: resultText 
+                        document: { url: finalUrl }, 
+                        mimetype: 'video/mp4', 
+                        fileName: fileName, 
+                        caption: `*${itemTitle}*\n💿 *Quality:* ${qQuality}\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
                     }, { quoted: received });
 
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
                 }
 

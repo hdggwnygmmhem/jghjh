@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz3",
+    pattern: "cinesubz",
     desc: "Search and download movies or series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",
@@ -75,6 +75,21 @@ ${resultsList}
             itemPoster = firstImage,
             timeout = null;
 
+        // Helper function to extract links from various API formats (array or downloadUrls object)
+        const extractDownloads = (data) => {
+            let links = [];
+            if (Array.isArray(data.download)) links = data.download;
+            else if (Array.isArray(data.downloads)) links = data.downloads;
+            else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
+                links = Object.entries(data.downloadUrls).map(([qual, link]) => ({
+                    quality: qual,
+                    url: link,
+                    size: 'N/A'
+                }));
+            }
+            return links;
+        };
+
         const handler = async (msgUpdate) => {
             try {
                 const received = msgUpdate.messages[0];
@@ -114,10 +129,7 @@ ${resultsList}
                     }
 
                     const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    console.log('Fetching Details URL -->', detailsUrl);
-                    
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
-                    console.log('Details Response Data -->', JSON.stringify(detailsRes.data, null, 2));
 
                     if (!detailsRes.data?.success || !detailsRes.data.data) { 
                         await conn.sendMessage(from, { text: '❎ Failed to fetch details from API.' }, { quoted: received }); 
@@ -160,9 +172,9 @@ ${epListText}
                         return;
                     }
 
-                    downloadsList = detailsData?.download || detailsData?.downloads || [];
+                    downloadsList = extractDownloads(detailsData);
 
-                    if (!Array.isArray(downloadsList) || downloadsList.length === 0) {
+                    if (!downloadsList.length) {
                         await conn.sendMessage(from, { text: '❎ No download links available for this movie.' }, { quoted: received });
                         cleanup();
                         return;
@@ -213,10 +225,7 @@ ${qualityList}
                     }
 
                     const epDetailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
-                    console.log('Fetching Episode URL -->', epDetailsUrl);
-
                     const epRes = await axios.get(epDetailsUrl, { timeout: 60000 });
-                    console.log('Episode Response Data -->', JSON.stringify(epRes.data, null, 2));
 
                     if (!epRes.data?.success || !epRes.data.data) {
                         await conn.sendMessage(from, { text: '❎ Failed to fetch episode download links.' }, { quoted: received });
@@ -225,9 +234,9 @@ ${qualityList}
                     }
 
                     const epData = epRes.data.data;
-                    downloadsList = epData?.download || epData?.downloads || [];
+                    downloadsList = extractDownloads(epData);
 
-                    if (!Array.isArray(downloadsList) || downloadsList.length === 0) {
+                    if (!downloadsList.length) {
                         await conn.sendMessage(from, { text: '❎ No download links found for this episode.' }, { quoted: received });
                         cleanup();
                         return;
@@ -260,7 +269,7 @@ ${qualityList}
                     lastMsgId = qualityMsg.key.id;
 
                 } else if (step === 'quality') {
-                    if (!Array.isArray(downloadsList) || choice < 1 || choice > downloadsList.length) { 
+                    if (!downloadsList || choice < 1 || choice > downloadsList.length) { 
                         await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloadsList.length})` }, { quoted: received }); 
                         return; 
                     }
@@ -330,7 +339,6 @@ ${qualityList}
 
             } catch (err) { 
                 console.error('CRITICAL CINESUBZ HANDLER ERROR -->', err);
-                console.error('Error Stack -->', err.stack);
                 await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });
                 cleanup(); 
             }
@@ -346,7 +354,6 @@ ${qualityList}
 
     } catch (e) {
         console.error('CRITICAL COMMAND ERROR -->', e);
-        console.error('Command Error Stack -->', e.stack);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
         return reply(`❌ *Error:* ${e.message}`);
     }

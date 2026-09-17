@@ -169,23 +169,6 @@ ${epListText}
                         return;
                     }
 
-                    // Smart Download Link Resolver if downloads array is empty
-                    if (!downloadsList.length) {
-                        try {
-                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                            if (dlRes.data?.success) {
-                                const dData = dlRes.data.data || dlRes.data;
-                                downloadsList = dData.downloads || dData.download || [];
-                                if (dData.downloadUrl || dData.url || dData.file) {
-                                    downloadsList.push({ quality: '1080p / 720p HD', size: 'N/A', url: dData.downloadUrl || dData.url || dData.file });
-                                }
-                            }
-                        } catch (e) {
-                            console.error('Download resolve error:', e.message);
-                        }
-                    }
-
                     if (!downloadsList.length) {
                         downloadsList = [
                             { quality: '1080p FHD', size: 'N/A', url: itemUrl },
@@ -284,18 +267,26 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // Final Direct Download Resolution via API
+                    // Robust Download Link Resolution
                     try {
                         const resolveUrl = targetUrl.startsWith('http') ? targetUrl : itemUrl;
                         const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(resolveUrl)}`;
-                        console.log(`[MOVIEDRIVE DEBUG] Final resolving URL from: ${dlApiUrl}`);
+                        console.log(`[MOVIEDRIVE DEBUG] Resolving download URL from: ${dlApiUrl}`);
                         const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
+                        
                         if (dlRes.data?.success) {
                             const dData = dlRes.data.data || dlRes.data;
-                            targetUrl = dData.downloadUrl || dData.url || dData.file || dData.link || resolveUrl;
+                            let resolved = dData.downloadUrl || dData.url || dData.file || dData.link;
+                            
+                            // Ensure we don't pick the exact movie page URL back as the final file link
+                            if (resolved && resolved !== resolveUrl && !resolved.includes('moviedrivebd.com/movies/')) {
+                                targetUrl = resolved;
+                            } else if (dData.downloads && Array.isArray(dData.downloads) && dData.downloads.length > 0) {
+                                targetUrl = dData.downloads[0].url || targetUrl;
+                            }
                         }
                     } catch (e) {
-                        console.error('Final download resolution error:', e.message);
+                        console.error('Download resolution error:', e.message);
                     }
 
                     const qSize = selectedQuality?.size || 'N/A';
@@ -313,7 +304,7 @@ ${qualityList}
                     cleanup();
                 }
 
-            } catch (err) { 
+            } ctx (err) { 
                 console.error('CRITICAL MOVIEDRIVE HANDLER ERROR -->', err);
                 if (received) {
                     await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });

@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz",
+    pattern: "cinesubz3",
     desc: "Search and download movies/series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",

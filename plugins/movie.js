@@ -7,10 +7,10 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz",
-    desc: "Search and download movies from CineSubz with interactive steps",
+    pattern: "moviebox",
+    desc: "Search and download movies from MovieBox with interactive steps",
     category: "download",
-    react: "🎬",
+    react: "📦",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
@@ -18,10 +18,10 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
-                `║   🎬 KAMRAN-MD CINESUBZ 🎬   \n` +
+                `║   📦 KAMRAN-MD MOVIEBOX 📦   \n` +
                 `╚════════════════════════╝\n\n` +
                 `❌ *Kripya movie ka naam dein!*\n\n` +
-                `> 📌 *Example:* \`.cinesubz Avatar\`\n` +
+                `> 📌 *Example:* \`.moviebox Avatar\`\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
         }
@@ -31,7 +31,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const API_KEY = '29569192d92a322d';
         const BASE_URL = 'https://api-dark-shan-yt.koyeb.app/movie';
 
-        const searchUrl = `${BASE_URL}/cinesubz-search?q=${encodeURIComponent(q)}&apikey=${API_KEY}`;
+        const searchUrl = `${BASE_URL}/moviebox-search?q=${encodeURIComponent(q)}&apikey=${API_KEY}`;
         const searchRes = await axios.get(searchUrl, { timeout: 60000 });
 
         if (!searchRes.data?.status || !searchRes.data.data?.length) {
@@ -43,13 +43,13 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const firstImage = results[0].image;
         
         const resultsList = results.map((movie, i) => { 
-            const title = movie.title.split('|')[0].trim(); 
-            return `*${i + 1} ┃ ${title}*\n   🎬 Movie • ${movie.quality || 'N/A'}`; 
+            const title = movie.title || 'Unknown Title'; 
+            return `*${i + 1} ┃ ${title}*\n   📦 MovieBox • ${movie.year || 'N/A'}`; 
         }).join('\n\n');
 
         const searchCaption = `
 ╔════════════════════════╗
-║   🎬 CINESUBZ SEARCH 🎬   
+║   📦 MOVIEBOX SEARCH 📦   
 ╚════════════════════════╝
 
 ${resultsList}
@@ -102,9 +102,9 @@ ${resultsList}
                     }
 
                     selectedMovie = results[choice - 1];
-                    movieTitle = selectedMovie.title.split('|')[0].trim();
+                    movieTitle = selectedMovie.title || 'MovieBox Video';
 
-                    const infoUrl = `${BASE_URL}/cinesubz-info?url=${encodeURIComponent(selectedMovie.link)}&apikey=${API_KEY}`;
+                    const infoUrl = `${BASE_URL}/moviebox-info?url=${encodeURIComponent(selectedMovie.link)}&apikey=${API_KEY}`;
                     const infoRes = await axios.get(infoUrl, { timeout: 60000 });
 
                     if (!infoRes.data?.status || !infoRes.data.data?.downloads) { 
@@ -117,18 +117,17 @@ ${resultsList}
                     const info = infoRes.data.data;
 
                     const qualityList = downloads.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem.quality} • ${qItem.size} • ${qItem.language || 'English'}*`; 
+                        return `*${i + 1} ┃📥 ${qItem.quality || 'HD'} • ${qItem.size || 'N/A'}*`; 
                     }).join('\n\n');
 
                     const qualityCaption = `
 ╔════════════════════════╗
-║   🎬 CINESUBZ INFO 🎬   
+║   📦 MOVIEBOX INFO 📦   
 ╚════════════════════════╝
 
 🎬 *Title:* ${movieTitle}
 ⭐ *Rating:* ${info.rating || 'N/A'}
 📅 *Year:* ${info.year || 'N/A'}
-⏱️ *Duration:* ${info.duration || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -153,7 +152,7 @@ ${qualityList}
 
                     selectedQuality = downloads[choice - 1];
 
-                    const downloadUrl = `${BASE_URL}/cinesubz-download?url=${encodeURIComponent(selectedQuality.link)}&apikey=${API_KEY}`;
+                    const downloadUrl = `${BASE_URL}/moviebox-download?url=${encodeURIComponent(selectedQuality.link)}&apikey=${API_KEY}`;
                     const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
 
                     if (!downloadRes.data?.status || !downloadRes.data.data?.download) { 
@@ -162,18 +161,16 @@ ${qualityList}
                         return; 
                     }
 
-                    const downloadInfo = downloadRes.data.data.download;
-                    const directItem = downloadInfo.find(d => d.name === 'unknown') || downloadInfo[0];
-                    finalUrl = directItem.url;
+                    finalUrl = downloadRes.data.data.download;
 
                     const formatCaption = `
 ╔════════════════════════╗
-║   🎬 CINESUBZ FORMAT 🎬   
+║   📦 MOVIEBOX FORMAT 📦   
 ╚════════════════════════╝
 
 🎬 *Title:* ${movieTitle}
-💿 *Quality:* ${selectedQuality.quality}
-📦 *Size:* ${selectedQuality.size}
+💿 *Quality:* ${selectedQuality.quality || 'HD'}
+📦 *Size:* ${selectedQuality.size || 'N/A'}
 
 🔢 *Reply with format number* 👇
 
@@ -199,7 +196,7 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    const fileName = `${movieTitle} [${selectedQuality.quality}] CineSubz.mp4`;
+                    const fileName = `${movieTitle} [MovieBox].mp4`;
 
                     if (choice === 2) {
                         await conn.sendMessage(from, { 
@@ -220,7 +217,7 @@ ${qualityList}
                 }
 
             } catch (err) { 
-                console.error('CineSubz handler error:', err); 
+                console.error('MovieBox handler error:', err); 
                 cleanup(); 
             }
         };

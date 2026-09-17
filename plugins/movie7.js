@@ -16,8 +16,6 @@ cmd({
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        console.log(`[SINHALASUB DEBUG] Command triggered with query: "${q}"`);
-        
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
@@ -76,10 +74,9 @@ ${resultsList}
             itemPoster = firstImage,
             timeout = null;
 
-        console.log(`[SINHALASUB DEBUG] Search message sent successfully. Message ID: ${lastMsgId}`);
-
         const extractDownloads = (data) => {
             let links = [];
+            if (!data) return links;
             if (Array.isArray(data.download)) links = data.download;
             else if (Array.isArray(data.downloads)) links = data.downloads;
             else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
@@ -102,15 +99,10 @@ ${resultsList}
                 if (fromId !== from) return;
 
                 const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                
-                console.log(`[SINHALASUB DEBUG] Incoming reply message. Quoted ID: ${quotedId}, Expected ID: ${lastMsgId}`);
-
                 if (!quotedId || quotedId !== lastMsgId) return;
 
                 const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
                 if (!text) return;
-
-                console.log(`[SINHALASUB DEBUG] Valid reply received: "${text}" at step: ${step}`);
 
                 const choice = parseInt(text.trim());
                 if (isNaN(choice)) { 
@@ -137,10 +129,22 @@ ${resultsList}
                     }
 
                     const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+                    console.log(`[SINHALASUB DEBUG] Fetching details from: ${detailsUrl}`);
+
+                    let detailsRes;
+                    try {
+                        detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+                    } catch (apiErr) {
+                        console.error('[SINHALASUB API ERROR] Details fetch failed:', apiErr.message);
+                        await conn.sendMessage(from, { text: '❎ API request failed or timed out while fetching details.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    console.log('[SINHALASUB DEBUG] Details API Response:', JSON.stringify(detailsRes.data, null, 2));
 
                     if (!detailsRes.data?.success || !detailsRes.data.data) { 
-                        await conn.sendMessage(from, { text: '❎ Failed to fetch details from API.' }, { quoted: received }); 
+                        await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
                         cleanup(); 
                         return; 
                     }
@@ -177,7 +181,6 @@ ${epListText}
 
                         step = 'episode';
                         lastMsgId = epMsg.key.id;
-                        console.log(`[SINHALASUB DEBUG] Switched to episode step. New Message ID: ${lastMsgId}`);
                         return;
                     }
 
@@ -216,7 +219,6 @@ ${qualityList}
 
                     step = 'quality'; 
                     lastMsgId = qualityMsg.key.id;
-                    console.log(`[SINHALASUB DEBUG] Switched to quality step. New Message ID: ${lastMsgId}`);
 
                 } else if (step === 'episode') {
                     if (!Array.isArray(episodesList) || choice < 1 || choice > episodesList.length) { 
@@ -235,7 +237,15 @@ ${qualityList}
                     }
 
                     const epDetailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
-                    const epRes = await axios.get(epDetailsUrl, { timeout: 60000 });
+                    let epRes;
+                    try {
+                        epRes = await axios.get(epDetailsUrl, { timeout: 60000 });
+                    } catch (apiErr) {
+                        console.error('[SINHALASUB API ERROR] Episode fetch failed:', apiErr.message);
+                        await conn.sendMessage(from, { text: '❎ API request failed while fetching episode.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
 
                     if (!epRes.data?.success || !epRes.data.data) {
                         await conn.sendMessage(from, { text: '❎ Failed to fetch episode download links.' }, { quoted: received });
@@ -277,7 +287,6 @@ ${qualityList}
 
                     step = 'quality'; 
                     lastMsgId = qualityMsg.key.id;
-                    console.log(`[SINHALASUB DEBUG] Switched from episode to quality step. New Message ID: ${lastMsgId}`);
 
                 } else if (step === 'quality') {
                     if (!downloadsList || choice < 1 || choice > downloadsList.length) { 
@@ -300,8 +309,6 @@ ${qualityList}
                     const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';
                     const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qQuality}] SinhalaSub.mp4`;
 
-                    console.log(`[SINHALASUB DEBUG] Sending document file. URL: ${finalUrl}`);
-
                     await conn.sendMessage(from, { 
                         document: { url: finalUrl }, 
                         mimetype: 'video/mp4', 
@@ -309,7 +316,7 @@ ${qualityList}
                         caption: `*${itemTitle}*\n💿 *Quality:* ${qQuality}\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
                     }, { quoted: received });
 
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key }RENCY });
                     cleanup();
                 }
 
@@ -323,7 +330,6 @@ ${qualityList}
         };
 
         const cleanup = () => { 
-            console.log(`[SINHALASUB DEBUG] Cleaning up event listener.`);
             if (timeout) clearTimeout(timeout); 
             conn.ev.off('messages.upsert', handler); 
         };

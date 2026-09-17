@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "moviedrive",
     alias: ["moviedrivebd", "drive"],
-    desc: "Search and download movies from MovieDriveBD using Vajira API",
+    desc: "Search and download movies or series from MovieDriveBD using Vajira API",
     category: "download",
     react: "🚀",
     filename: __filename
@@ -21,7 +21,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
                 `╔════════════════════════╗\n` +
                 `║   🚀 KAMRAN-MD MOVIEDRIVE 🚀  \n` +
                 `╚════════════════════════╝\n\n` +
-                `❌ *Kripya movie ka naam dein!*\n\n` +
+                `❌ *Kripya movie ya series ka naam dein!*\n\n` +
                 `> 📌 *Example:* \`.moviedrive 2026\`\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
@@ -68,6 +68,7 @@ ${resultsList}
         let step = 'movie', 
             lastMsgId = searchMsg.key.id, 
             downloadsList = [], 
+            episodesList = [],
             itemTitle = '', 
             itemUrl = '',
             itemPoster = firstImage,
@@ -136,13 +137,61 @@ ${resultsList}
                     itemPoster = detailsData?.poster || detailsData?.imageUrl || selectedItem?.poster || firstImage;
                     
                     downloadsList = detailsData.downloads || detailsData.download || [];
+                    episodesList = detailsData.episodes || [];
 
-                    // If API returns empty downloads array, extract qualities directly from search result or generate standard options using itemUrl
+                    // If it's a TV show / series with episodes
+                    if (episodesList.length > 0) {
+                        const epListText = episodesList.slice(0, 15).map((ep, i) => {
+                            return `*${i + 1} ┃ ${ep?.title || `Episode ${i + 1}`}*`;
+                        }).join('\n\n');
+
+                        const epCaption = `
+╔════════════════════════╗
+║   📺 SELECT EPISODE 📺   
+╚════════════════════════╝
+
+🎬 *Series:* ${itemTitle}
+📦 *Total Episodes:* ${episodesList.length}
+
+🔢 *Reply with episode number* 👇
+
+${epListText}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                        const epMsg = await conn.sendMessage(from, { 
+                            image: { url: itemPoster }, 
+                            caption: epCaption 
+                        }, { quoted: received });
+
+                        step = 'episode';
+                        lastMsgId = epMsg.key.id;
+                        return;
+                    }
+
+                    // If downloads list is empty, hit the /download endpoint directly to extract links
+                    if (!downloadsList.length) {
+                        try {
+                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
+                            if (dlRes.data?.success) {
+                                const dData = dlRes.data.data || dlRes.data;
+                                downloadsList = dData.downloads || dData.download || [];
+                                if (dData.downloadUrl || dData.url) {
+                                    downloadsList.push({ quality: 'HD 720p/1080p', size: 'N/A', url: dData.downloadUrl || dData.url });
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Fallback download fetch error:', e.message);
+                        }
+                    }
+
+                    // Ultimate fallback if still empty
                     if (!downloadsList.length) {
                         downloadsList = [
-                            { quality: '1080p', size: 'N/A', url: itemUrl },
-                            { quality: '720p', size: 'N/A', url: itemUrl },
-                            { quality: '480p', size: 'N/A', url: itemUrl }
+                            { quality: 'FHD 1080p', size: 'N/A', url: itemUrl },
+                            { quality: 'HD 720p', size: 'N/A', url: itemUrl }
                         ];
                     }
 
@@ -174,6 +223,57 @@ ${qualityList}
                     step = 'quality'; 
                     lastMsgId = qualityMsg.key.id;
 
+                } else if (step === 'episode') {
+                    if (!episodesList || choice < 1 || choice > episodesList.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid episode number (1-${episodesList.length})` }, { quoted: received }); 
+                        return; 
+                    }
+
+                    const selectedEp = episodesList[choice - 1];
+                    itemTitle = `${itemTitle} - ${selectedEp?.title || `Ep ${choice}`}`;
+                    const epUrl = selectedEp?.url || itemUrl;
+
+                    const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
+                    let epRes;
+                    try {
+                        epRes = await axios.get(detailsUrl, { timeout: 60000 });
+                    } catch (e) {
+                        epRes = { data: { success: false } };
+                    }
+
+                    const epData = epRes.data?.data || epRes.data;
+                    downloadsList = epData?.downloads || epData?.download || [];
+
+                    if (!downloadsList.length) {
+                        downloadsList = [{ quality: 'HD Episode', size: 'N/A', url: epUrl }];
+                    }
+
+                    const qualityList = downloadsList.map((qItem, i) => { 
+                        return `*${i + 1} ┃📥 ${qItem?.quality || qItem?.name || 'Quality'} • ${qItem?.size || 'N/A'}*`; 
+                    }).join('\n\n');
+
+                    const qualityCaption = `
+╔════════════════════════╗
+║   📺 EPISODE INFO 📺    
+╚════════════════════════╝
+
+🎬 *Episode:* ${itemTitle}
+
+🔢 *Reply with quality number* 👇
+
+${qualityList}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const qualityMsg = await conn.sendMessage(from, { 
+                        image: { url: itemPoster }, 
+                        caption: qualityCaption 
+                    }, { quoted: received });
+
+                    step = 'quality'; 
+                    lastMsgId = qualityMsg.key.id;
+
                 } else if (step === 'quality') {
                     if (!downloadsList || choice < 1 || choice > downloadsList.length) { 
                         await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloadsList.length})` }, { quoted: received }); 
@@ -181,26 +281,22 @@ ${qualityList}
                     }
 
                     const selectedQuality = downloadsList[choice - 1];
-                    let targetUrl = selectedQuality?.url;
+                    let targetUrl = selectedQuality?.url || itemUrl;
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // If the URL is a movie page or needs resolution via download API
-                    if (targetUrl && !targetUrl.includes('pixeldrain') && !targetUrl.includes('filesdl')) {
-                        try {
-                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;
-                            console.log(`[MOVIEDRIVE DEBUG] Resolving download URL from: ${dlApiUrl}`);
-                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                            if (dlRes.data?.success && (dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file)) {
-                                targetUrl = dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file;
-                            }
-                        } catch (e) {
-                            console.error('MovieDriveBD download resolution error:', e.message);
+                    // Resolve final direct file link via /download endpoint
+                    try {
+                        const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;
+                        console.log(`[MOVIEDRIVE DEBUG] Resolving download URL from: ${dlApiUrl}`);
+                        const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
+                        if (dlRes.data?.success) {
+                            const dData = dlRes.data.data || dlRes.data;
+                            targetUrl = dData.downloadUrl || dData.url || dData.file || targetUrl;
                         }
+                    } catch (e) {
+                        console.error('MovieDriveBD download resolution error:', e.message);
                     }
-
-                    // Fallback if targetUrl is still empty
-                    if (!targetUrl) targetUrl = itemUrl;
 
                     const qSize = selectedQuality?.size || 'N/A';
                     const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';

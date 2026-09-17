@@ -288,7 +288,6 @@ ${qualityList}
                     const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';
                     const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qQuality}] SinhalaSub.mp4`;
 
-                    // Quality select hote hi direct document format mein video bhej dega
                     await conn.sendMessage(from, { 
                         document: { url: finalUrl }, 
                         mimetype: 'video/mp4', 

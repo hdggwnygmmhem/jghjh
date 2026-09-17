@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "movie",
+    pattern: "movie3",
     desc: "Search and download movies from CineSubz with interactive steps",
     category: "download",
     react: "🎬",

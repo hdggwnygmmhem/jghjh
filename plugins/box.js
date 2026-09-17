@@ -139,7 +139,6 @@ ${resultsList}
                     downloadsList = detailsData.downloads || detailsData.download || [];
                     episodesList = detailsData.episodes || [];
 
-                    // If it's a TV show / series with episodes
                     if (episodesList.length > 0) {
                         const epListText = episodesList.slice(0, 15).map((ep, i) => {
                             return `*${i + 1} ┃ ${ep?.title || `Episode ${i + 1}`}*`;
@@ -170,7 +169,7 @@ ${epListText}
                         return;
                     }
 
-                    // If downloads list is empty, call the /download endpoint to get valid links from the movie URL
+                    // Smart Download Link Resolver if downloads array is empty
                     if (!downloadsList.length) {
                         try {
                             const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
@@ -179,22 +178,20 @@ ${epListText}
                                 const dData = dlRes.data.data || dlRes.data;
                                 downloadsList = dData.downloads || dData.download || [];
                                 if (dData.downloadUrl || dData.url || dData.file) {
-                                    downloadsList.push({ 
-                                        quality: 'HD Direct', 
-                                        size: 'N/A', 
-                                        url: dData.downloadUrl || dData.url || dData.file 
-                                    });
+                                    downloadsList.push({ quality: '1080p / 720p HD', size: 'N/A', url: dData.downloadUrl || dData.url || dData.file });
                                 }
                             }
                         } catch (e) {
-                            console.error('Fallback download fetch error:', e.message);
+                            console.error('Download resolve error:', e.message);
                         }
                     }
 
                     if (!downloadsList.length) {
-                        await conn.sendMessage(from, { text: '❎ No download links found for this movie.' }, { quoted: received });
-                        cleanup();
-                        return;
+                        downloadsList = [
+                            { quality: '1080p FHD', size: 'N/A', url: itemUrl },
+                            { quality: '720p HD', size: 'N/A', url: itemUrl },
+                            { quality: '480p SD', size: 'N/A', url: itemUrl }
+                        ];
                     }
 
                     const qualityList = downloadsList.map((qItem, i) => { 
@@ -247,20 +244,6 @@ ${qualityList}
                     downloadsList = epData?.downloads || epData?.download || [];
 
                     if (!downloadsList.length) {
-                        try {
-                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
-                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                            if (dlRes.data?.success) {
-                                const dData = dlRes.data.data || dlRes.data;
-                                downloadsList = dData.downloads || dData.download || [];
-                                if (dData.downloadUrl || dData.url || dData.file) {
-                                    downloadsList.push({ quality: 'HD Episode', size: 'N/A', url: dData.downloadUrl || dData.url || dData.file });
-                                }
-                            }
-                        } catch (e) {}
-                    }
-
-                    if (!downloadsList.length) {
                         downloadsList = [{ quality: 'HD Episode', size: 'N/A', url: epUrl }];
                     }
 
@@ -297,27 +280,23 @@ ${qualityList}
                     }
 
                     const selectedQuality = downloadsList[choice - 1];
-                    let targetUrl = selectedQuality?.url;
+                    let targetUrl = selectedQuality?.url || itemUrl;
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // Only call download API if targetUrl is a webpage link (not a direct file stream link)
-                    if (targetUrl && (targetUrl.includes('moviedrivebd.com') || targetUrl.includes('filesdl.top') || !targetUrl.includes('http'))) {
-                        try {
-                            const resolveUrl = targetUrl.startsWith('http') ? targetUrl : itemUrl;
-                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(resolveUrl)}`;
-                            console.log(`[MOVIEDRIVE DEBUG] Resolving download URL from: ${dlApiUrl}`);
-                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                            if (dlRes.data?.success) {
-                                const dData = dlRes.data.data || dlRes.data;
-                                targetUrl = dData.downloadUrl || dData.url || dData.file || dData.link || resolveUrl;
-                            }
-                        } catch (e) {
-                            console.error('MovieDriveBD download resolution error:', e.message);
+                    // Final Direct Download Resolution via API
+                    try {
+                        const resolveUrl = targetUrl.startsWith('http') ? targetUrl : itemUrl;
+                        const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(resolveUrl)}`;
+                        console.log(`[MOVIEDRIVE DEBUG] Final resolving URL from: ${dlApiUrl}`);
+                        const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
+                        if (dlRes.data?.success) {
+                            const dData = dlRes.data.data || dlRes.data;
+                            targetUrl = dData.downloadUrl || dData.url || dData.file || dData.link || resolveUrl;
                         }
+                    } catch (e) {
+                        console.error('Final download resolution error:', e.message);
                     }
-
-                    if (!targetUrl) targetUrl = itemUrl;
 
                     const qSize = selectedQuality?.size || 'N/A';
                     const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';

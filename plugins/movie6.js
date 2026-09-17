@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz1",
+    pattern: "cinesubz",
     alias: ["cinesubz3", "cinesubz2"],
     desc: "Search and download movies or series from CineSubz using Vajira API",
     category: "download",
@@ -91,8 +91,9 @@ ${resultsList}
         };
 
         const handler = async (msgUpdate) => {
+            let received = null;
             try {
-                const received = msgUpdate.messages[0];
+                received = msgUpdate.messages[0];
                 if (!received) return;
                 
                 const fromId = received.key.remoteJid || received.key.participant;
@@ -283,63 +284,37 @@ ${qualityList}
                         return;
                     }
 
-                    const formatCaption = `
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+
+                    // Safe direct link delivery to prevent WhatsApp media upload crash (500 error)
+                    const resultText = `
 ╔════════════════════════╗
-║   🎬 CINESUBZ FORMAT 🎬   
+║   🎬 CINESUBZ DOWNLOAD 🎬  
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
 💿 *Quality:* ${selectedQuality?.quality || selectedQuality?.name || 'N/A'}
 📦 *Size:* ${selectedQuality?.size || 'N/A'}
 
-🔢 *Reply with format number* 👇
-
-*1 ┃ 📽️ Video Format*
-*2 ┃ 📁 Document Format*
+🔗 *Direct Download Link:*
+${finalUrl}
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
 
-                    const formatMsg = await conn.sendMessage(from, { 
+                    await conn.sendMessage(from, { 
                         image: { url: itemPoster }, 
-                        caption: formatCaption 
+                        caption: resultText 
                     }, { quoted: received });
 
-                    step = 'format'; 
-                    lastMsgId = formatMsg.key.id;
-
-                } else if (step === 'format') {
-                    if (choice !== 1 && choice !== 2) { 
-                        await conn.sendMessage(from, { text: `❎ Please select 1 (Video) or 2 (Document).` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                    const qSize = selectedQuality?.size || 'N/A';
-                    const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qSize}] CineSubz.mp4`;
-
-                    if (choice === 2) {
-                        await conn.sendMessage(from, { 
-                            document: { url: finalUrl }, 
-                            mimetype: 'video/mp4', 
-                            fileName: fileName, 
-                            caption: `*${itemTitle}*\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    } else {
-                        await conn.sendMessage(from, { 
-                            video: { url: finalUrl }, 
-                            caption: `*${itemTitle}*\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
                 }
 
             } catch (err) { 
                 console.error('CRITICAL CINESUBZ HANDLER ERROR -->', err);
-                await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });
+                if (received) {
+                    await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });
+                }
                 cleanup(); 
             }
         };
@@ -350,7 +325,7 @@ ${qualityList}
         };
 
         conn.ev.on('messages.upsert', handler);
-        timeout = setTimeout(() => cleanup(), 60 * 1000);
+        timeout = setTimeout(() => cleanup(), 5 * 60 * 1000);
 
     } catch (e) {
         console.error('CRITICAL COMMAND ERROR -->', e);

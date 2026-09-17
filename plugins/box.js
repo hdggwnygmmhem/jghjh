@@ -41,7 +41,8 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const results = searchRes.data.results.slice(0, 5);
-        const firstImage = results[0]?.poster || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
+        // Updated working fallback image link
+        const firstImage = results[0]?.poster || results[0]?.image || 'https://telegra.ph/file/1d9818815dd3c5a77f98d.jpg';
         
         const resultsList = results.map((item, i) => { 
             const title = item?.title || 'Unknown'; 
@@ -119,8 +120,6 @@ ${resultsList}
                 }
 
                 const detailsData = resData.data || resData;
-                
-                // Directly targeting the exact key found in logs
                 const directDownloadUrl = detailsData?.directDownloadUrl || detailsData?.downloadPageLink || detailsData?.downloadUrl || detailsData?.url;
 
                 if (!directDownloadUrl) {

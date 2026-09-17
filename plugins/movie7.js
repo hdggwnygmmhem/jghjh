@@ -41,7 +41,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const results = searchRes.data.results.slice(0, 5);
-        const firstImage = results[0]?.poster || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
+        const firstImage = results[0]?.poster || results[0]?.imageUrl || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
         
         const resultsList = results.map((item, i) => { 
             const title = item?.title || 'Unknown'; 
@@ -77,9 +77,11 @@ ${resultsList}
         const extractDownloads = (data) => {
             let links = [];
             if (!data) return links;
-            if (Array.isArray(data.download)) links = data.download;
-            else if (Array.isArray(data.downloads)) links = data.downloads;
-            else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
+            if (Array.isArray(data.downloads)) links = data.downloads;
+            else if (Array.isArray(data.download)) links = data.download;
+            else if (Array.isArray(data.episodes)) {
+                // If it's a series list, handled separately
+            } else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
                 links = Object.entries(data.downloadUrls).map(([qual, link]) => ({
                     quality: qual,
                     url: link,
@@ -141,19 +143,20 @@ ${resultsList}
                         return;
                     }
 
-                    console.log('[SINHALASUB DEBUG] Details API Response:', JSON.stringify(detailsRes.data, null, 2));
+                    console.log('[SINHALASUB DEBUG] Details API Response received successfully.');
 
-                    if (!detailsRes.data?.success || !detailsRes.data.data) { 
+                    const resData = detailsRes.data;
+                    if (!resData?.success) { 
                         await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
                         cleanup(); 
                         return; 
                     }
 
-                    const detailsData = detailsRes.data.data;
-                    itemPoster = detailsData?.poster || selectedItem?.poster || firstImage;
+                    itemPoster = resData?.metadata?.imageUrl || resData?.poster || selectedItem?.poster || firstImage;
 
-                    if (detailsData?.type === 'tvshow' && Array.isArray(detailsData.episodes) && detailsData.episodes.length > 0) {
-                        episodesList = detailsData.episodes;
+                    // Check for TV Show episodes
+                    if ((resData?.type?.toLowerCase() === 'tvshow' || resData?.type?.toLowerCase() === 'series') && Array.isArray(resData.episodes) && resData.episodes.length > 0) {
+                        episodesList = resData.episodes;
 
                         const epListText = episodesList.map((ep, i) => {
                             return `*${i + 1} ┃ ${ep?.title || `Episode ${ep?.index || i + 1}`}* (${ep?.date || 'N/A'})`;
@@ -184,7 +187,7 @@ ${epListText}
                         return;
                     }
 
-                    downloadsList = extractDownloads(detailsData);
+                    downloadsList = extractDownloads(resData);
 
                     if (!downloadsList.length) {
                         await conn.sendMessage(from, { text: '❎ No download links available for this movie.' }, { quoted: received });
@@ -202,8 +205,8 @@ ${epListText}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData?.meta?.rating || 'N/A'}
-📅 *Year:* ${detailsData?.meta?.year || 'N/A'}
+⭐ *Rating:* ${resData?.metadata?.imdbRating || resData?.meta?.rating || 'N/A'}
+📅 *Year:* ${resData?.metadata?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -247,14 +250,13 @@ ${qualityList}
                         return;
                     }
 
-                    if (!epRes.data?.success || !epRes.data.data) {
+                    if (!epRes.data?.success) {
                         await conn.sendMessage(from, { text: '❎ Failed to fetch episode download links.' }, { quoted: received });
                         cleanup();
                         return;
                     }
 
-                    const epData = epRes.data.data;
-                    downloadsList = extractDownloads(epData);
+                    downloadsList = extractDownloads(epRes.data);
 
                     if (!downloadsList.length) {
                         await conn.sendMessage(from, { text: '❎ No download links found for this episode.' }, { quoted: received });

@@ -41,8 +41,6 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const results = searchRes.data.results.slice(0, 5);
-        // Updated working fallback image link
-        const firstImage = results[0]?.poster || results[0]?.image || 'https://telegra.ph/file/1d9818815dd3c5a77f98d.jpg';
         
         const resultsList = results.map((item, i) => { 
             const title = item?.title || 'Unknown'; 
@@ -61,10 +59,8 @@ ${resultsList}
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
 
-        const searchMsg = await conn.sendMessage(from, { 
-            image: { url: firstImage }, 
-            caption: searchCaption 
-        }, { quoted: mek });
+        // Sending as text message to completely avoid image 404 fetching errors
+        const searchMsg = await conn.sendMessage(from, { text: searchCaption }, { quoted: mek });
 
         let lastMsgId = searchMsg.key.id, 
             timeout = null;
@@ -128,7 +124,6 @@ ${resultsList}
                     return;
                 }
 
-                const itemPoster = detailsData?.imageUrl || detailsData?.poster || firstImage;
                 const movieGenres = detailsData?.genres || 'HD';
                 const movieSize = detailsData?.size || 'N/A';
 

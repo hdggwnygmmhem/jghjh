@@ -267,7 +267,6 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // Robust Download Link Resolution
                     try {
                         const resolveUrl = targetUrl.startsWith('http') ? targetUrl : itemUrl;
                         const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(resolveUrl)}`;
@@ -278,7 +277,6 @@ ${qualityList}
                             const dData = dlRes.data.data || dlRes.data;
                             let resolved = dData.downloadUrl || dData.url || dData.file || dData.link;
                             
-                            // Ensure we don't pick the exact movie page URL back as the final file link
                             if (resolved && resolved !== resolveUrl && !resolved.includes('moviedrivebd.com/movies/')) {
                                 targetUrl = resolved;
                             } else if (dData.downloads && Array.isArray(dData.downloads) && dData.downloads.length > 0) {
@@ -304,7 +302,7 @@ ${qualityList}
                     cleanup();
                 }
 
-            } ctx (err) { 
+            } catch (err) { 
                 console.error('CRITICAL MOVIEDRIVE HANDLER ERROR -->', err);
                 if (received) {
                     await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });

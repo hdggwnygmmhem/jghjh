@@ -29,7 +29,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const API_KEY = 'za6005338@gmail.com:vajira-90771';
+        const API_KEY = 'VajiraOfc';
         const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/cinesubz';
 
         const searchUrl = `${BASE_URL}/search?apikey=${encodeURIComponent(API_KEY)}&q=${encodeURIComponent(q)}`;

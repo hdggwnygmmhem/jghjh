@@ -316,7 +316,7 @@ ${qualityList}
                         caption: `*${itemTitle}*\n💿 *Quality:* ${qQuality}\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
                     }, { quoted: received });
 
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key }RENCY });
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
                 }
 

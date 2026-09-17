@@ -7,8 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz3",
-    desc: "Search and download movies/series from CineSubz using Vajira API",
+    pattern: "cinesubz",
+    desc: "Search and download movies or series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",
     filename: __filename
@@ -67,10 +67,12 @@ ${resultsList}
         let step = 'movie', 
             lastMsgId = searchMsg.key.id, 
             selectedItem = null, 
-            downloads = [], 
+            episodesList = [],
+            downloadsList = [], 
             finalUrl = null, 
             selectedQuality = null, 
             itemTitle = '', 
+            itemPoster = firstImage,
             timeout = null;
 
         const handler = async (msgUpdate) => {
@@ -105,35 +107,62 @@ ${resultsList}
                     itemTitle = selectedItem.title || 'Media';
                     const itemUrl = selectedItem.url;
 
-                    const isEpisode = itemUrl.includes('/episodes/');
-                    const detailsUrl = `${BASE_URL}/${isEpisode ? 'episode' : 'details'}?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    
+                    const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
 
-                    // DEBUG LOG: Yeh line aapke Heroku logs me API response print karegi
-                    console.log('API DETAILS RESPONSE -->', JSON.stringify(detailsRes.data, null, 2));
-
                     if (!detailsRes.data?.success || !detailsRes.data.data) { 
-                        await conn.sendMessage(from, { text: '❎ API response failed or invalid.' }, { quoted: received }); 
+                        await conn.sendMessage(from, { text: '❎ Failed to fetch details.' }, { quoted: received }); 
                         cleanup(); 
                         return; 
                     }
 
                     const detailsData = detailsRes.data.data;
-                    
-                    // Fallback check for different link array keys from API response
-                    downloads = detailsData.download || detailsData.downloads || detailsData.links || [];
+                    itemPoster = detailsData.poster || selectedItem.poster || firstImage;
 
-                    if (!downloads.length) {
-                        await conn.sendMessage(from, { text: '❎ No download links available in response.' }, { quoted: received });
+                    // Check if it's a TV Show with episodes
+                    if (detailsData.type === 'tvshow' && detailsData.episodes && detailsData.episodes.length > 0) {
+                        episodesList = detailsData.episodes;
+
+                        const epListText = episodesList.map((ep, i) => {
+                            return `*${i + 1} ┃ ${ep.title || `Episode ${ep.index}`}* (${ep.date || 'N/A'})`;
+                        }).join('\n\n');
+
+                        const epCaption = `
+╔════════════════════════╗
+║   📺 SELECT EPISODE 📺   
+╚════════════════════════╝
+
+🎬 *Series:* ${itemTitle}
+📦 *Total Episodes:* ${episodesList.length}
+
+🔢 *Reply with episode number* 👇
+
+${epListText}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                        const epMsg = await conn.sendMessage(from, { 
+                            image: { url: itemPoster }, 
+                            caption: epCaption 
+                        }, { quoted: received });
+
+                        step = 'episode';
+                        lastMsgId = epMsg.key.id;
+                        return;
+                    }
+
+                    // Direct Movie Download Links
+                    downloadsList = detailsData.download || detailsData.downloads || [];
+
+                    if (!downloadsList.length) {
+                        await conn.sendMessage(from, { text: '❎ No download links available for this movie.' }, { quoted: received });
                         cleanup();
                         return;
                     }
 
-                    const qualityList = downloads.map((qItem, i) => { 
-                        const qName = qItem.quality || qItem.name || `Quality ${i + 1}`;
-                        const qSize = qItem.size || 'N/A';
-                        return `*${i + 1} ┃📥 ${qName} • ${qSize}*`; 
+                    const qualityList = downloadsList.map((qItem, i) => { 
+                        return `*${i + 1} ┃📥 ${qItem.quality || qItem.name || 'Quality'} • ${qItem.size || 'N/A'}*`; 
                     }).join('\n\n');
 
                     const qualityCaption = `
@@ -142,7 +171,7 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData.meta?.rating || selectedItem.rating || 'N/A'}
+⭐ *Rating:* ${detailsData.meta?.rating || 'N/A'}
 📅 *Year:* ${detailsData.meta?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
@@ -153,7 +182,61 @@ ${qualityList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
                     const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: detailsData.poster || selectedItem.poster || firstImage }, 
+                        image: { url: itemPoster }, 
+                        caption: qualityCaption 
+                    }, { quoted: received });
+
+                    step = 'quality'; 
+                    lastMsgId = qualityMsg.key.id;
+
+                } else if (step === 'episode') {
+                    if (!episodesList || choice < 1 || choice > episodesList.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid episode number (1-${episodesList.length})` }, { quoted: received }); 
+                        return; 
+                    }
+
+                    const selectedEp = episodesList[choice - 1];
+                    itemTitle = `${itemTitle} - ${selectedEp.title || `Ep ${selectedEp.index}`}`;
+                    const epUrl = selectedEp.url;
+
+                    const epDetailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
+                    const epRes = await axios.get(epDetailsUrl, { timeout: 60000 });
+
+                    if (!epRes.data?.success || !epRes.data.data) {
+                        await conn.sendMessage(from, { text: '❎ Failed to fetch episode download links.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const epData = epRes.data.data;
+                    downloadsList = epData.download || epData.downloads || [];
+
+                    if (!downloadsList.length) {
+                        await conn.sendMessage(from, { text: '❎ No download links found for this episode.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const qualityList = downloadsList.map((qItem, i) => { 
+                        return `*${i + 1} ┃📥 ${qItem.quality || qItem.name || 'Quality'} • ${qItem.size || 'N/A'}*`; 
+                    }).join('\n\n');
+
+                    const qualityCaption = `
+╔════════════════════════╗
+║   📺 EPISODE INFO 📺    
+╚════════════════════════╝
+
+🎬 *Episode:* ${itemTitle}
+
+🔢 *Reply with quality number* 👇
+
+${qualityList}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const qualityMsg = await conn.sendMessage(from, { 
+                        image: { url: itemPoster }, 
                         caption: qualityCaption 
                     }, { quoted: received });
 
@@ -161,12 +244,12 @@ ${qualityList}
                     lastMsgId = qualityMsg.key.id;
 
                 } else if (step === 'quality') {
-                    if (!downloads || choice < 1 || choice > downloads.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloads.length})` }, { quoted: received }); 
+                    if (!downloadsList || choice < 1 || choice > downloadsList.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloadsList.length})` }, { quoted: received }); 
                         return; 
                     }
 
-                    selectedQuality = downloads[choice - 1];
+                    selectedQuality = downloadsList[choice - 1];
                     finalUrl = selectedQuality.url || selectedQuality.link;
 
                     if (!finalUrl) {
@@ -193,7 +276,7 @@ ${qualityList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
                     const formatMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedItem.poster || firstImage }, 
+                        image: { url: itemPoster }, 
                         caption: formatCaption 
                     }, { quoted: received });
 

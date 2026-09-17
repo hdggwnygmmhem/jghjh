@@ -28,7 +28,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const API_KEY = '2e0f218d3714d2e1';
+        const API_KEY = '29569192d92a322d';
         const BASE_URL = 'https://api-dark-shan-yt.koyeb.app/movie';
 
         const searchUrl = `${BASE_URL}/moviebox-search?q=${encodeURIComponent(q)}&apikey=${API_KEY}`;
@@ -161,7 +161,15 @@ ${qualityList}
                         return; 
                     }
 
-                    finalUrl = downloadRes.data.data.download;
+                    const rawDownload = downloadRes.data.data.download;
+                    // Fix: Ensure finalUrl is strictly a string (handles cases where API returns an array or object)
+                    finalUrl = Array.isArray(rawDownload) ? rawDownload[0] : (typeof rawDownload === 'object' ? rawDownload.url : rawDownload);
+
+                    if (!finalUrl || typeof finalUrl !== 'string') {
+                        await conn.sendMessage(from, { text: '❎ Invalid download link received from API.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
 
                     const formatCaption = `
 ╔════════════════════════╗

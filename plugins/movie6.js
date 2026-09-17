@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz3",
+    pattern: "cinesubz",
     desc: "Search and download movies or series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",
@@ -114,10 +114,13 @@ ${resultsList}
                     }
 
                     const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                    console.log('Fetching Details URL -->', detailsUrl);
+                    
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+                    console.log('Details Response Data -->', JSON.stringify(detailsRes.data, null, 2));
 
                     if (!detailsRes.data?.success || !detailsRes.data.data) { 
-                        await conn.sendMessage(from, { text: '❎ Failed to fetch details.' }, { quoted: received }); 
+                        await conn.sendMessage(from, { text: '❎ Failed to fetch details from API.' }, { quoted: received }); 
                         cleanup(); 
                         return; 
                     }
@@ -125,7 +128,6 @@ ${resultsList}
                     const detailsData = detailsRes.data.data;
                     itemPoster = detailsData?.poster || selectedItem?.poster || firstImage;
 
-                    // Check if episodes exist safely
                     if (detailsData?.type === 'tvshow' && Array.isArray(detailsData.episodes) && detailsData.episodes.length > 0) {
                         episodesList = detailsData.episodes;
 
@@ -158,7 +160,6 @@ ${epListText}
                         return;
                     }
 
-                    // Safe fallback for downloads
                     downloadsList = detailsData?.download || detailsData?.downloads || [];
 
                     if (!Array.isArray(downloadsList) || downloadsList.length === 0) {
@@ -212,7 +213,10 @@ ${qualityList}
                     }
 
                     const epDetailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
+                    console.log('Fetching Episode URL -->', epDetailsUrl);
+
                     const epRes = await axios.get(epDetailsUrl, { timeout: 60000 });
+                    console.log('Episode Response Data -->', JSON.stringify(epRes.data, null, 2));
 
                     if (!epRes.data?.success || !epRes.data.data) {
                         await conn.sendMessage(from, { text: '❎ Failed to fetch episode download links.' }, { quoted: received });
@@ -297,7 +301,7 @@ ${qualityList}
 
                 } else if (step === 'format') {
                     if (choice !== 1 && choice !== 2) { 
-                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
+                        await conn.sendMessage(from, { text: `❎ Please select 1 (Video) or 2 (Document).` }, { quoted: received }); 
                         return; 
                     }
 
@@ -325,8 +329,9 @@ ${qualityList}
                 }
 
             } catch (err) { 
-                console.error('CineSubz handler error:', err);
-                await conn.sendMessage(from, { text: `❎ *Error:* ${err.message}` }, { quoted: received });
+                console.error('CRITICAL CINESUBZ HANDLER ERROR -->', err);
+                console.error('Error Stack -->', err.stack);
+                await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });
                 cleanup(); 
             }
         };
@@ -340,8 +345,9 @@ ${qualityList}
         timeout = setTimeout(() => cleanup(), 60 * 1000);
 
     } catch (e) {
-        console.error('CineSubz command error:', e);
+        console.error('CRITICAL COMMAND ERROR -->', e);
+        console.error('Command Error Stack -->', e.stack);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
+        return reply(`❌ *Error:* ${e.message}`);
     }
 });

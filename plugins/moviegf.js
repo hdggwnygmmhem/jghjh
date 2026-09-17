@@ -28,11 +28,39 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const API_KEY = '12f85decd3d58102';
+        // Multiple API Keys (Pehli expire hone par doosri chal jayegi)
+        const API_KEYS = [
+            '20a658ea9d74efb2',
+            '12f85decd3d58102',
+            '902cbc90b2291c53',
+            '9fe12e22dd6795f4',
+            'bf3cef33e2e1557c'
+        ];
+        
         const BASE_URL = 'https://api-dark-shan-yt.koyeb.app/movie';
 
-        const searchUrl = `${BASE_URL}/cinesubz-search?q=${encodeURIComponent(q)}&apikey=${API_KEY}`;
-        const searchRes = await axios.get(searchUrl, { timeout: 60000 });
+        // Helper function for automatic API key fallback
+        const fetchWithApi = async (endpoint, params = {}) => {
+            let lastError = null;
+            for (const key of API_KEYS) {
+                try {
+                    const queryParams = new URLSearchParams({ ...params, apikey: key });
+                    const url = `${BASE_URL}${endpoint}?${queryParams.toString()}`;
+                    const response = await axios.get(url, { timeout: 60000 });
+                    
+                    if (response.data && response.data.status) {
+                        return response;
+                    }
+                } catch (err) {
+                    lastError = err;
+                    // Agar request fail ho ya key expire ho, toh loop next key par chala jayega
+                    continue;
+                }
+            }
+            throw lastError || new Error("All API keys failed.");
+        };
+
+        const searchRes = await fetchWithApi('/cinesubz-search', { q });
 
         if (!searchRes.data?.status || !searchRes.data.data?.length) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
@@ -104,8 +132,7 @@ ${resultsList}
                     selectedMovie = results[choice - 1];
                     movieTitle = selectedMovie.title.split('|')[0].trim();
 
-                    const infoUrl = `${BASE_URL}/cinesubz-info?url=${encodeURIComponent(selectedMovie.link)}&apikey=${API_KEY}`;
-                    const infoRes = await axios.get(infoUrl, { timeout: 60000 });
+                    const infoRes = await fetchWithApi('/cinesubz-info', { url: selectedMovie.link });
 
                     if (!infoRes.data?.status || !infoRes.data.data?.downloads) { 
                         await conn.sendMessage(from, { text: '❎ No download links found for this movie.' }, { quoted: received }); 
@@ -153,8 +180,7 @@ ${qualityList}
 
                     selectedQuality = downloads[choice - 1];
 
-                    const downloadUrl = `${BASE_URL}/cinesubz-download?url=${encodeURIComponent(selectedQuality.link)}&apikey=${API_KEY}`;
-                    const downloadRes = await axios.get(downloadUrl, { timeout: 60000 });
+                    const downloadRes = await fetchWithApi('/cinesubz-download', { url: selectedQuality.link });
 
                     if (!downloadRes.data?.status || !downloadRes.data.data?.download) { 
                         await conn.sendMessage(from, { text: '❎ Failed to retrieve the download link.' }, { quoted: received }); 

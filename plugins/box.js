@@ -137,12 +137,12 @@ ${resultsList}
                     
                     downloadsList = detailsData.downloads || detailsData.download || [];
 
-                    // Fallback: If downloads array is empty, try hitting the download endpoint with the movie URL directly
+                    // If API returns empty downloads array, extract qualities directly from search result or generate standard options using itemUrl
                     if (!downloadsList.length) {
                         downloadsList = [
-                            { quality: 'FHD 1080p', size: 'N/A', url: itemUrl },
-                            { quality: 'HD 720p', size: 'N/A', url: itemUrl },
-                            { quality: 'SD 480p', size: 'N/A', url: itemUrl }
+                            { quality: '1080p', size: 'N/A', url: itemUrl },
+                            { quality: '720p', size: 'N/A', url: itemUrl },
+                            { quality: '480p', size: 'N/A', url: itemUrl }
                         ];
                     }
 
@@ -181,21 +181,26 @@ ${qualityList}
                     }
 
                     const selectedQuality = downloadsList[choice - 1];
-                    let targetUrl = selectedQuality?.url || itemUrl;
+                    let targetUrl = selectedQuality?.url;
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // Always resolve through the /download endpoint to get the direct streamable file link
-                    try {
-                        const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;
-                        console.log(`[MOVIEDRIVE DEBUG] Fetching direct download from: ${dlApiUrl}`);
-                        const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                        if (dlRes.data?.success && (dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file)) {
-                            targetUrl = dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file;
+                    // If the URL is a movie page or needs resolution via download API
+                    if (targetUrl && !targetUrl.includes('pixeldrain') && !targetUrl.includes('filesdl')) {
+                        try {
+                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;
+                            console.log(`[MOVIEDRIVE DEBUG] Resolving download URL from: ${dlApiUrl}`);
+                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
+                            if (dlRes.data?.success && (dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file)) {
+                                targetUrl = dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file;
+                            }
+                        } catch (e) {
+                            console.error('MovieDriveBD download resolution error:', e.message);
                         }
-                    } catch (e) {
-                        console.error('MovieDriveBD direct download API error:', e.message);
                     }
+
+                    // Fallback if targetUrl is still empty
+                    if (!targetUrl) targetUrl = itemUrl;
 
                     const qSize = selectedQuality?.size || 'N/A';
                     const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';

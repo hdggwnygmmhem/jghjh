@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz3",
+    pattern: "cinesubz",
     desc: "Search and download movies/series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",
@@ -110,17 +110,22 @@ ${resultsList}
                     
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
 
+                    // DEBUG LOG: Yeh line aapke Heroku logs me API response print karegi
+                    console.log('API DETAILS RESPONSE -->', JSON.stringify(detailsRes.data, null, 2));
+
                     if (!detailsRes.data?.success || !detailsRes.data.data) { 
-                        await conn.sendMessage(from, { text: '❎ No download links found for this item.' }, { quoted: received }); 
+                        await conn.sendMessage(from, { text: '❎ API response failed or invalid.' }, { quoted: received }); 
                         cleanup(); 
                         return; 
                     }
 
                     const detailsData = detailsRes.data.data;
-                    downloads = detailsData.download || detailsData.downloads || [];
+                    
+                    // Fallback check for different link array keys from API response
+                    downloads = detailsData.download || detailsData.downloads || detailsData.links || [];
 
                     if (!downloads.length) {
-                        await conn.sendMessage(from, { text: '❎ No download links available.' }, { quoted: received });
+                        await conn.sendMessage(from, { text: '❎ No download links available in response.' }, { quoted: received });
                         cleanup();
                         return;
                     }
@@ -137,7 +142,7 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData.meta?.rating || 'N/A'}
+⭐ *Rating:* ${detailsData.meta?.rating || selectedItem.rating || 'N/A'}
 📅 *Year:* ${detailsData.meta?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇

@@ -69,27 +69,9 @@ ${resultsList}
             lastMsgId = searchMsg.key.id, 
             downloadsList = [], 
             itemTitle = '', 
+            itemUrl = '',
             itemPoster = firstImage,
             timeout = null;
-
-        const extractDownloads = (data) => {
-            let links = [];
-            if (!data) return links;
-            
-            // Checking all possible keys for download links
-            const rawLinks = data.downloads || data.download || data.links || data.downloadUrls;
-            
-            if (Array.isArray(rawLinks)) {
-                links = rawLinks;
-            } else if (rawLinks && typeof rawLinks === 'object') {
-                links = Object.entries(rawLinks).map(([qual, link]) => ({
-                    quality: qual,
-                    url: typeof link === 'string' ? link : (link?.url || link?.link),
-                    size: link?.size || 'N/A'
-                }));
-            }
-            return links;
-        };
 
         const handler = async (msgUpdate) => {
             let received = null;
@@ -122,7 +104,7 @@ ${resultsList}
 
                     const selectedItem = results[choice - 1];
                     itemTitle = selectedItem?.title || 'Movie';
-                    const itemUrl = selectedItem?.url;
+                    itemUrl = selectedItem?.url;
 
                     if (!itemUrl) {
                         await conn.sendMessage(from, { text: '❎ Invalid item URL.' }, { quoted: received });
@@ -144,8 +126,6 @@ ${resultsList}
                     }
 
                     const resData = detailsRes.data;
-                    console.log('[MOVIEDRIVE FULL API RESPONSE] -->', JSON.stringify(resData, null, 2));
-
                     if (!resData?.success) { 
                         await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
                         cleanup(); 
@@ -154,12 +134,16 @@ ${resultsList}
 
                     const detailsData = resData.data || resData;
                     itemPoster = detailsData?.poster || detailsData?.imageUrl || selectedItem?.poster || firstImage;
-                    downloadsList = extractDownloads(detailsData);
+                    
+                    downloadsList = detailsData.downloads || detailsData.download || [];
 
+                    // Fallback: If downloads array is empty, try hitting the download endpoint with the movie URL directly
                     if (!downloadsList.length) {
-                        await conn.sendMessage(from, { text: '❎ No download links available for this movie.' }, { quoted: received });
-                        cleanup();
-                        return;
+                        downloadsList = [
+                            { quality: 'FHD 1080p', size: 'N/A', url: itemUrl },
+                            { quality: 'HD 720p', size: 'N/A', url: itemUrl },
+                            { quality: 'SD 480p', size: 'N/A', url: itemUrl }
+                        ];
                     }
 
                     const qualityList = downloadsList.map((qItem, i) => { 
@@ -172,8 +156,8 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData?.meta?.rating || detailsData?.rating || 'N/A'}
-📅 *Year:* ${detailsData?.meta?.year || detailsData?.year || 'N/A'}
+⭐ *Rating:* ${detailsData?.imdbRating || detailsData?.rating || 'N/A'}
+📅 *Year:* ${detailsData?.releaseDate || detailsData?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -197,26 +181,20 @@ ${qualityList}
                     }
 
                     const selectedQuality = downloadsList[choice - 1];
-                    let targetUrl = selectedQuality?.url || selectedQuality?.link;
-
-                    if (!targetUrl) {
-                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
+                    let targetUrl = selectedQuality?.url || itemUrl;
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    if (targetUrl.includes('filesdl.top') || targetUrl.includes('moviedrivebd')) {
-                        try {
-                            const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;
-                            const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                            if (dlRes.data?.success && (dlRes.data.downloadUrl || dlRes.data.url)) {
-                                targetUrl = dlRes.data.downloadUrl || dlRes.data.url;
-                            }
-                        } catch (e) {
-                            console.error('MovieDriveBD direct download API error:', e.message);
+                    // Always resolve through the /download endpoint to get the direct streamable file link
+                    try {
+                        const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;
+                        console.log(`[MOVIEDRIVE DEBUG] Fetching direct download from: ${dlApiUrl}`);
+                        const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
+                        if (dlRes.data?.success && (dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file)) {
+                            targetUrl = dlRes.data.downloadUrl || dlRes.data.url || dlRes.data.file;
                         }
+                    } catch (e) {
+                        console.error('MovieDriveBD direct download API error:', e.message);
                     }
 
                     const qSize = selectedQuality?.size || 'N/A';

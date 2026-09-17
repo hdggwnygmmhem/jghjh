@@ -28,7 +28,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const API_KEY = '29569192d92a322d';
+        const API_KEY = '2e0f218d3714d2e1';
         const BASE_URL = 'https://api-dark-shan-yt.koyeb.app/movie';
 
         const searchUrl = `${BASE_URL}/moviebox-search?q=${encodeURIComponent(q)}&apikey=${API_KEY}`;

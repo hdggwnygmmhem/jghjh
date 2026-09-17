@@ -40,10 +40,10 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const results = searchRes.data.results.slice(0, 5);
-        const firstImage = results[0].poster || results[0].image || 'https://i.imgur.com/3932mio.jpeg';
+        const firstImage = results[0]?.poster || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
         
         const resultsList = results.map((item, i) => { 
-            const title = item.title || 'Unknown'; 
+            const title = item?.title || 'Unknown'; 
             return `*${i + 1} ┃ ${title}*`; 
         }).join('\n\n');
 
@@ -104,8 +104,14 @@ ${resultsList}
                     }
 
                     selectedItem = results[choice - 1];
-                    itemTitle = selectedItem.title || 'Media';
-                    const itemUrl = selectedItem.url;
+                    itemTitle = selectedItem?.title || 'Media';
+                    const itemUrl = selectedItem?.url;
+
+                    if (!itemUrl) {
+                        await conn.sendMessage(from, { text: '❎ Invalid item URL.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
 
                     const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
@@ -117,14 +123,14 @@ ${resultsList}
                     }
 
                     const detailsData = detailsRes.data.data;
-                    itemPoster = detailsData.poster || selectedItem.poster || firstImage;
+                    itemPoster = detailsData?.poster || selectedItem?.poster || firstImage;
 
-                    // Check if it's a TV Show with episodes
-                    if (detailsData.type === 'tvshow' && detailsData.episodes && detailsData.episodes.length > 0) {
+                    // Check if episodes exist safely
+                    if (detailsData?.type === 'tvshow' && Array.isArray(detailsData.episodes) && detailsData.episodes.length > 0) {
                         episodesList = detailsData.episodes;
 
                         const epListText = episodesList.map((ep, i) => {
-                            return `*${i + 1} ┃ ${ep.title || `Episode ${ep.index}`}* (${ep.date || 'N/A'})`;
+                            return `*${i + 1} ┃ ${ep?.title || `Episode ${ep?.index || i + 1}`}* (${ep?.date || 'N/A'})`;
                         }).join('\n\n');
 
                         const epCaption = `
@@ -152,17 +158,17 @@ ${epListText}
                         return;
                     }
 
-                    // Direct Movie Download Links
-                    downloadsList = detailsData.download || detailsData.downloads || [];
+                    // Safe fallback for downloads
+                    downloadsList = detailsData?.download || detailsData?.downloads || [];
 
-                    if (!downloadsList.length) {
+                    if (!Array.isArray(downloadsList) || downloadsList.length === 0) {
                         await conn.sendMessage(from, { text: '❎ No download links available for this movie.' }, { quoted: received });
                         cleanup();
                         return;
                     }
 
                     const qualityList = downloadsList.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem.quality || qItem.name || 'Quality'} • ${qItem.size || 'N/A'}*`; 
+                        return `*${i + 1} ┃📥 ${qItem?.quality || qItem?.name || 'Quality'} • ${qItem?.size || 'N/A'}*`; 
                     }).join('\n\n');
 
                     const qualityCaption = `
@@ -171,8 +177,8 @@ ${epListText}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData.meta?.rating || 'N/A'}
-📅 *Year:* ${detailsData.meta?.year || 'N/A'}
+⭐ *Rating:* ${detailsData?.meta?.rating || 'N/A'}
+📅 *Year:* ${detailsData?.meta?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -190,14 +196,20 @@ ${qualityList}
                     lastMsgId = qualityMsg.key.id;
 
                 } else if (step === 'episode') {
-                    if (!episodesList || choice < 1 || choice > episodesList.length) { 
+                    if (!Array.isArray(episodesList) || choice < 1 || choice > episodesList.length) { 
                         await conn.sendMessage(from, { text: `❎ Select a valid episode number (1-${episodesList.length})` }, { quoted: received }); 
                         return; 
                     }
 
                     const selectedEp = episodesList[choice - 1];
-                    itemTitle = `${itemTitle} - ${selectedEp.title || `Ep ${selectedEp.index}`}`;
-                    const epUrl = selectedEp.url;
+                    itemTitle = `${itemTitle} - ${selectedEp?.title || `Ep ${selectedEp?.index || choice}`}`;
+                    const epUrl = selectedEp?.url;
+
+                    if (!epUrl) {
+                        await conn.sendMessage(from, { text: '❎ Invalid episode URL.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
 
                     const epDetailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
                     const epRes = await axios.get(epDetailsUrl, { timeout: 60000 });
@@ -209,16 +221,16 @@ ${qualityList}
                     }
 
                     const epData = epRes.data.data;
-                    downloadsList = epData.download || epData.downloads || [];
+                    downloadsList = epData?.download || epData?.downloads || [];
 
-                    if (!downloadsList.length) {
+                    if (!Array.isArray(downloadsList) || downloadsList.length === 0) {
                         await conn.sendMessage(from, { text: '❎ No download links found for this episode.' }, { quoted: received });
                         cleanup();
                         return;
                     }
 
                     const qualityList = downloadsList.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem.quality || qItem.name || 'Quality'} • ${qItem.size || 'N/A'}*`; 
+                        return `*${i + 1} ┃📥 ${qItem?.quality || qItem?.name || 'Quality'} • ${qItem?.size || 'N/A'}*`; 
                     }).join('\n\n');
 
                     const qualityCaption = `
@@ -244,13 +256,13 @@ ${qualityList}
                     lastMsgId = qualityMsg.key.id;
 
                 } else if (step === 'quality') {
-                    if (!downloadsList || choice < 1 || choice > downloadsList.length) { 
+                    if (!Array.isArray(downloadsList) || choice < 1 || choice > downloadsList.length) { 
                         await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloadsList.length})` }, { quoted: received }); 
                         return; 
                     }
 
                     selectedQuality = downloadsList[choice - 1];
-                    finalUrl = selectedQuality.url || selectedQuality.link;
+                    finalUrl = selectedQuality?.url || selectedQuality?.link;
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
@@ -264,8 +276,8 @@ ${qualityList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-💿 *Quality:* ${selectedQuality.quality || selectedQuality.name || 'N/A'}
-📦 *Size:* ${selectedQuality.size || 'N/A'}
+💿 *Quality:* ${selectedQuality?.quality || selectedQuality?.name || 'N/A'}
+📦 *Size:* ${selectedQuality?.size || 'N/A'}
 
 🔢 *Reply with format number* 👇
 
@@ -291,8 +303,8 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    const qSize = selectedQuality.size || 'N/A';
-                    const fileName = `${itemTitle} [${qSize}] CineSubz.mp4`;
+                    const qSize = selectedQuality?.size || 'N/A';
+                    const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qSize}] CineSubz.mp4`;
 
                     if (choice === 2) {
                         await conn.sendMessage(from, { 
@@ -313,7 +325,8 @@ ${qualityList}
                 }
 
             } catch (err) { 
-                console.error('CineSubz handler error:', err); 
+                console.error('CineSubz handler error:', err);
+                await conn.sendMessage(from, { text: `❎ *Error:* ${err.message}` }, { quoted: received });
                 cleanup(); 
             }
         };

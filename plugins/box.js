@@ -112,8 +112,6 @@ ${resultsList}
                 const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
                 const resData = detailsRes.data;
 
-                console.log('[THENKIRI FULL API RESPONSE] -->', JSON.stringify(resData, null, 2));
-
                 if (!resData?.success) { 
                     await conn.sendMessage(from, { text: '❎ API returned unsuccessful response.' }, { quoted: received }); 
                     cleanup(); 
@@ -122,16 +120,17 @@ ${resultsList}
 
                 const detailsData = resData.data || resData;
                 
-                // Smart link extractor checking all possible properties
-                let directDownloadUrl = detailsData?.downloadUrl || detailsData?.download || detailsData?.link || detailsData?.url || resData?.downloadUrl || resData?.download;
+                // Directly targeting the exact key found in logs
+                const directDownloadUrl = detailsData?.directDownloadUrl || detailsData?.downloadPageLink || detailsData?.downloadUrl || detailsData?.url;
 
-                // If URL points back to thenkiri page, fallback to itemUrl
-                if (!directDownloadUrl || directDownloadUrl === itemUrl) {
-                    directDownloadUrl = itemUrl;
+                if (!directDownloadUrl) {
+                    await conn.sendMessage(from, { text: '❎ Direct download link nahi mila!' }, { quoted: received });
+                    cleanup();
+                    return;
                 }
 
-                const itemPoster = detailsData?.poster || detailsData?.imageUrl || firstImage;
-                const movieGenres = Array.isArray(detailsData?.genres) ? detailsData.genres.join(', ') : (detailsData?.genres || 'HD');
+                const itemPoster = detailsData?.imageUrl || detailsData?.poster || firstImage;
+                const movieGenres = detailsData?.genres || 'HD';
                 const movieSize = detailsData?.size || 'N/A';
 
                 const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [Thenkiri].mp4`;

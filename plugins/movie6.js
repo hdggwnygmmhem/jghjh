@@ -7,7 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinesubz3",
+    pattern: "cinesubz1",
+    alias: ["cinesubz3", "cinesubz2"],
     desc: "Search and download movies or series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",
@@ -75,7 +76,6 @@ ${resultsList}
             itemPoster = firstImage,
             timeout = null;
 
-        // Helper function to extract links from various API formats (array or downloadUrls object)
         const extractDownloads = (data) => {
             let links = [];
             if (Array.isArray(data.download)) links = data.download;

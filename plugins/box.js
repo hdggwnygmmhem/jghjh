@@ -7,11 +7,11 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "moviedrive",
-    alias: ["moviedrivebd", "drive"],
-    desc: "Search and download movies or series from MovieDriveBD using Vajira API",
+    pattern: "thenkiri",
+    alias: ["nkiri", "thenkirimovie"],
+    desc: "Search and download movies from Thenkiri using Vajira API",
     category: "download",
-    react: "🚀",
+    react: "🎬",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
@@ -19,10 +19,10 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
-                `║   🚀 KAMRAN-MD MOVIEDRIVE 🚀  \n` +
+                `║   🚀 KAMRAN-MD THENKIRI 🚀    \n` +
                 `╚════════════════════════╝\n\n` +
-                `❌ *Kripya movie ya series ka naam dein!*\n\n` +
-                `> 📌 *Example:* \`.moviedrive 2026\`\n` +
+                `❌ *Kripya movie ka naam dein!*\n\n` +
+                `> 📌 *Example:* \`.thenkiri 2026\`\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
         }
@@ -30,7 +30,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
         const API_KEY = 'za6005338@gmail.com:vajira-90771';
-        const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/moviedrivebd';
+        const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/thenkiri';
 
         const searchUrl = `${BASE_URL}/search?apikey=${encodeURIComponent(API_KEY)}&q=${encodeURIComponent(q)}`;
         const searchRes = await axios.get(searchUrl, { timeout: 60000 });
@@ -50,7 +50,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
         const searchCaption = `
 ╔════════════════════════╗
-║   🚀 MOVIEDRIVE SEARCH 🚀   
+║    🔥 THENKIRI SEARCH 🔥    
 ╚════════════════════════╝
 
 ${resultsList}
@@ -65,13 +65,7 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let step = 'movie', 
-            lastMsgId = searchMsg.key.id, 
-            downloadsList = [], 
-            episodesList = [],
-            itemTitle = '', 
-            itemUrl = '',
-            itemPoster = firstImage,
+        let lastMsgId = searchMsg.key.id, 
             timeout = null;
 
         const handler = async (msgUpdate) => {
@@ -95,215 +89,64 @@ ${resultsList}
                     return; 
                 }
 
-                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
-
-                if (step === 'movie') {
-                    if (choice < 1 || choice > results.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    const selectedItem = results[choice - 1];
-                    itemTitle = selectedItem?.title || 'Movie';
-                    itemUrl = selectedItem?.url;
-
-                    if (!itemUrl) {
-                        await conn.sendMessage(from, { text: '❎ Invalid item URL.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    console.log(`[MOVIEDRIVE DEBUG] Fetching details from: ${detailsUrl}`);
-
-                    let detailsRes;
-                    try {
-                        detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
-                    } catch (apiErr) {
-                        console.error('[MOVIEDRIVE API ERROR] Details fetch failed:', apiErr.message);
-                        await conn.sendMessage(from, { text: '❎ API request failed or timed out while fetching details.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    const resData = detailsRes.data;
-                    if (!resData?.success) { 
-                        await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
-                        cleanup(); 
-                        return; 
-                    }
-
-                    const detailsData = resData.data || resData;
-                    itemPoster = detailsData?.poster || detailsData?.imageUrl || selectedItem?.poster || firstImage;
-                    
-                    downloadsList = detailsData.downloads || detailsData.download || [];
-                    episodesList = detailsData.episodes || [];
-
-                    if (episodesList.length > 0) {
-                        const epListText = episodesList.slice(0, 15).map((ep, i) => {
-                            return `*${i + 1} ┃ ${ep?.title || `Episode ${i + 1}`}*`;
-                        }).join('\n\n');
-
-                        const epCaption = `
-╔════════════════════════╗
-║   📺 SELECT EPISODE 📺   
-╚════════════════════════╝
-
-🎬 *Series:* ${itemTitle}
-📦 *Total Episodes:* ${episodesList.length}
-
-🔢 *Reply with episode number* 👇
-
-${epListText}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                        const epMsg = await conn.sendMessage(from, { 
-                            image: { url: itemPoster }, 
-                            caption: epCaption 
-                        }, { quoted: received });
-
-                        step = 'episode';
-                        lastMsgId = epMsg.key.id;
-                        return;
-                    }
-
-                    if (!downloadsList.length) {
-                        downloadsList = [
-                            { quality: '1080p FHD', size: 'N/A', url: itemUrl },
-                            { quality: '720p HD', size: 'N/A', url: itemUrl },
-                            { quality: '480p SD', size: 'N/A', url: itemUrl }
-                        ];
-                    }
-
-                    const qualityList = downloadsList.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem?.quality || qItem?.name || 'Quality'} • ${qItem?.size || 'N/A'}*`; 
-                    }).join('\n\n');
-
-                    const qualityCaption = `
-╔════════════════════════╗
-║   🚀 MOVIEDRIVE INFO 🚀   
-╚════════════════════════╝
-
-🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData?.imdbRating || detailsData?.rating || 'N/A'}
-📅 *Year:* ${detailsData?.releaseDate || detailsData?.year || 'N/A'}
-
-🔢 *Reply with quality number* 👇
-
-${qualityList}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: itemPoster }, 
-                        caption: qualityCaption 
-                    }, { quoted: received });
-
-                    step = 'quality'; 
-                    lastMsgId = qualityMsg.key.id;
-
-                } else if (step === 'episode') {
-                    if (!episodesList || choice < 1 || choice > episodesList.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid episode number (1-${episodesList.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    const selectedEp = episodesList[choice - 1];
-                    itemTitle = `${itemTitle} - ${selectedEp?.title || `Ep ${choice}`}`;
-                    const epUrl = selectedEp?.url || itemUrl;
-
-                    const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(epUrl)}`;
-                    let epRes;
-                    try {
-                        epRes = await axios.get(detailsUrl, { timeout: 60000 });
-                    } catch (e) {
-                        epRes = { data: { success: false } };
-                    }
-
-                    const epData = epRes.data?.data || epRes.data;
-                    downloadsList = epData?.downloads || epData?.download || [];
-
-                    if (!downloadsList.length) {
-                        downloadsList = [{ quality: 'HD Episode', size: 'N/A', url: epUrl }];
-                    }
-
-                    const qualityList = downloadsList.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem?.quality || qItem?.name || 'Quality'} • ${qItem?.size || 'N/A'}*`; 
-                    }).join('\n\n');
-
-                    const qualityCaption = `
-╔════════════════════════╗
-║   📺 EPISODE INFO 📺    
-╚════════════════════════╝
-
-🎬 *Episode:* ${itemTitle}
-
-🔢 *Reply with quality number* 👇
-
-${qualityList}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: itemPoster }, 
-                        caption: qualityCaption 
-                    }, { quoted: received });
-
-                    step = 'quality'; 
-                    lastMsgId = qualityMsg.key.id;
-
-                } else if (step === 'quality') {
-                    if (!downloadsList || choice < 1 || choice > downloadsList.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloadsList.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    const selectedQuality = downloadsList[choice - 1];
-                    let targetUrl = selectedQuality?.url || itemUrl;
-
-                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                    try {
-                        const resolveUrl = targetUrl.startsWith('http') ? targetUrl : itemUrl;
-                        const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(resolveUrl)}`;
-                        console.log(`[MOVIEDRIVE DEBUG] Resolving download URL from: ${dlApiUrl}`);
-                        const dlRes = await axios.get(dlApiUrl, { timeout: 60000 });
-                        
-                        if (dlRes.data?.success) {
-                            const dData = dlRes.data.data || dlRes.data;
-                            let resolved = dData.downloadUrl || dData.url || dData.file || dData.link;
-                            
-                            if (resolved && resolved !== resolveUrl && !resolved.includes('moviedrivebd.com/movies/')) {
-                                targetUrl = resolved;
-                            } else if (dData.downloads && Array.isArray(dData.downloads) && dData.downloads.length > 0) {
-                                targetUrl = dData.downloads[0].url || targetUrl;
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Download resolution error:', e.message);
-                    }
-
-                    const qSize = selectedQuality?.size || 'N/A';
-                    const qQuality = selectedQuality?.quality || selectedQuality?.name || 'HD';
-                    const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qQuality}] MovieDrive.mp4`;
-
-                    await conn.sendMessage(from, { 
-                        document: { url: targetUrl }, 
-                        mimetype: 'video/mp4', 
-                        fileName: fileName, 
-                        caption: `*${itemTitle}*\n💿 *Quality:* ${qQuality}\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                    }, { quoted: received });
-
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                    cleanup();
+                if (choice < 1 || choice > results.length) { 
+                    await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
+                    return; 
                 }
 
+                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
+
+                const selectedItem = results[choice - 1];
+                const itemTitle = selectedItem?.title || 'Movie';
+                const itemUrl = selectedItem?.url;
+
+                if (!itemUrl) {
+                    await conn.sendMessage(from, { text: '❎ Invalid item URL.' }, { quoted: received });
+                    cleanup();
+                    return;
+                }
+
+                const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                console.log(`[THENKIRI DEBUG] Fetching details from: ${detailsUrl}`);
+
+                const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+                const resData = detailsRes.data;
+
+                if (!resData?.success) { 
+                    await conn.sendMessage(from, { text: '❎ API returned unsuccessful response.' }, { quoted: received }); 
+                    cleanup(); 
+                    return; 
+                }
+
+                const detailsData = resData.data || resData;
+                const directDownloadUrl = detailsData?.downloadUrl || detailsData?.download || detailsData?.url;
+
+                if (!directDownloadUrl) {
+                    await conn.sendMessage(from, { text: '❎ Direct download link nahi mila!' }, { quoted: received });
+                    cleanup();
+                    return;
+                }
+
+                const itemPoster = detailsData?.poster || detailsData?.imageUrl || firstImage;
+                const movieGenres = Array.isArray(detailsData?.genres) ? detailsData.genres.join(', ') : (detailsData?.genres || 'HD');
+                const movieSize = detailsData?.size || 'N/A';
+
+                const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [Thenkiri].mp4`;
+
+                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
+
+                await conn.sendMessage(from, { 
+                    document: { url: directDownloadUrl }, 
+                    mimetype: 'video/mp4', 
+                    fileName: fileName, 
+                    caption: `*${itemTitle}*\n🎬 *Genres:* ${movieGenres}\n📦 *Size:* ${movieSize}\n\n> *👑 Powered by KAMRAN MD*` 
+                }, { quoted: received });
+
+                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                cleanup();
+
             } catch (err) { 
-                console.error('CRITICAL MOVIEDRIVE HANDLER ERROR -->', err);
+                console.error('CRITICAL THENKIRI HANDLER ERROR -->', err);
                 if (received) {
                     await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });
                 }

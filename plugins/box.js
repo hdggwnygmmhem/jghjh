@@ -112,6 +112,8 @@ ${resultsList}
                 const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
                 const resData = detailsRes.data;
 
+                console.log('[THENKIRI FULL API RESPONSE] -->', JSON.stringify(resData, null, 2));
+
                 if (!resData?.success) { 
                     await conn.sendMessage(from, { text: '❎ API returned unsuccessful response.' }, { quoted: received }); 
                     cleanup(); 
@@ -119,12 +121,13 @@ ${resultsList}
                 }
 
                 const detailsData = resData.data || resData;
-                const directDownloadUrl = detailsData?.downloadUrl || detailsData?.download || detailsData?.url;
+                
+                // Smart link extractor checking all possible properties
+                let directDownloadUrl = detailsData?.downloadUrl || detailsData?.download || detailsData?.link || detailsData?.url || resData?.downloadUrl || resData?.download;
 
-                if (!directDownloadUrl) {
-                    await conn.sendMessage(from, { text: '❎ Direct download link nahi mila!' }, { quoted: received });
-                    cleanup();
-                    return;
+                // If URL points back to thenkiri page, fallback to itemUrl
+                if (!directDownloadUrl || directDownloadUrl === itemUrl) {
+                    directDownloadUrl = itemUrl;
                 }
 
                 const itemPoster = detailsData?.poster || detailsData?.imageUrl || firstImage;

@@ -75,13 +75,17 @@ ${resultsList}
         const extractDownloads = (data) => {
             let links = [];
             if (!data) return links;
-            if (Array.isArray(data.downloads)) links = data.downloads;
-            else if (Array.isArray(data.download)) links = data.download;
-            else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
-                links = Object.entries(data.downloadUrls).map(([qual, link]) => ({
+            
+            // Checking all possible keys for download links
+            const rawLinks = data.downloads || data.download || data.links || data.downloadUrls;
+            
+            if (Array.isArray(rawLinks)) {
+                links = rawLinks;
+            } else if (rawLinks && typeof rawLinks === 'object') {
+                links = Object.entries(rawLinks).map(([qual, link]) => ({
                     quality: qual,
-                    url: link,
-                    size: 'N/A'
+                    url: typeof link === 'string' ? link : (link?.url || link?.link),
+                    size: link?.size || 'N/A'
                 }));
             }
             return links;
@@ -140,6 +144,8 @@ ${resultsList}
                     }
 
                     const resData = detailsRes.data;
+                    console.log('[MOVIEDRIVE DEBUG] Details API Response received successfully.');
+
                     if (!resData?.success) { 
                         await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
                         cleanup(); 

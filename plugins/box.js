@@ -144,7 +144,7 @@ ${resultsList}
                     }
 
                     const resData = detailsRes.data;
-                    console.log('[MOVIEDRIVE DEBUG] Details API Response received successfully.');
+                    console.log('[MOVIEDRIVE FULL API RESPONSE] -->', JSON.stringify(resData, null, 2));
 
                     if (!resData?.success) { 
                         await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
@@ -207,7 +207,6 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // If URL points to filedl page, call the /download endpoint to get the direct file link
                     if (targetUrl.includes('filesdl.top') || targetUrl.includes('moviedrivebd')) {
                         try {
                             const dlApiUrl = `${BASE_URL}/download?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(targetUrl)}`;

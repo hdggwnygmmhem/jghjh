@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "cinesubz3",
-    desc: "Search and download movies or episodes from CineSubz with interactive steps",
+    desc: "Search and download movies/series from CineSubz using Vajira API",
     category: "download",
     react: "🎬",
     filename: __filename
@@ -21,7 +21,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
                 `║   🎬 KAMRAN-MD CINESUBZ 🎬   \n` +
                 `╚════════════════════════╝\n\n` +
                 `❌ *Kripya movie ya series ka naam dein!*\n\n` +
-                `> 📌 *Example:* \`.cinesubz Avatar\`\n` +
+                `> 📌 *Example:* \`.cinesubz 2026\`\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
         }
@@ -34,18 +34,17 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const searchUrl = `${BASE_URL}/search?apikey=${encodeURIComponent(API_KEY)}&q=${encodeURIComponent(q)}`;
         const searchRes = await axios.get(searchUrl, { timeout: 60000 });
 
-        if (!searchRes.data?.status || !searchRes.data.result?.length) {
+        if (!searchRes.data?.success || !searchRes.data.results?.length) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *Koi result nahi mila!*");
         }
 
-        const results = searchRes.data.result.slice(0, 5);
-        const firstImage = results[0].image || results[0].thumbnail || 'https://i.imgur.com/3932mio.jpeg';
+        const results = searchRes.data.results.slice(0, 5);
+        const firstImage = results[0].poster || results[0].image || 'https://i.imgur.com/3932mio.jpeg';
         
         const resultsList = results.map((item, i) => { 
             const title = item.title || 'Unknown'; 
-            const type = item.type || 'Movie';
-            return `*${i + 1} ┃ ${title}*\n   🎬 Type • ${type}`; 
+            return `*${i + 1} ┃ ${title}*`; 
         }).join('\n\n');
 
         const searchCaption = `
@@ -68,11 +67,10 @@ ${resultsList}
         let step = 'movie', 
             lastMsgId = searchMsg.key.id, 
             selectedItem = null, 
-            downloads = null, 
+            downloads = [], 
             finalUrl = null, 
             selectedQuality = null, 
             itemTitle = '', 
-            itemSize = 'N/A',
             timeout = null;
 
         const handler = async (msgUpdate) => {
@@ -105,28 +103,21 @@ ${resultsList}
 
                     selectedItem = results[choice - 1];
                     itemTitle = selectedItem.title || 'Media';
-                    const itemUrl = selectedItem.url || selectedItem.link;
+                    const itemUrl = selectedItem.url;
 
-                    const isEpisodeOrSeries = itemUrl.includes('/episodes/') || itemUrl.includes('/series/') || selectedItem.type?.toLowerCase().includes('series');
-
-                    let detailsUrl = '';
-                    if (isEpisodeOrSeries && itemUrl.includes('/episodes/')) {
-                        detailsUrl = `${BASE_URL}/episode?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    } else {
-                        detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    }
-
+                    const isEpisode = itemUrl.includes('/episodes/');
+                    const detailsUrl = `${BASE_URL}/${isEpisode ? 'episode' : 'details'}?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                    
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
 
-                    if (!detailsRes.data?.status || !detailsRes.data.result) { 
+                    if (!detailsRes.data?.success || !detailsRes.data.data) { 
                         await conn.sendMessage(from, { text: '❎ No download links found for this item.' }, { quoted: received }); 
                         cleanup(); 
                         return; 
                     }
 
-                    const details = detailsRes.data.result;
-                    downloads = details.download || details.downloads || details.links || [];
-                    itemSize = details.size || selectedItem.size || 'N/A';
+                    const detailsData = detailsRes.data.data;
+                    downloads = detailsData.download || detailsData.downloads || [];
 
                     if (!downloads.length) {
                         await conn.sendMessage(from, { text: '❎ No download links available.' }, { quoted: received });
@@ -135,8 +126,8 @@ ${resultsList}
                     }
 
                     const qualityList = downloads.map((qItem, i) => { 
-                        const qName = qItem.quality || qItem.name || 'Quality';
-                        const qSize = qItem.size || itemSize;
+                        const qName = qItem.quality || qItem.name || `Quality ${i + 1}`;
+                        const qSize = qItem.size || 'N/A';
                         return `*${i + 1} ┃📥 ${qName} • ${qSize}*`; 
                     }).join('\n\n');
 
@@ -146,9 +137,8 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-📦 *Size:* ${itemSize}
-⭐ *Rating:* ${details.rating || selectedItem.rating || 'N/A'}
-📅 *Year:* ${details.year || 'N/A'}
+⭐ *Rating:* ${detailsData.meta?.rating || 'N/A'}
+📅 *Year:* ${detailsData.meta?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -158,7 +148,7 @@ ${qualityList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
                     const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedItem.image || firstImage }, 
+                        image: { url: detailsData.poster || selectedItem.poster || firstImage }, 
                         caption: qualityCaption 
                     }, { quoted: received });
 
@@ -187,7 +177,7 @@ ${qualityList}
 
 🎬 *Title:* ${itemTitle}
 💿 *Quality:* ${selectedQuality.quality || selectedQuality.name || 'N/A'}
-📦 *Size:* ${selectedQuality.size || itemSize}
+📦 *Size:* ${selectedQuality.size || 'N/A'}
 
 🔢 *Reply with format number* 👇
 
@@ -198,7 +188,7 @@ ${qualityList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
                     const formatMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedItem.image || firstImage }, 
+                        image: { url: selectedItem.poster || firstImage }, 
                         caption: formatCaption 
                     }, { quoted: received });
 
@@ -213,7 +203,7 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    const qSize = selectedQuality.size || itemSize;
+                    const qSize = selectedQuality.size || 'N/A';
                     const fileName = `${itemTitle} [${qSize}] CineSubz.mp4`;
 
                     if (choice === 2) {

@@ -7,8 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "sinhalasub33",
-    alias: ["sinhalasub3", "sinhalasub2"],
+    pattern: "movie5",
+    alias: ["movie6", "movie7"],
     desc: "Search and download movies or series from SinhalaSub using Vajira API",
     category: "download",
     react: "🎬",
@@ -43,10 +43,8 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const results = searchRes.data.results.slice(0, 5);
         const firstImage = results[0]?.poster || results[0]?.imageUrl || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
         
-        // Clean title function to remove unwanted Sinhala characters if needed
         const cleanTitle = (rawTitle) => {
             if (!rawTitle) return 'Unknown';
-            // Sirf English letters, numbers aur basic punctuation rakhne ke liye
             return rawTitle.split('|')[0].trim();
         };
 
@@ -280,7 +278,7 @@ ${qualityList}
 ${qualityList}
 
 > ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trigger ? '' : ''.trim(); // formatting fixed
+> 👑 *Powered by KAMRAN MD*`.trim();
 
                     const qualityMsg = await conn.sendMessage(from, { 
                         image: { url: itemPoster }, 
@@ -341,6 +339,7 @@ ${qualityList}
 
     } catch (e) {
         console.error('CRITICAL COMMAND ERROR -->', e);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } text: `❌ *Error:* ${e.message}` });
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        return reply(`❌ *Error:* ${e.message}`);
     }
 });

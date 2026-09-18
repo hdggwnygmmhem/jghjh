@@ -1,4 +1,4 @@
-// DR KAMRAN - BAISCOPES STABLE CODE
+// DR KAMRAN - BAISCOPES LIGHTWEIGHT & MEMORY SAFE
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { cmd } from '../command.js';
@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "baiscopes",
-    desc: "Search and download movies from Baiscopes.lk with interactive steps",
+    desc: "Search and download movies from Baiscopes.lk safely",
     category: "download",
     react: "🎬",
     filename: __filename
@@ -183,17 +183,18 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    try {
-                        // Pehle video try karega, agar size bada hua toh link bhej dega taaki bot crash na ho
-                        await conn.sendMessage(from, { 
-                            video: { url: finalUrl }, 
-                            caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    } catch (mediaErr) {
-                        await conn.sendMessage(from, { 
-                            text: `🎬 *${movieTitle}*\n\n📥 *Direct Download Link:* ${finalUrl}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    }
+                    // Memory overload se bachne ke liye direct high-speed link send kiya jayega taaki Heroku crash na ho
+                    await conn.sendMessage(from, { 
+                        text: `╔════════════════════════╗\n` +
+                              `║   🎬 MOVIE READY 🎬   \n` +
+                              `╚════════════════════════╝\n\n` +
+                              `🎬 *Title:* ${movieTitle}\n` +
+                              `💿 *Quality:* ${selectedQuality.quality || 'HD'}\n` +
+                              `📦 *Size:* ${selectedQuality.size || 'N/A'}\n\n` +
+                              `📥 *Direct Download Link:*\n${finalUrl}\n\n` +
+                              `> ⚡ *Server Safe & Fast*\n` +
+                              `> 👑 *Powered by KAMRAN MD*` 
+                    }, { quoted: received });
 
                     await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();

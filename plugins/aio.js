@@ -7,7 +7,7 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "sinhalasub",
+    pattern: "sinhalasub33",
     alias: ["sinhalasub3", "sinhalasub2"],
     desc: "Search and download movies or series from SinhalaSub using Vajira API",
     category: "download",

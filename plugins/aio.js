@@ -7,8 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "movie5",
-    alias: ["movie6", "movie7"],
+    pattern: "sinhalasub64",
+    alias: ["sinhalasub3", "sinhalasub26"],
     desc: "Search and download movies or series from SinhalaSub using Vajira API",
     category: "download",
     react: "🎬",
@@ -43,13 +43,8 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const results = searchRes.data.results.slice(0, 5);
         const firstImage = results[0]?.poster || results[0]?.imageUrl || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
         
-        const cleanTitle = (rawTitle) => {
-            if (!rawTitle) return 'Unknown';
-            return rawTitle.split('|')[0].trim();
-        };
-
         const resultsList = results.map((item, i) => { 
-            const title = cleanTitle(item?.title); 
+            const title = item?.title || 'Unknown'; 
             return `*${i + 1} ┃ ${title}*`; 
         }).join('\n\n');
 
@@ -84,7 +79,9 @@ ${resultsList}
             if (!data) return links;
             if (Array.isArray(data.downloads)) links = data.downloads;
             else if (Array.isArray(data.download)) links = data.download;
-            else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
+            else if (Array.isArray(data.episodes)) {
+                // If it's a series list, handled separately
+            } else if (data.downloadUrls && typeof data.downloadUrls === 'object') {
                 links = Object.entries(data.downloadUrls).map(([qual, link]) => ({
                     quality: qual,
                     url: link,
@@ -124,7 +121,7 @@ ${resultsList}
                     }
 
                     selectedItem = results[choice - 1];
-                    itemTitle = cleanTitle(selectedItem?.title);
+                    itemTitle = selectedItem?.title || 'Media';
                     const itemUrl = selectedItem?.url;
 
                     if (!itemUrl) {
@@ -134,6 +131,8 @@ ${resultsList}
                     }
 
                     const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
+                    console.log(`[SINHALASUB DEBUG] Fetching details from: ${detailsUrl}`);
+
                     let detailsRes;
                     try {
                         detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
@@ -144,6 +143,8 @@ ${resultsList}
                         return;
                     }
 
+                    console.log('[SINHALASUB DEBUG] Details API Response received successfully.');
+
                     const resData = detailsRes.data;
                     if (!resData?.success) { 
                         await conn.sendMessage(from, { text: '❎ API returned unsuccessful response for details.' }, { quoted: received }); 
@@ -153,11 +154,12 @@ ${resultsList}
 
                     itemPoster = resData?.metadata?.imageUrl || resData?.poster || selectedItem?.poster || firstImage;
 
+                    // Check for TV Show episodes
                     if ((resData?.type?.toLowerCase() === 'tvshow' || resData?.type?.toLowerCase() === 'series') && Array.isArray(resData.episodes) && resData.episodes.length > 0) {
                         episodesList = resData.episodes;
 
                         const epListText = episodesList.map((ep, i) => {
-                            return `*${i + 1} ┃ ${cleanTitle(ep?.title) || `Episode ${ep?.index || i + 1}`}*`;
+                            return `*${i + 1} ┃ ${ep?.title || `Episode ${ep?.index || i + 1}`}* (${ep?.date || 'N/A'})`;
                         }).join('\n\n');
 
                         const epCaption = `
@@ -228,7 +230,7 @@ ${qualityList}
                     }
 
                     const selectedEp = episodesList[choice - 1];
-                    itemTitle = `${itemTitle} - ${cleanTitle(selectedEp?.title) || `Ep ${selectedEp?.index || choice}`}`;
+                    itemTitle = `${itemTitle} - ${selectedEp?.title || `Ep ${selectedEp?.index || choice}`}`;
                     const epUrl = selectedEp?.url;
 
                     if (!epUrl) {
@@ -298,7 +300,7 @@ ${qualityList}
                     const finalUrl = selectedQuality?.url || selectedQuality?.link;
 
                     if (!finalUrl) {
-                        await conn.sendMessage(from, { text: `❎ Download URL extraction failed.` }, { quoted: received });
+                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
                         cleanup();
                         return;
                     }

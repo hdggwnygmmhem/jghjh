@@ -7,8 +7,8 @@ import { cmd } from '../command.js';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "thenkiri",
-    alias: ["nkiri", "thenkirimovie"],
+    pattern: "thenkiri2",
+    alias: ["nkiri2", "thenkirimovie2"],
     desc: "Search and download movies from Thenkiri using Vajira API",
     category: "download",
     react: "🎬",

@@ -1,4 +1,4 @@
-// DR KAMRAN - BAISCOPES LIGHTWEIGHT & MEMORY SAFE
+// DR KAMRAN - BAISCOPES FIXED QUALITY
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { cmd } from '../command.js';
@@ -137,7 +137,9 @@ ${resultsList}
                     const info = infoRes.data.data;
 
                     const qualityList = downloads.map((qItem, i) => { 
-                        return `*${i + 1} ┃📥 ${qItem.quality || 'HD'} • ${qItem.size || 'N/A'}*`; 
+                        const qName = qItem.quality || qItem.resolution || qItem.name || 'HD';
+                        const qSize = qItem.size || 'N/A';
+                        return `*${i + 1} ┃📥 ${qName} • ${qSize}*`; 
                     }).join('\n\n');
 
                     const qualityCaption = `
@@ -174,6 +176,7 @@ ${qualityList}
                     const selectedQuality = downloads[choice - 1];
                     const finalUrl = selectedQuality.link || selectedQuality.url;
                     const movieTitle = selectedMovie.title || 'Movie';
+                    const qName = selectedQuality.quality || selectedQuality.resolution || selectedQuality.name || 'HD';
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Is quality ka download link available nahi hai!' }, { quoted: received });
@@ -183,20 +186,19 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    // Memory overload se bachne ke liye direct high-speed link send kiya jayega taaki Heroku crash na ho
                     await conn.sendMessage(from, { 
                         text: `╔════════════════════════╗\n` +
                               `║   🎬 MOVIE READY 🎬   \n` +
                               `╚════════════════════════╝\n\n` +
                               `🎬 *Title:* ${movieTitle}\n` +
-                              `💿 *Quality:* ${selectedQuality.quality || 'HD'}\n` +
+                              `💿 *Quality:* ${qName}\n` +
                               `📦 *Size:* ${selectedQuality.size || 'N/A'}\n\n` +
                               `📥 *Direct Download Link:*\n${finalUrl}\n\n` +
                               `> ⚡ *Server Safe & Fast*\n` +
                               `> 👑 *Powered by KAMRAN MD*` 
                     }, { quoted: received });
 
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } }),
                     cleanup();
                 }
 

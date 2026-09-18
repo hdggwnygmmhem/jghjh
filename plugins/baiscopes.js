@@ -1,4 +1,4 @@
-// DR KAMRAN - BAISCOPES CMD
+// DR KAMRAN - BAISCOPES CMD FIXED
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { cmd } from '../command.js';
@@ -172,8 +172,14 @@ ${qualityList}
                     }
 
                     const selectedQuality = downloads[choice - 1];
-                    const finalUrl = selectedQuality.link;
+                    const finalUrl = selectedQuality.link || selectedQuality.url;
                     const movieTitle = selectedMovie.title || 'Movie';
+
+                    if (!finalUrl) {
+                        await conn.sendMessage(from, { text: '❎ Is quality ka download link available nahi hai!' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
@@ -188,6 +194,7 @@ ${qualityList}
 
             } catch (err) { 
                 console.error('Baiscopes handler error:', err); 
+                await conn.sendMessage(from, { text: '❎ Download karne mein error aa gaya!' }, { quoted: received });
                 cleanup(); 
             }
         };

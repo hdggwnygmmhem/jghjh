@@ -1,4 +1,4 @@
-// DR KAMRAN - BAISCOPES CMD FIXED
+// DR KAMRAN - BAISCOPES STABLE CODE
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { cmd } from '../command.js';
@@ -183,10 +183,17 @@ ${qualityList}
 
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    await conn.sendMessage(from, { 
-                        video: { url: finalUrl }, 
-                        caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                    }, { quoted: received });
+                    try {
+                        // Pehle video try karega, agar size bada hua toh link bhej dega taaki bot crash na ho
+                        await conn.sendMessage(from, { 
+                            video: { url: finalUrl }, 
+                            caption: `*${movieTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    } catch (mediaErr) {
+                        await conn.sendMessage(from, { 
+                            text: `🎬 *${movieTitle}*\n\n📥 *Direct Download Link:* ${finalUrl}\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    }
 
                     await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
@@ -194,7 +201,7 @@ ${qualityList}
 
             } catch (err) { 
                 console.error('Baiscopes handler error:', err); 
-                await conn.sendMessage(from, { text: '❎ Download karne mein error aa gaya!' }, { quoted: received });
+                await conn.sendMessage(from, { text: '❎ Download karne mein error aa gaya!' }, { quoted: mek });
                 cleanup(); 
             }
         };

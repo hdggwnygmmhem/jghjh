@@ -7,18 +7,18 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "video65",
-    alias: ["4ytmp4", "ytsong", "ytvideo"],
-    desc: "Search and download YouTube videos or audio with interactive options",
+    pattern: "video",
+    alias: ["ytmp4", "ytsong", "ytvideo"],
+    desc: "Search and download YouTube videos or audio",
     category: "downloader",
     react: "🎥",
     filename: __filename
-}, async (conn, mek, m, { from, text, reply, sender }) => {
+}, async (conn, mek, m, { from, text, reply }) => {
     try {
         const q = text?.trim() || '';
 
         if (!q) {
-            return reply('*❌ Please enter a YouTube URL or video title.*\n\n*Example:* `.video Faded`');
+            return reply('*❌ Please enter a YouTube URL or title.*\n\n*Example:* `.video Faded`');
         }
 
         function extractYouTubeId(url) {
@@ -38,7 +38,7 @@ cmd({
         
         if (!v) {
             await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
-            return reply('*❌ No results found for that query.*');
+            return reply('*❌ No results found.*');
         }
 
         const youtubeUrl = v.url;
@@ -49,7 +49,7 @@ cmd({
 
 ┏━━━━━━━━━━━◆◉◉➤
 ┃🎵 *𝗧ɪᴛʟᴇ:* ${v.title}
-┃⏱️ *𝗗ᴜʀᴀᴛɪᴏɴ:* ${v.timestamp}
+┃⏱️ *𝗗ᴜʀᴀétion:* ${v.timestamp}
 ┃👀 *𝗩ɪᴇᴡꜱ:* ${v.views}
 ┃📆 *𝗥ᴇʟᴇᴀꜱᴇᴅ:* ${v.ago}
 ┃🔗 *𝗨ʀʟ:* https://youtu.be/${videoId}
@@ -66,12 +66,12 @@ cmd({
             },
             {
                 buttonId: 'video_doc',
-                buttonText: { displayText: '📁 𝗗ᴏᴄᴜᴍᴇɴᴛ' },
+                buttonText: { displayText: '📁 𝗗ᴏᴄᴜᴍᴇ𝗻𝘁' },
                 type: 1
             },
             {
                 buttonId: 'video_audio',
-                buttonText: { displayText: '🎵 𝗔ᴜ𝒅ɪᴏ' },
+                buttonText: { displayText: '🎵 𝗔ᴜᴅɪᴏ' },
                 type: 1
             }
         ];
@@ -95,6 +95,7 @@ cmd({
                 const fromId = updateMsg.key.remoteJid || updateMsg.key.participant;
                 if (fromId !== from) return;
 
+                // Handle Button Clicks (Agar bot base support karega toh chalega)
                 const buttonResponse = updateMsg.message?.buttonsResponseMessage;
                 if (buttonResponse) {
                     const contextId = buttonResponse.contextInfo?.stanzaId;
@@ -108,6 +109,7 @@ cmd({
                     return;
                 }
 
+                // Handle Text Replies (1, 2, 3) - Yeh 100% working hai
                 const msgText = updateMsg.message?.conversation || updateMsg.message?.extendedTextMessage?.text;
                 if (!msgText) return;
                 
@@ -131,14 +133,13 @@ cmd({
 
             } catch (error) {
                 console.error("Handler error:", error);
-                await conn.sendMessage(from, { text: "❌ An error occurred during download. Please try again." }, { quoted: mek });
+                await conn.sendMessage(from, { text: "❌ An error occurred. Please try again." }, { quoted: mek });
                 conn.ev.off('messages.upsert', handler);
             }
         };
 
         conn.ev.on('messages.upsert', handler);
 
-        // Auto remove listener after 5 minutes
         setTimeout(() => {
             try {
                 conn.ev.off('messages.upsert', handler);
@@ -148,70 +149,61 @@ cmd({
         }, 5 * 60 * 1000);
 
     } catch (e) {
-        console.error('Main video command error:', e);
+        console.error('Main error:', e);
         reply("*❌ Error fetching video. Please check the URL or try again later.*");
     }
 });
 
-// Helper function to handle downloads for both buttons and text replies
 async function processDownload(conn, m, from, selectedId, encodedUrl, v) {
     try {
         const apiKey = "54e2595579566fd44d2f5e1eeb2ff7f513bd4009cab33939ede82486dd7ad508";
-        
-        if (selectedId === 'video_video' || selectedId === 'video_doc') {
-            const videoApiUrl = `https://back.asitha.top/api/ytapi?url=${encodedUrl}&fo=1&qu=144&apiKey=${apiKey}`;
-            const videoResponse = await axios.get(videoApiUrl, { timeout: 30000 });
-            const videoData = videoResponse.data;
+        const videoApiUrl = `https://back.asitha.top/api/ytapi?url=${encodedUrl}&fo=1&qu=144&apiKey=${apiKey}`;
 
-            if (!videoData?.download_url) {
-                return await conn.sendMessage(from, { text: "❌ Video download failed. API returned an error." }, { quoted: m });
+        if (selectedId === 'video_video' || selectedId === 'video_doc') {
+            const res = await axios.get(videoApiUrl, { timeout: 30000 });
+            const data = res.data;
+
+            if (!data?.download_url) {
+                return await conn.sendMessage(from, { text: "❌ Video download failed." }, { quoted: m });
             }
 
-            const downloadUrl = videoData.download_url;
             const cleanTitle = v.title.replace(/[^\w\s]/gi, '');
-            const fileName = `${cleanTitle}.mp4`;
-
             if (selectedId === 'video_video') {
                 await conn.sendMessage(from, {
-                    video: { url: downloadUrl },
+                    video: { url: data.download_url },
                     mimetype: "video/mp4",
-                    caption: `*🎬 ${v.title}*\n> *© KAMRAN-MD*`
+                    caption: `*🎬 ${v.title}*`
                 }, { quoted: m });
             } else {
                 await conn.sendMessage(from, {
-                    document: { url: downloadUrl },
+                    document: { url: data.download_url },
                     mimetype: "video/mp4",
-                    fileName: fileName,
-                    caption: `*📁 ${v.title}*\n> *© KAMRAN-MD*`
+                    fileName: `${cleanTitle}.mp4`,
+                    caption: `*📁 ${v.title}*`
                 }, { quoted: m });
             }
-
         } else if (selectedId === 'video_audio') {
-            const audioApiUrl = `https://back.asitha.top/api/ytapi?url=${encodedUrl}&fo=1&qu=144&apiKey=${apiKey}`;
-            const audioResponse = await axios.get(audioApiUrl, { timeout: 30000 });
-            const audioData = audioResponse.data;
+            const res = await axios.get(videoApiUrl, { timeout: 30000 });
+            const data = res.data;
 
-            if (!audioData?.download_url) {
-                return await conn.sendMessage(from, { text: "❌ Audio download failed. API returned an error." }, { quoted: m });
+            if (!data?.download_url) {
+                return await conn.sendMessage(from, { text: "❌ Audio download failed." }, { quoted: m });
             }
 
-            const downloadUrl = audioData.download_url;
             const cleanTitle = v.title.replace(/[^\w\s]/gi, '');
-            const fileName = `${cleanTitle}.mp3`;
-
             await conn.sendMessage(from, {
-                audio: { url: downloadUrl },
+                audio: { url: data.download_url },
                 mimetype: "audio/mpeg",
                 ptt: false,
-                fileName: fileName,
-                caption: `*🎵 ${v.title}*\n> *© KAMRAN-MD*`
+                fileName: `${cleanTitle}.mp3`,
+                caption: `*🎵 ${v.title}*`
             }, { quoted: m });
         }
 
         await conn.sendMessage(from, { react: { text: "✅", key: m.key } });
 
-    } catch (apiError) {
-        console.error('API Download Error:', apiError);
-        await conn.sendMessage(from, { text: `❌ Download failed: ${apiError.message || 'Unknown error'}` }, { quoted: m });
+    } catch (err) {
+        console.error('API Error:', err);
+        await conn.sendMessage(from, { text: `❌ Download failed: ${err.message}` }, { quoted: m });
     }
 }

@@ -4,7 +4,7 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== DRAMA DOCUMENT COMMAND ====================
+// ==================== DRAMA DOCUMENT COMMAND (SAFE LARGE FILE) ====================
 cmd({
     pattern: "drama",
     alias: ["epi", "da", "episode", "dramaepi"],
@@ -49,18 +49,22 @@ cmd({
             return reply("❌ Failed to retrieve the download link.");
         }
 
-        await reply(`📁 *Downloading Drama Document:* ${title}\nPlease wait...`);
+        await reply(`📁 *Downloading Large Drama File:* ${title}\nPlease wait, this may take a few seconds...`);
 
+        // Download large file safely with maxContentLength and stream handling
         const docRes = await axios.get(videoUrl, {
             responseType: 'arraybuffer',
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://www.youtube.com/'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.youtube.com/',
+                'Range': 'bytes=0-'
             },
-            timeout: 60000
+            timeout: 120000 // 2 minutes timeout for large files
         });
 
-        // Sending as Document File
+        // Sending as Document File safely
         await conn.sendMessage(from, {
             document: Buffer.from(docRes.data),
             mimetype: 'video/mp4',

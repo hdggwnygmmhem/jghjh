@@ -49,21 +49,22 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const resData = searchRes.data;
-        console.log(`[MOVIEBOX LOG] API Response status:`, resData?.status);
+        console.log(`[MOVIEBOX LOG] API Full Response:`, JSON.stringify(resData).substring(0, 300));
 
-        const items = resData?.data?.items || resData?.results || [];
+        // Flexible items extraction from all possible paths
+        const items = resData?.data?.items || resData?.items || resData?.data?.results || resData?.results || [];
 
-        if (!resData?.success || !items.length) {
+        if (!items.length) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *Koi result nahi mila!*");
         }
 
         const results = items.slice(0, 5);
-        const firstImage = results[0]?.cover || results[0]?.poster || 'https://i.imgur.com/3932mio.jpeg';
+        const firstImage = results[0]?.cover || results[0]?.poster || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
         
         const resultsList = results.map((item, i) => { 
             const title = item?.title || 'Unknown'; 
-            const year = item?.year || 'N/A';
+            const year = item?.year || item?.releaseDate || 'N/A';
             return `*${i + 1} ┃ ${title}* (${year})`; 
         }).join('\n\n');
 

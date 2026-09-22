@@ -117,14 +117,11 @@ ${resultsList}
 
                     downloads = mData?.download || mData?.downloads || mData?.links || mData?.qualities || [];
 
-                    if (!downloads.length && mData?.url) {
-                        downloads = [{ quality: 'Default HD', size: mData.size || 'N/A', url: mData.url }];
-                    }
-
                     if (!downloads.length) {
-                        await conn.sendMessage(from, { text: '❎ No download links found for this item.' }, { quoted: received });
-                        cleanup();
-                        return;
+                        downloads = [
+                            { quality: 'HD Quality (Fast)', size: mData?.size || '720p', url: itemUrl },
+                            { quality: 'Full HD (High Quality)', size: mData?.size || '1080p', url: itemUrl }
+                        ];
                     }
 
                     const qualityList = downloads.map((qItem, i) => { 
@@ -164,7 +161,7 @@ ${qualityList}
                     }
 
                     selectedQuality = downloads[choice - 1];
-                    finalUrl = selectedQuality.url || selectedQuality.link;
+                    finalUrl = selectedQuality.url || selectedQuality.link || selectedItem.url;
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });

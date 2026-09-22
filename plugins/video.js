@@ -9,9 +9,12 @@ async function executeVideo(conn, mek, m, query, from, reply) {
     try {
         if (!query) {
             return reply(
-                `⚠️ Please provide a video name or search query!\n\n` +
-                `Example:\n` +
-                `• .videoz song pal`
+                `╭───────────────◆\n` +
+                `│ ⚠️ *PLEASE PROVIDE A QUERY*\n` +
+                `╰───────────────◆\n\n` +
+                `✨ *Example Usage:*\n` +
+                `• \`.video song pal\`\n` +
+                `• \`.videoz lo-fi beats\``
             );
         }
 
@@ -27,25 +30,42 @@ async function executeVideo(conn, mek, m, query, from, reply) {
 
         if (!resData || !resData.status || !resData.result) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not find any video results for that query.");
+            return reply("❌ *Oops!* Could not find any video results for your query.");
         }
 
         const info = resData.result;
         const videoUrl = info.download_url;
         const title = info.searched_title || query;
         const videoPageUrl = info.searched_url || '';
+        const thumbnail = info.thumbnail || info.image || '';
+        const duration = info.duration || info.timestamp || 'Unknown';
+        const views = info.views || 'N/A';
 
         if (!videoUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Failed to retrieve the video download link from the API response.");
+            return reply("❌ Failed to retrieve the video download link from the API.");
         }
 
-        // Send caption info first
-        let caption = `🎬 *Title:* ${title}\n`;
-        if (videoPageUrl) caption += `🔗 *YouTube:* ${videoPageUrl}\n`;
-        caption += `🤖 *Bot:* KAMRAN-MD\n`;
-        caption += `📁 *Status:* Downloading video buffer...`;
-        await reply(caption);
+        // Send Stylish Preview / Info Card First (with Thumbnail if available)
+        let caption = `╭───────────────◆\n`;
+        caption += `│ 📥 *KAMRAN-MD DOWNLOADER*\n`;
+        caption += `├───────────────◆\n`;
+        caption += `│ 🎬 *Title:* ${title}\n`;
+        caption += `│ ⏱️ *Duration:* ${duration}\n`;
+        caption += `│ 👀 *Views:* ${views}\n`;
+        if (videoPageUrl) caption += `│ 🔗 *YouTube:* ${videoPageUrl}\n`;
+        caption += `├───────────────◆\n`;
+        caption += `│ 🔄 *Status:* Downloading video buffer...\n`;
+        caption += `╰───────────────◆`;
+
+        if (thumbnail) {
+            await conn.sendMessage(from, { 
+                image: { url: thumbnail }, 
+                caption: caption 
+            }, { quoted: mek });
+        } else {
+            await reply(caption);
+        }
 
         // Download video as arraybuffer with proper headers to bypass streaming block
         const videoBufferRes = await axios.get(videoUrl, {
@@ -57,11 +77,18 @@ async function executeVideo(conn, mek, m, query, from, reply) {
             timeout: 60000 // 60 seconds for large files
         });
 
-        // Send the video buffer directly
+        // Send the video buffer directly with stylish styling
+        const finalCaption = 
+            `╭───────────────◆\n` +
+            `│ 🎥 *${title}*\n` +
+            `├───────────────◆\n` +
+            `│ ⚡ *Powered by:* KAMRAN-MD\n` +
+            `╰───────────────◆`;
+
         await conn.sendMessage(from, {
             video: Buffer.from(videoBufferRes.data),
             mimetype: 'video/mp4',
-            caption: `🎥 ${title}\n> Powered by KAMRAN-MD`
+            caption: finalCaption
         }, { quoted: mek });
 
         // Success reaction
@@ -69,7 +96,7 @@ async function executeVideo(conn, mek, m, query, from, reply) {
 
     } catch (error) {
         console.error("KAMRAN-MD Video Error:", error);
-        reply(`❌ Error: ${error.message}`);
+        reply(`❌ *An Error Occurred:* ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 }
@@ -83,7 +110,6 @@ cmd({
         const rawText = body.trim().toLowerCase();
         const triggers = ['video', 'ytmp4', 'ytvideo', 'playvid', 'videoz'];
 
-        // Triggers automatically in both Inbox and Groups if it matches the command or starts with it followed by space/query
         const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
         if (matchedTrigger) {
             const query = body.slice(matchedTrigger.length).trim();
@@ -98,7 +124,7 @@ cmd({
 cmd({
     pattern: "video",
     alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
-    desc: "Search and download videos from YouTube via DR",
+    desc: "Search and download stylish videos from YouTube via KAMRAN-MD",
     category: "downloader",
     react: "📥",
     filename: __filename

@@ -86,13 +86,13 @@ ${resultsList}
                 const fromId = received.key.remoteJid || received.key.participant;
                 if (fromId !== from) return;
 
-                const text = received.message?.conversation || received.message?.extendedTextMessage?.text || received.message?.imageMessage?.caption;
-                console.log(`[MOVIEBOX DEBUG] Received text: "${text}" from ${fromId}`);
-
                 const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                console.log(`[MOVIEBOX DEBUG] Quoted ID: ${quotedId}, Expected LastMsgId: ${lastMsgId}`);
-
                 if (!quotedId || quotedId !== lastMsgId) return;
+
+                // Turant cleanup kar do taaki dobara event trigger na ho
+                cleanup();
+
+                const text = received.message?.conversation || received.message?.extendedTextMessage?.text || received.message?.imageMessage?.caption;
                 if (!text) return;
 
                 const choice = parseInt(text.trim());
@@ -114,7 +114,6 @@ ${resultsList}
 
                 if (!downloadUrl) {
                     await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
-                    cleanup();
                     return;
                 }
 
@@ -138,7 +137,6 @@ ${resultsList}
                 }, { quoted: received });
 
                 await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                cleanup();
 
             } catch (err) { 
                 console.error('CRITICAL MOVIEBOX HANDLER ERROR -->', err);

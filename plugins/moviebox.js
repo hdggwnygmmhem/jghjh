@@ -138,10 +138,19 @@ ${resultsList}
                 const releaseDate = selectedItem?.releaseDate || 'N/A';
                 const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
 
-                console.log(`[MOVIEBOX LOG] Sending document: ${fileName}...`);
+                console.log(`[MOVIEBOX LOG] Downloading file buffer from URL...`);
                 
+                // Fetching buffer to ensure smooth delivery without stream timeout
+                const videoBufferRes = await axios.get(downloadUrl, { 
+                    responseType: 'arraybuffer',
+                    timeout: 120000 
+                });
+
+                const videoBuffer = Buffer.from(videoBufferRes.data);
+                console.log(`[MOVIEBOX LOG] Buffer downloaded successfully. Size: ${videoBuffer.length} bytes. Sending document...`);
+
                 await conn.sendMessage(from, { 
-                    document: { url: downloadUrl }, 
+                    document: videoBuffer, 
                     mimetype: 'video/mp4', 
                     fileName: fileName, 
                     caption: `╔════════════════════════╗\n` +

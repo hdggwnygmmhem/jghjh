@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 cmd({
     pattern: "moviebox",
-    alias: ["mb", "movie", "msearch"],
+    alias: ["mb", "msearch"],
     desc: "Search and download movies using Vajira MovieBox API",
     category: "download",
     react: "🎬",
@@ -18,6 +18,8 @@ cmd({
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
+        console.log(`[MOVIEBOX LOG] Command triggered with query: "${q}"`);
+
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
@@ -35,16 +37,21 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/movieboxs';
         const searchUrl = `${BASE_URL}?apikey=${encodeURIComponent(API_KEY)}&query=${encodeURIComponent(q)}&page=1&perPage=24`;
         
+        console.log(`[MOVIEBOX LOG] Fetching URL: ${searchUrl}`);
+
         let searchRes;
         try {
             searchRes = await axios.get(searchUrl, { timeout: 60000 });
         } catch (apiErr) {
+            console.error('[MOVIEBOX ERROR] API call failed:', apiErr.message);
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *API request failed or timed out!*");
         }
 
         const resData = searchRes.data;
-        const items = resData?.data?.items || resData?.results || resData?.items || [];
+        console.log(`[MOVIEBOX LOG] API Response status:`, resData?.status);
+
+        const items = resData?.data?.items || resData?.results || [];
 
         if (!resData?.success || !items.length) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
@@ -108,7 +115,7 @@ ${resultsList}
                 const subjectId = selectedItem?.subjectid || selectedItem?.id;
                 const detailPath = selectedItem?.detailPath || selectedItem?.path || '';
 
-                console.log(`[MOVIEBOX LOG] Selected: "${itemTitle}" | ID: ${subjectId} | Path: ${detailPath}`);
+                console.log(`[MOVIEBOX LOG] Selected Item: "${itemTitle}" | ID: ${subjectId} | Path: ${detailPath}`);
 
                 const detailUrl = `https://vajiraofc-apis.vercel.app/api/moviebox?apikey=${encodeURIComponent(API_KEY)}&id=${subjectId}&detailPath=${encodeURIComponent(detailPath)}&season=0&episode=0`;
                 

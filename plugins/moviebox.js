@@ -81,15 +81,18 @@ ${resultsList}
             let received = null;
             try {
                 received = msgUpdate.messages[0];
-                if (!received) return;
+                if (!received || !received.message) return;
                 
                 const fromId = received.key.remoteJid || received.key.participant;
                 if (fromId !== from) return;
 
-                const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                if (!quotedId || quotedId !== lastMsgId) return;
+                const text = received.message?.conversation || received.message?.extendedTextMessage?.text || received.message?.imageMessage?.caption;
+                console.log(`[MOVIEBOX DEBUG] Received text: "${text}" from ${fromId}`);
 
-                const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
+                const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
+                console.log(`[MOVIEBOX DEBUG] Quoted ID: ${quotedId}, Expected LastMsgId: ${lastMsgId}`);
+
+                if (!quotedId || quotedId !== lastMsgId) return;
                 if (!text) return;
 
                 const choice = parseInt(text.trim());
@@ -118,7 +121,6 @@ ${resultsList}
                 const rating = selectedItem?.imdbRatingValue || 'N/A';
                 const genre = selectedItem?.genre || 'N/A';
                 const releaseDate = selectedItem?.releaseDate || 'N/A';
-                const posterUrl = selectedItem?.cover?.url || firstImage;
                 const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
 
                 await conn.sendMessage(from, { 

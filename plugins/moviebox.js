@@ -2,29 +2,29 @@
 
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "cinevibes",
-    alias: ["cv", "cine"],
-    desc: "Search and download movies from CineVibes",
+    pattern: "moviebox",
+    alias: ["mb", "movie", "msearch"],
+    desc: "Search and download movies using MovieBox Pro API",
     category: "download",
     react: "🎬",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
-        console.log(`[CINEVIBES LOG] Command triggered with query: "${q}"`);
-
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
-                `║   🎬 KAMRAN-MD CINEVIBES 🎬   \n` +
+                `║   🎬 KAMRAN-MD MOVIEBOX 🎬   \n` +
                 `╚════════════════════════╝\n\n` +
                 `❌ *Kripya movie ya series ka naam dein!*\n\n` +
-                `> 📌 *Example:* \`.cinevibes new\`\n` +
+                `> 📌 *Example:* \`.moviebox Spiderman\`\n` +
                 `> ⚡ *Version:* \`12.00\``
             );
         }
@@ -32,40 +32,42 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
         const API_KEY = 'drkamranislamabad@gmail.com:vajira-68623';
-        const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/cinevibes';
-
-        const searchUrl = `${BASE_URL}/search?apikey=${encodeURIComponent(API_KEY)}&q=${encodeURIComponent(q)}`;
+        const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/movieboxs';
+        const searchUrl = `${BASE_URL}?apikey=${encodeURIComponent(API_KEY)}&query=${encodeURIComponent(q)}&page=1&perPage=24`;
         
         let searchRes;
         try {
-            searchRes = await axios.get(searchUrl, { timeout: 120000 });
+            searchRes = await axios.get(searchUrl, { timeout: 60000 });
         } catch (apiErr) {
-            console.error('[CINEVIBES ERROR] Search timeout:', apiErr.message);
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ *Server is busy or timed out. Please try again!*");
+            return reply("❌ *API request failed or timed out!*");
         }
 
-        if (!searchRes.data?.success || !searchRes.data.results?.length) {
+        const resData = searchRes.data;
+        const items = resData?.data?.items || resData?.items || [];
+
+        if (!items.length) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *Koi result nahi mila!*");
         }
 
-        const results = searchRes.data.results.slice(0, 5);
-        const firstImage = results[0].poster || results[0].image || 'https://i.imgur.com/3932mio.jpeg';
+        const results = items.slice(0, 5);
+        const firstImage = 'https://i.imgur.com/3932mio.jpeg';
         
         const resultsList = results.map((item, i) => { 
-            const title = item.title || 'Unknown'; 
-            return `*${i + 1} ┃ ${title}*`; 
+            const title = item?.title || 'Unknown'; 
+            const year = item?.year || 'N/A';
+            return `*${i + 1} ┃ ${title}* (${year})`; 
         }).join('\n\n');
 
         const searchCaption = `
 ╔════════════════════════╗
-║   🎬 CINEVIBES SEARCH 🎬   
+║   🎬 MOVIEBOX SEARCH 🎬   
 ╚════════════════════════╝
 
 ${resultsList}
 
-🔢 *Reply with a number to select* 👇
+🔢 *Reply with a number to download as document* 👇
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
@@ -75,19 +77,13 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let step = 'movie', 
-            lastMsgId = searchMsg.key.id, 
-            selectedItem = null, 
-            downloads = [], 
-            finalUrl = null, 
-            selectedQuality = null, 
-            itemTitle = '', 
-            timeout = null;
+        let lastMsgId = searchMsg.key.id;
+        let timeout = null;
 
         const handler = async (msgUpdate) => {
             try {
                 const received = msgUpdate.messages[0];
-                if (!received) return;
+                if (!received || !received.message) return;
                 
                 const fromId = received.key.remoteJid || received.key.participant;
                 if (fromId !== from) return;
@@ -99,153 +95,75 @@ ${resultsList}
                 if (!text) return;
 
                 const choice = parseInt(text.trim());
-                if (isNaN(choice)) { 
-                    await conn.sendMessage(from, { text: '❎ Please enter a valid number.' }, { quoted: received }); 
+                if (isNaN(choice) || choice < 1 || choice > results.length) { 
+                    await conn.sendMessage(from, { text: `❎ Please enter a valid number (1-${results.length}).` }, { quoted: received }); 
                     return; 
                 }
 
-                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
+                cleanup();
+                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                if (step === 'movie') {
-                    if (choice < 1 || choice > results.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                        return; 
-                    }
+                const selectedItem = results[choice - 1];
+                const itemTitle = selectedItem?.title || 'Movie';
+                const subjectId = selectedItem?.subjectid;
+                const detailPath = selectedItem?.detailPath || '';
 
-                    selectedItem = results[choice - 1];
-                    itemTitle = selectedItem.title || 'Media';
-                    const itemUrl = selectedItem.url;
-
-                    const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    console.log(`[CINEVIBES LOG] Fetching details: ${detailsUrl}`);
-
-                    let detailsRes;
-                    try {
-                        detailsRes = await axios.get(detailsUrl, { timeout: 120000 });
-                    } catch (detErr) {
-                        await conn.sendMessage(from, { text: '❎ Details request timed out.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    const resJson = detailsRes.data;
-                    const mData = resJson?.movie || resJson?.data || resJson?.result || resJson;
-
-                    const rawDownloads = mData?.download || mData?.downloads || mData?.links || mData?.qualities || [];
-
-                    // Strictly filter out images or invalid links
-                    downloads = rawDownloads.filter(d => {
-                        const link = d.url || d.link || '';
-                        return link && !link.includes('opengraph-image') && !link.endsWith('.jpg') && !link.endsWith('.png');
-                    });
-
-                    if (!downloads.length) {
-                        await conn.sendMessage(from, { text: '❎ Is movie ke liye direct download links available nahi hain.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    const qualityList = downloads.map((qItem, i) => { 
-                        const qName = qItem.quality || qItem.name || qItem.resolution || `Quality ${i + 1}`;
-                        const qSize = qItem.size || 'N/A';
-                        return `*${i + 1} ┃📥 ${qName} • ${qSize}*`; 
-                    }).join('\n\n');
-
-                    const qualityCaption = `
-╔════════════════════════╗
-║   🎬 CINEVIBES INFO 🎬   
-╚════════════════════════╝
-
-🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${mData?.rating || 'N/A'}
-📅 *Year:* ${mData?.year || 'N/A'}
-
-🔢 *Reply with quality number* 👇
-
-${qualityList}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: mData?.poster || selectedItem.poster || firstImage }, 
-                        caption: qualityCaption 
-                    }, { quoted: received });
-
-                    step = 'quality'; 
-                    lastMsgId = qualityMsg.key.id;
-
-                } else if (step === 'quality') {
-                    if (!downloads || choice < 1 || choice > downloads.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${downloads.length})` }, { quoted: received }); 
-                        return; 
-                    }
-
-                    selectedQuality = downloads[choice - 1];
-                    finalUrl = selectedQuality.url || selectedQuality.link;
-
-                    if (!finalUrl) {
-                        await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
-
-                    const formatCaption = `
-╔════════════════════════╗
-║   🎬 CINEVIBES FORMAT 🎬   
-╚════════════════════════╝
-
-🎬 *Title:* ${itemTitle}
-💿 *Quality:* ${selectedQuality.quality || selectedQuality.name || selectedQuality.resolution || 'N/A'}
-📦 *Size:* ${selectedQuality.size || 'N/A'}
-
-🔢 *Reply with format number* 👇
-
-*1 ┃ 📽️ Video Format*
-*2 ┃ 📁 Document Format*
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
-
-                    const formatMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedItem.poster || firstImage }, 
-                        caption: formatCaption 
-                    }, { quoted: received });
-
-                    step = 'format'; 
-                    lastMsgId = formatMsg.key.id;
-
-                } else if (step === 'format') {
-                    if (choice !== 1 && choice !== 2) { 
-                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
-                        return; 
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                    const qSize = selectedQuality.size || 'N/A';
-                    const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qSize}] CineVibes.mp4`;
-
-                    if (choice === 2) {
-                        await conn.sendMessage(from, { 
-                            document: { url: finalUrl }, 
-                            mimetype: 'video/mp4', 
-                            fileName: fileName, 
-                            caption: `*${itemTitle}*\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    } else {
-                        await conn.sendMessage(from, { 
-                            video: { url: finalUrl }, 
-                            caption: `*${itemTitle}*\n📦 *Size:* ${qSize}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-                    cleanup();
+                const detailUrl = `https://vajiraofc-apis.vercel.app/api/moviebox?apikey=${encodeURIComponent(API_KEY)}&id=${subjectId}&detailPath=${encodeURIComponent(detailPath)}&season=0&episode=0`;
+                
+                let downloadUrl = '';
+                try {
+                    const detailRes = await axios.get(detailUrl, { timeout: 60000 });
+                    const dData = detailRes.data;
+                    downloadUrl = dData?.data?.downloadUrl || dData?.downloadUrl || dData?.data?.url || dData?.url;
+                } catch (e) {
+                    console.log('Detail fetch error, using fallback');
                 }
 
+                if (!downloadUrl) {
+                    downloadUrl = selectedItem?.downloadUrl || selectedItem?.url;
+                }
+
+                if (!downloadUrl) {
+                    await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
+                    return;
+                }
+
+                const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
+                const tempFilePath = path.join('/tmp', cleanFileName);
+
+                const response = await axios({
+                    method: 'GET',
+                    url: downloadUrl,
+                    responseType: 'stream',
+                    timeout: 600000
+                });
+
+                const writer = fs.createWriteStream(tempFilePath);
+                response.data.pipe(writer);
+
+                await new Promise((resolve, reject) => {
+                    writer.on('finish', resolve);
+                    writer.on('error', reject);
+                });
+
+                await conn.sendMessage(from, { 
+                    document: { url: tempFilePath }, 
+                    mimetype: 'video/mp4', 
+                    fileName: cleanFileName, 
+                    caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                }, { quoted: received });
+
+                if (fs.existsSync(tempFilePath)) {
+                    fs.unlinkSync(tempFilePath);
+                }
+
+                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+
             } catch (err) { 
-                console.error('CineVibes handler error:', err); 
+                console.error('Handler error -->', err); 
+                if (received) {
+                    await conn.sendMessage(from, { text: `❎ *Error:* ${err.message}` }, { quoted: received });
+                }
                 cleanup(); 
             }
         };
@@ -256,11 +174,12 @@ ${qualityList}
         };
 
         conn.ev.on('messages.upsert', handler);
-        timeout = setTimeout(() => cleanup(), 60 * 1000);
+        timeout = setTimeout(() => cleanup(), 10 * 60 * 1000);
 
+    }CATCH_ERROR (e) {   // Standard catch block
     } catch (e) {
-        console.error('CineVibes command error:', e);
+        console.error('Command error -->', e);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
+        return reply(`❌ *Error:* ${e.message}`);
     }
 });

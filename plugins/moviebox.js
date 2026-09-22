@@ -112,13 +112,13 @@ ${resultsList}
                     console.log(`[CINEVIBES LOG] Fetching details: ${detailsUrl}`);
 
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
-                    console.log(`[CINEVIBES LOG] Details Full Response:`, JSON.stringify(detailsRes.data).substring(0, 400));
+                    const resJson = detailsRes.data;
+                    const mData = resJson?.movie || resJson?.data || resJson?.result || resJson;
 
-                    const dData = detailsRes.data?.data || detailsRes.data?.result || detailsRes.data;
-                    downloads = dData?.download || dData?.downloads || dData?.links || [];
+                    downloads = mData?.download || mData?.downloads || mData?.links || mData?.qualities || [];
 
-                    if (!downloads.length && dData?.url) {
-                        downloads = [{ quality: 'Default HD', size: 'N/A', url: dData.url }];
+                    if (!downloads.length && mData?.url) {
+                        downloads = [{ quality: 'Default HD', size: mData.size || 'N/A', url: mData.url }];
                     }
 
                     if (!downloads.length) {
@@ -139,8 +139,8 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${dData?.meta?.rating || dData?.rating || 'N/A'}
-📅 *Year:* ${dData?.meta?.year || dData?.year || 'N/A'}
+⭐ *Rating:* ${mData?.rating || 'N/A'}
+📅 *Year:* ${mData?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -150,7 +150,7 @@ ${qualityList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
                     const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: dData?.poster || selectedItem.poster || firstImage }, 
+                        image: { url: mData?.poster || selectedItem.poster || firstImage }, 
                         caption: qualityCaption 
                     }, { quoted: received });
 

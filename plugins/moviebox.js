@@ -136,32 +136,41 @@ ${resultsList}
                 const rating = selectedItem?.imdbRatingValue || 'N/A';
                 const genre = selectedItem?.genre || 'N/A';
                 const releaseDate = selectedItem?.releaseDate || 'N/A';
-                const posterUrl = selectedItem?.cover?.url || firstImage;
+                const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
 
-                console.log(`[MOVIEBOX LOG] Sending direct download link message...`);
+                console.log(`[MOVIEBOX LOG] Streaming and downloading file as document...`);
 
-                const downloadCaption = `
-╔════════════════════════╗
-║   🎬 MOVIE READY 🎬      
-╚════════════════════════╝
+                // Stream request use ki hai taaki memory limit exceed na ho
+                const response = await axios({
+                    method: 'GET',
+                    url: downloadUrl,
+                    responseType: 'stream',
+                    timeout: 120000
+                });
 
-🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${rating}
-🎭 *Genre:* ${genre}
-📅 *Release:* ${releaseDate}
+                const chunks = [];
+                for await (const chunk of response.data) {
+                    chunks.push(chunk);
+                }
+                const buffer = Buffer.concat(chunks);
 
-📥 *Direct Download Link:* 
-${downloadUrl}
-
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
+                console.log(`[MOVIEBOX LOG] File downloaded into buffer successfully. Size: ${buffer.length} bytes. Sending document...`);
 
                 await conn.sendMessage(from, { 
-                    image: { url: posterUrl },
-                    caption: downloadCaption 
+                    document: buffer, 
+                    mimetype: 'video/mp4', 
+                    fileName: fileName, 
+                    caption: `╔════════════════════════╗\n` +
+                             `║   🎬 MOVIE DOWNLOAD 🎬   \n` +
+                             `╚════════════════════════╝\n\n` +
+                             `🎬 *Title:* ${itemTitle}\n` +
+                             `⭐ *Rating:* ${rating}\n` +
+                             `🎭 *Genre:* ${genre}\n` +
+                             `📅 *Release:* ${releaseDate}\n\n` +
+                             `> *👑 Powered by KAMRAN MD*` 
                 }, { quoted: received });
 
-                console.log('[MOVIEBOX LOG] Movie download link sent successfully!');
+                console.log('[MOVIEBOX LOG] Movie document sent successfully!');
                 await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
 
             } catch (err) { 

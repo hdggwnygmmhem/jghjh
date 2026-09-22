@@ -176,7 +176,6 @@ ${resultsList}
         conn.ev.on('messages.upsert', handler);
         timeout = setTimeout(() => cleanup(), 10 * 60 * 1000);
 
-    }CATCH_ERROR (e) {   // Standard catch block
     } catch (e) {
         console.error('Command error -->', e);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });

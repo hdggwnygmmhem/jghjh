@@ -5,21 +5,22 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 // ==================== CORE MULTI-FORMAT LOGIC ====================
-async function executeVideo(conn, mek, m, query, from, reply) {
+async function executeDrama(conn, mek, m, query, from, reply) {
     try {
         if (!query) {
             return reply(
-                `🎵 *KAMRAN-MD MULTI-DOWNLOADER*\n\n` +
-                `❌ *Please provide a video name or search query!*\n\n` +
-                `💡 *Example:* \`.video song pal\``
+                `🎬 *KAMRAN-MD DRAMA DOWNLOADER*\n\n` +
+                `❌ *Please provide a drama name or episode!* \n\n` +
+                `💡 *Example:* \`.drama mohabbat 57\``
             );
         }
 
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the API endpoint
-        const encodedQuery = encodeURIComponent(query.trim());
+        // Call the API endpoint (Clean query for better YouTube search results)
+        const cleanQuery = query.replace(/epi|episode/gi, '').trim();
+        const encodedQuery = encodeURIComponent(cleanQuery);
         const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodedQuery}`;
         
         const response = await axios.get(apiUrl, { timeout: 30000 });
@@ -27,7 +28,7 @@ async function executeVideo(conn, mek, m, query, from, reply) {
 
         if (!resData || !resData.status || !resData.result) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ *Oops!* No results found for your query.");
+            return reply("❌ *Oops!* No drama or video results found for that query. Try writing a shorter name.");
         }
 
         const info = resData.result;
@@ -41,10 +42,10 @@ async function executeVideo(conn, mek, m, query, from, reply) {
             return reply("❌ Failed to retrieve the download link.");
         }
 
-        // Stylish Selection Menu with Video, Audio, and Document Options
+        // Stylish Selection Menu
         const selectCaption = 
             `╭───────────────────────╮\n` +
-            `  🎬 *${title}*\n` +
+            `  📺 *${title}*\n` +
             `╰───────────────────────╯\n\n` +
             `📌 *Apni pasand ka format select karein:*\n\n` +
             `1️⃣ *Video (MP4)*\n` +
@@ -71,7 +72,7 @@ async function executeVideo(conn, mek, m, query, from, reply) {
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("KAMRAN-MD Multi-Format Error:", error);
+        console.error("KAMRAN-MD Drama Error:", error);
         reply(`❌ *Error:* ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
@@ -89,7 +90,7 @@ cmd({
         const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
         if (matchedTrigger) {
             const query = body.slice(matchedTrigger.length).trim();
-            await executeVideo(conn, mek, m, query, from, (text) => conn.sendMessage(from, { text }, { quoted: mek }));
+            await executeDrama(conn, mek, m, query, from, (text) => conn.sendMessage(from, { text }, { quoted: mek }));
         }
     } catch (error) {
         console.error("Auto-Body Error:", error);
@@ -100,11 +101,11 @@ cmd({
 cmd({
     pattern: "drama",
     alias: ["epi", "da", "episode", "dramaepi"],
-    desc: "Search and select video, audio or document from YouTube via KAMRAN-MD",
+    desc: "Search and select drama video, audio or document",
     category: "downloader",
     react: "📥",
     filename: __filename
 }, async (conn, mek, m, extra) => {
     const { from, text, reply } = extra;
-    await executeVideo(conn, mek, m, text, from, reply);
+    await executeDrama(conn, mek, m, text, from, reply);
 });

@@ -37,21 +37,15 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const BASE_URL = 'https://vajiraofc-apis.vercel.app/api/movieboxs';
         const searchUrl = `${BASE_URL}?apikey=${encodeURIComponent(API_KEY)}&query=${encodeURIComponent(q)}&page=1&perPage=24`;
         
-        console.log(`[MOVIEBOX LOG] Fetching URL: ${searchUrl}`);
-
         let searchRes;
         try {
             searchRes = await axios.get(searchUrl, { timeout: 60000 });
         } catch (apiErr) {
-            console.error('[MOVIEBOX ERROR] API call failed:', apiErr.message);
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *API request failed or timed out!*");
         }
 
         const resData = searchRes.data;
-        console.log(`[MOVIEBOX LOG] API Full Response:`, JSON.stringify(resData).substring(0, 300));
-
-        // Flexible items extraction from all possible paths
         const items = resData?.data?.items || resData?.items || resData?.data?.results || resData?.results || [];
 
         if (!items.length) {
@@ -60,7 +54,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const results = items.slice(0, 5);
-        const firstImage = results[0]?.cover || results[0]?.poster || results[0]?.image || 'https://i.imgur.com/3932mio.jpeg';
+        const fallbackImage = 'https://i.imgur.com/3932mio.jpeg';
         
         const resultsList = results.map((item, i) => { 
             const title = item?.title || 'Unknown'; 
@@ -81,7 +75,7 @@ ${resultsList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
         const searchMsg = await conn.sendMessage(from, { 
-            image: { url: firstImage }, 
+            image: { url: fallbackImage }, 
             caption: searchCaption 
         }, { quoted: mek });
 

@@ -112,9 +112,10 @@ ${resultsList}
                     console.log(`[CINEVIBES LOG] Fetching details: ${detailsUrl}`);
 
                     const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
-                    const dData = detailsRes.data?.data || detailsRes.data;
+                    console.log(`[CINEVIBES LOG] Details Full Response:`, JSON.stringify(detailsRes.data).substring(0, 400));
 
-                    downloads = dData?.download || dData?.downloads || dData?.result?.download || dData?.result?.downloads || [];
+                    const dData = detailsRes.data?.data || detailsRes.data?.result || detailsRes.data;
+                    downloads = dData?.download || dData?.downloads || dData?.links || [];
 
                     if (!downloads.length && dData?.url) {
                         downloads = [{ quality: 'Default HD', size: 'N/A', url: dData.url }];
@@ -127,7 +128,7 @@ ${resultsList}
                     }
 
                     const qualityList = downloads.map((qItem, i) => { 
-                        const qName = qItem.quality || qItem.name || `Quality ${i + 1}`;
+                        const qName = qItem.quality || qItem.name || qItem.resolution || `Quality ${i + 1}`;
                         const qSize = qItem.size || 'N/A';
                         return `*${i + 1} ┃📥 ${qName} • ${qSize}*`; 
                     }).join('\n\n');
@@ -177,7 +178,7 @@ ${qualityList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-💿 *Quality:* ${selectedQuality.quality || selectedQuality.name || 'N/A'}
+💿 *Quality:* ${selectedQuality.quality || selectedQuality.name || selectedQuality.resolution || 'N/A'}
 📦 *Size:* ${selectedQuality.size || 'N/A'}
 
 🔢 *Reply with format number* 👇

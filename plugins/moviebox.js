@@ -2,8 +2,6 @@
 
 import { fileURLToPath } from 'url';
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,7 +66,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
 ${resultsList}
 
-🔢 *Reply with a number to download as document* 👇
+🔢 *Reply with a number to select movie* 👇
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
@@ -78,117 +76,106 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let lastMsgId = searchMsg.key.id, 
+        let step = 'movie', 
+            lastMsgId = searchMsg.key.id, 
+            selectedItem = null, 
+            finalUrl = null, 
+            itemTitle = '', 
             timeout = null;
 
-        console.log(`[MOVIEBOX LOG] Search message sent. Waiting for reply with ID: ${lastMsgId}`);
-
         const handler = async (msgUpdate) => {
-            let received = null;
             try {
-                received = msgUpdate.messages[0];
-                if (!received || !received.message) return;
+                const received = msgUpdate.messages[0];
+                if (!received) return;
                 
                 const fromId = received.key.remoteJid || received.key.participant;
                 if (fromId !== from) return;
 
                 const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                console.log(`[MOVIEBOX LOG] Incoming message detected. Quoted ID: ${quotedId} | Expected ID: ${lastMsgId}`);
-
                 if (!quotedId || quotedId !== lastMsgId) return;
 
-                cleanup();
-
-                const text = received.message?.conversation || received.message?.extendedTextMessage?.text || received.message?.imageMessage?.caption;
-                console.log(`[MOVIEBOX LOG] Selected choice text: "${text}"`);
-                
-                if (!text) {
-                    console.log('[MOVIEBOX ERROR] Text content is empty.');
-                    return;
-                }
+                const text = received.message?.conversation || received.message?.extendedTextMessage?.text;
+                if (!text) return;
 
                 const choice = parseInt(text.trim());
                 if (isNaN(choice)) { 
-                    console.log('[MOVIEBOX ERROR] Choice is not a valid number.');
                     await conn.sendMessage(from, { text: '❎ Please enter a valid number.' }, { quoted: received }); 
                     return; 
                 }
 
-                if (choice < 1 || choice > results.length) { 
-                    console.log(`[MOVIEBOX ERROR] Choice out of range (1-${results.length}).`);
-                    await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                    return; 
+                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
+
+                if (step === 'movie') {
+                    if (choice < 1 || choice > results.length) { 
+                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
+                        return; 
+                    }
+
+                    selectedItem = results[choice - 1];
+                    itemTitle = selectedItem?.title || 'Movie';
+                    finalUrl = selectedItem?.proxyDownload || selectedItem?.proxyStream;
+
+                    if (!finalUrl) {
+                        await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
+                        cleanup();
+                        return;
+                    }
+
+                    const formatCaption = `
+╔════════════════════════╗
+║   🎬 MOVIEBOX FORMAT 🎬   
+╚════════════════════════╝
+
+🎬 *Title:* ${itemTitle}
+⭐ *Rating:* ${selectedItem?.imdbRatingValue || 'N/A'}
+📅 *Release:* ${selectedItem?.releaseDate || 'N/A'}
+
+🔢 *Reply with format number* 👇
+
+*1 ┃ 📽️ Video Format*
+*2 ┃ 📁 Document Format*
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
+
+                    const formatMsg = await conn.sendMessage(from, { 
+                        image: { url: selectedItem?.cover?.url || firstImage }, 
+                        caption: formatCaption 
+                    }, { quoted: received });
+
+                    step = 'format'; 
+                    lastMsgId = formatMsg.key.id;
+
+                } else if (step === 'format') {
+                    if (choice !== 1 && choice !== 2) { 
+                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
+                        return; 
+                    }
+
+                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
+
+                    const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
+
+                    if (choice === 2) {
+                        await conn.sendMessage(from, { 
+                            document: { url: finalUrl }, 
+                            mimetype: 'video/mp4', 
+                            fileName: cleanFileName, 
+                            caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    } else {
+                        await conn.sendMessage(from, { 
+                            video: { url: finalUrl }, 
+                            caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                        }, { quoted: received });
+                    }
+
+                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                    cleanup();
                 }
-
-                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                const selectedItem = results[choice - 1];
-                const itemTitle = selectedItem?.title || 'Movie';
-                const downloadUrl = selectedItem?.proxyDownload || selectedItem?.proxyStream;
-
-                console.log(`[MOVIEBOX LOG] Selected Movie: "${itemTitle}"`);
-                console.log(`[MOVIEBOX LOG] Download URL: ${downloadUrl}`);
-
-                if (!downloadUrl) {
-                    console.error('[MOVIEBOX ERROR] Download URL is missing for this item!');
-                    await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
-                    return;
-                }
-
-                const rating = selectedItem?.imdbRatingValue || 'N/A';
-                const genre = selectedItem?.genre || 'N/A';
-                const releaseDate = selectedItem?.releaseDate || 'N/A';
-                const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
-                const tempFilePath = path.join('/tmp', cleanFileName);
-
-                console.log(`[MOVIEBOX LOG] Downloading file to temp path: ${tempFilePath}...`);
-
-                // Stream directly to /tmp directory to avoid RAM memory crash
-                const response = await axios({
-                    method: 'GET',
-                    url: downloadUrl,
-                    responseType: 'stream',
-                    timeout: 300000
-                });
-
-                const writer = fs.createWriteStream(tempFilePath);
-                response.data.pipe(writer);
-
-                await new Promise((resolve, reject) => {
-                    writer.on('finish', resolve);
-                    writer.on('error', reject);
-                });
-
-                console.log(`[MOVIEBOX LOG] Download complete. Sending document to WhatsApp...`);
-
-                await conn.sendMessage(from, { 
-                    document: { url: tempFilePath }, 
-                    mimetype: 'video/mp4', 
-                    fileName: cleanFileName, 
-                    caption: `╔════════════════════════╗\n` +
-                             `║   🎬 MOVIE DOWNLOAD 🎬   \n` +
-                             `╚════════════════════════╝\n\n` +
-                             `🎬 *Title:* ${itemTitle}\n` +
-                             `⭐ *Rating:* ${rating}\n` +
-                             `🎭 *Genre:* ${genre}\n` +
-                             `📅 *Release:* ${releaseDate}\n\n` +
-                             `> *👑 Powered by KAMRAN MD*` 
-                }, { quoted: received });
-
-                console.log('[MOVIEBOX LOG] Document sent successfully. Cleaning up temp file...');
-                
-                // Delete temp file after sending to save disk space
-                if (fs.existsSync(tempFilePath)) {
-                    fs.unlinkSync(tempFilePath);
-                }
-
-                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
 
             } catch (err) { 
-                console.error('CRITICAL MOVIEBOX HANDLER ERROR -->', err);
-                if (received) {
-                    await conn.sendMessage(from, { text: `❎ *System Error:* ${err.message}` }, { quoted: received });
-                }
+                console.error('MovieBox handler error:', err); 
                 cleanup(); 
             }
         };
@@ -199,11 +186,11 @@ ${resultsList}
         };
 
         conn.ev.on('messages.upsert', handler);
-        timeout = setTimeout(() => cleanup(), 10 * 60 * 1000);
+        timeout = setTimeout(() => cleanup(), 60 * 1000);
 
     } catch (e) {
-        console.error('CRITICAL COMMAND ERROR -->', e);
+        console.error('MovieBox command error:', e);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        return reply(`❌ *Error:* ${e.message}`);
+        return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
     }
 });

@@ -117,11 +117,16 @@ ${resultsList}
 
                     downloads = mData?.download || mData?.downloads || mData?.links || mData?.qualities || [];
 
+                    // Filter out invalid or image links
+                    downloads = downloads.filter(d => {
+                        const link = d.url || d.link || '';
+                        return link && !link.includes('opengraph-image') && !link.endsWith('.jpg') && !link.endsWith('.png');
+                    });
+
                     if (!downloads.length) {
-                        downloads = [
-                            { quality: 'HD Quality (Fast)', size: mData?.size || '720p', url: itemUrl },
-                            { quality: 'Full HD (High Quality)', size: mData?.size || '1080p', url: itemUrl }
-                        ];
+                        await conn.sendMessage(from, { text: '❎ Is movie ke liye direct download links available nahi hain.' }, { quoted: received });
+                        cleanup();
+                        return;
                     }
 
                     const qualityList = downloads.map((qItem, i) => { 
@@ -161,7 +166,7 @@ ${qualityList}
                     }
 
                     selectedQuality = downloads[choice - 1];
-                    finalUrl = selectedQuality.url || selectedQuality.link || selectedItem.url;
+                    finalUrl = selectedQuality.url || selectedQuality.link;
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });

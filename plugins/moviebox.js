@@ -107,10 +107,10 @@ ${resultsList}
 
                 const selectedItem = results[choice - 1];
                 const itemTitle = selectedItem?.title || 'Movie';
-                const subjectId = selectedItem?.subjectid || selectedItem?.id;
+                const subjectId = selectedItem?.subjectid;
                 const detailPath = selectedItem?.detailPath || selectedItem?.path || '';
 
-                console.log(`[MOVIEBOX LOG] Selected Item: "${itemTitle}" | ID: ${subjectId} | Path: ${detailPath}`);
+                console.log(`[MOVIEBOX LOG] Selected Item: "${itemTitle}" | Subject ID: ${subjectId} | Path: ${detailPath}`);
 
                 const detailUrl = `https://vajiraofc-apis.vercel.app/api/moviebox?apikey=${encodeURIComponent(API_KEY)}&id=${subjectId}&detailPath=${encodeURIComponent(detailPath)}&season=0&episode=0`;
                 

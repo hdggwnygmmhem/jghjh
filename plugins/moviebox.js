@@ -2,6 +2,8 @@
 
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,7 +68,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
 ${resultsList}
 
-🔢 *Reply with a number to select download* 👇
+🔢 *Reply with a number to download as document* 👇
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
@@ -136,32 +138,50 @@ ${resultsList}
                 const rating = selectedItem?.imdbRatingValue || 'N/A';
                 const genre = selectedItem?.genre || 'N/A';
                 const releaseDate = selectedItem?.releaseDate || 'N/A';
-                const posterUrl = selectedItem?.cover?.url || firstImage;
+                const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
+                const tempFilePath = path.join('/tmp', cleanFileName);
 
-                console.log(`[MOVIEBOX LOG] Sending high-speed download link card...`);
+                console.log(`[MOVIEBOX LOG] Downloading file to temp path: ${tempFilePath}...`);
 
-                const downloadCaption = `
-╔════════════════════════╗
-║   🎬 MOVIE READY 🎬      
-╚════════════════════════╝
+                // Stream directly to /tmp directory to avoid RAM memory crash
+                const response = await axios({
+                    method: 'GET',
+                    url: downloadUrl,
+                    responseType: 'stream',
+                    timeout: 300000
+                });
 
-🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${rating}
-🎭 *Genre:* ${genre}
-📅 *Release:* ${releaseDate}
+                const writer = fs.createWriteStream(tempFilePath);
+                response.data.pipe(writer);
 
-📥 *Direct Download Link:* 
-${downloadUrl}
+                await new Promise((resolve, reject) => {
+                    writer.on('finish', resolve);
+                    writer.on('error', reject);
+                });
 
-> ⚡ *Version:* \`12.00\`
-> 👑 *Powered by KAMRAN MD*`.trim();
+                console.log(`[MOVIEBOX LOG] Download complete. Sending document to WhatsApp...`);
 
                 await conn.sendMessage(from, { 
-                    image: { url: posterUrl },
-                    caption: downloadCaption 
+                    document: { url: tempFilePath }, 
+                    mimetype: 'video/mp4', 
+                    fileName: cleanFileName, 
+                    caption: `╔════════════════════════╗\n` +
+                             `║   🎬 MOVIE DOWNLOAD 🎬   \n` +
+                             `╚════════════════════════╝\n\n` +
+                             `🎬 *Title:* ${itemTitle}\n` +
+                             `⭐ *Rating:* ${rating}\n` +
+                             `🎭 *Genre:* ${genre}\n` +
+                             `📅 *Release:* ${releaseDate}\n\n` +
+                             `> *👑 Powered by KAMRAN MD*` 
                 }, { quoted: received });
 
-                console.log('[MOVIEBOX LOG] Download link card sent successfully!');
+                console.log('[MOVIEBOX LOG] Document sent successfully. Cleaning up temp file...');
+                
+                // Delete temp file after sending to save disk space
+                if (fs.existsSync(tempFilePath)) {
+                    fs.unlinkSync(tempFilePath);
+                }
+
                 await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
 
             } catch (err) { 
@@ -179,7 +199,7 @@ ${downloadUrl}
         };
 
         conn.ev.on('messages.upsert', handler);
-        timeout = setTimeout(() => cleanup(), 5 * 60 * 1000);
+        timeout = setTimeout(() => cleanup(), 10 * 60 * 1000);
 
     } catch (e) {
         console.error('CRITICAL COMMAND ERROR -->', e);

@@ -44,7 +44,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         }
 
         const resData = searchRes.data;
-        const items = resData?.data?.items || resData?.results || [];
+        const items = resData?.data?.items || resData?.results || resData?.items || [];
 
         if (!resData?.success || !items.length) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
@@ -105,7 +105,7 @@ ${resultsList}
 
                 const selectedItem = results[choice - 1];
                 const itemTitle = selectedItem?.title || 'Movie';
-                const subjectId = selectedItem?.subjectid;
+                const subjectId = selectedItem?.subjectid || selectedItem?.id;
                 const detailPath = selectedItem?.detailPath || selectedItem?.path || '';
 
                 console.log(`[MOVIEBOX LOG] Selected: "${itemTitle}" | ID: ${subjectId} | Path: ${detailPath}`);
@@ -116,13 +116,13 @@ ${resultsList}
                 try {
                     const detailRes = await axios.get(detailUrl, { timeout: 60000 });
                     const dData = detailRes.data;
-                    downloadUrl = dData?.data?.downloadUrl || dData?.downloadUrl || dData?.data?.url || dData?.url;
+                    downloadUrl = dData?.data?.downloadUrl || dData?.downloadUrl || dData?.data?.url || dData?.url || dData?.data?.proxyDownload;
                 } catch (e) {
                     console.error('[MOVIEBOX ERROR] Detail fetch failed:', e.message);
                 }
 
                 if (!downloadUrl) {
-                    downloadUrl = selectedItem?.downloadUrl || selectedItem?.url;
+                    downloadUrl = selectedItem?.downloadUrl || selectedItem?.url || selectedItem?.proxyDownload;
                 }
 
                 if (!downloadUrl) {

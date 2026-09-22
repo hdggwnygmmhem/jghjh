@@ -109,19 +109,19 @@ ${resultsList}
                     const itemUrl = selectedItem.url;
 
                     const detailsUrl = `${BASE_URL}/details?apikey=${encodeURIComponent(API_KEY)}&url=${encodeURIComponent(itemUrl)}`;
-                    const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+                    console.log(`[CINEVIBES LOG] Fetching details: ${detailsUrl}`);
 
-                    if (!detailsRes.data?.success || !detailsRes.data.data) { 
-                        await conn.sendMessage(from, { text: '❎ No download links found for this item.' }, { quoted: received }); 
-                        cleanup(); 
-                        return; 
+                    const detailsRes = await axios.get(detailsUrl, { timeout: 60000 });
+                    const dData = detailsRes.data?.data || detailsRes.data;
+
+                    downloads = dData?.download || dData?.downloads || dData?.result?.download || dData?.result?.downloads || [];
+
+                    if (!downloads.length && dData?.url) {
+                        downloads = [{ quality: 'Default HD', size: 'N/A', url: dData.url }];
                     }
 
-                    const detailsData = detailsRes.data.data;
-                    downloads = detailsData.download || detailsData.downloads || [];
-
                     if (!downloads.length) {
-                        await conn.sendMessage(from, { text: '❎ No download links available.' }, { quoted: received });
+                        await conn.sendMessage(from, { text: '❎ No download links found for this item.' }, { quoted: received });
                         cleanup();
                         return;
                     }
@@ -138,8 +138,8 @@ ${resultsList}
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${detailsData.meta?.rating || 'N/A'}
-📅 *Year:* ${detailsData.meta?.year || 'N/A'}
+⭐ *Rating:* ${dData?.meta?.rating || dData?.rating || 'N/A'}
+📅 *Year:* ${dData?.meta?.year || dData?.year || 'N/A'}
 
 🔢 *Reply with quality number* 👇
 
@@ -149,7 +149,7 @@ ${qualityList}
 > 👑 *Powered by KAMRAN MD*`.trim();
 
                     const qualityMsg = await conn.sendMessage(from, { 
-                        image: { url: detailsData.poster || selectedItem.poster || firstImage }, 
+                        image: { url: dData?.poster || selectedItem.poster || firstImage }, 
                         caption: qualityCaption 
                     }, { quoted: received });
 

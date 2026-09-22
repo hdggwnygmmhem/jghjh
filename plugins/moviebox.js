@@ -2,8 +2,6 @@
 
 import { fileURLToPath } from 'url';
 import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,7 +63,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
 
 ${resultsList}
 
-🔢 *Reply with a number to select movie* 👇
+🔢 *Reply with a number to get fast download link* 👇
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
@@ -75,11 +73,7 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let currentStep = 'movie'; 
         let lastMsgId = searchMsg.key.id;
-        let selectedItem = null;
-        let finalUrl = null;
-        let itemTitle = '';
         let timeout = null;
 
         const handler = async (msgUpdate) => {
@@ -102,129 +96,53 @@ ${resultsList}
                     return; 
                 }
 
-                await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
+                if (choice < 1 || choice > results.length) { 
+                    await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
+                    return; 
+                }
 
-                if (currentStep === 'movie') {
-                    if (choice < 1 || choice > results.length) { 
-                        await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
-                        return; 
-                    }
+                await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
-                    selectedItem = results[choice - 1];
-                    itemTitle = selectedItem?.title || 'Movie';
-                    finalUrl = selectedItem?.proxyDownload || selectedItem?.proxyStream;
+                const selectedItem = results[choice - 1];
+                const itemTitle = selectedItem?.title || 'Movie';
+                const downloadUrl = selectedItem?.proxyDownload || selectedItem?.proxyStream;
 
-                    if (!finalUrl) {
-                        await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
-                        cleanup();
-                        return;
-                    }
+                if (!downloadUrl) {
+                    await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
+                    cleanup();
+                    return;
+                }
 
-                    const formatCaption = `
+                const rating = selectedItem?.imdbRatingValue || 'N/A';
+                const genre = selectedItem?.genre || 'N/A';
+                const releaseDate = selectedItem?.releaseDate || 'N/A';
+                const posterUrl = selectedItem?.cover?.url || firstImage;
+
+                const downloadCaption = `
 ╔════════════════════════╗
-║   🎬 MOVIEBOX FORMAT 🎬   
+║   🎬 FAST MOVIE LINK 🎬   
 ╚════════════════════════╝
 
 🎬 *Title:* ${itemTitle}
-⭐ *Rating:* ${selectedItem?.imdbRatingValue || 'N/A'}
-📅 *Release:* ${selectedItem?.releaseDate || 'N/A'}
+⭐ *Rating:* ${rating}
+🎭 *Genre:* ${genre}
+📅 *Release:* ${releaseDate}
 
-🔢 *Reply with format number* 👇
-
-*1 ┃ 📽️ Video Format*
-*2 ┃ 📁 Document Format*
+📥 *Direct Download Link:* ${downloadUrl}
 
 > ⚡ *Version:* \`12.00\`
 > 👑 *Powered by KAMRAN MD*`.trim();
 
-                    const formatMsg = await conn.sendMessage(from, { 
-                        image: { url: selectedItem?.cover?.url || firstImage }, 
-                        caption: formatCaption 
-                    }, { quoted: received });
+                await conn.sendMessage(from, { 
+                    image: { url: posterUrl },
+                    caption: downloadCaption 
+                }, { quoted: received });
 
-                    currentStep = 'format'; 
-                    lastMsgId = formatMsg.key.id;
-
-                } else if (currentStep === 'format') {
-                    if (choice !== 1 && choice !== 2) { 
-                        await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
-                        return; 
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
-
-                    const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
-                    const tempFilePath = path.join('/tmp', cleanFileName);
-
-                    console.log(`[MOVIEBOX LOG] Starting download for: ${itemTitle}`);
-
-                    try {
-                        const response = await axios({
-                            method: 'GET',
-                            url: finalUrl,
-                            responseType: 'stream',
-                            timeout: 45000 // 45 seconds strict timeout
-                        });
-
-                        const writer = fs.createWriteStream(tempFilePath);
-                        response.data.pipe(writer);
-
-                        let downloadTimeout = setTimeout(() => {
-                            writer.destroy();
-                            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-                            throw new Error("Download timed out because external server is not sending data.");
-                        }, 45000);
-
-                        await new Promise((resolve, reject) => {
-                            writer.on('finish', () => {
-                                clearTimeout(downloadTimeout);
-                                resolve();
-                            });
-                            writer.on('error', (err) => {
-                                clearTimeout(downloadTimeout);
-                                reject(err);
-                            });
-                        });
-
-                        console.log(`[MOVIEBOX LOG] Download finished. Sending to WhatsApp...`);
-
-                        if (choice === 2) {
-                            await conn.sendMessage(from, { 
-                                document: { url: tempFilePath }, 
-                                mimetype: 'video/mp4', 
-                                fileName: cleanFileName, 
-                                caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                            }, { quoted: received });
-                        } else {
-                            await conn.sendMessage(from, { 
-                                video: { url: tempFilePath }, 
-                                caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                            }, { quoted: received });
-                        }
-
-                        if (fs.existsSync(tempFilePath)) {
-                            fs.unlinkSync(tempFilePath);
-                        }
-
-                        await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
-
-                    } catch (dlErr) {
-                        console.error('[MOVIEBOX DOWNLOAD ERROR] -->', dlErr.message);
-                        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-                        
-                        await conn.sendMessage(from, { 
-                            text: `❌ *Download Failed:* External stream server is not responding or hanging. \n\n🔗 *Direct Link:* ${finalUrl}\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    }
-
-                    cleanup();
-                }
+                await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+                cleanup();
 
             } catch (err) { 
                 console.error('MovieBox handler error -->', err); 
-                if (received) {
-                    await conn.sendMessage(from, { text: `❎ *Error:* ${err.message}` }, { quoted: received });
-                }
                 cleanup(); 
             }
         };

@@ -208,7 +208,7 @@ ${qualityList}
                     const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qSize}] CineVibes.mp4`;
 
                     if (choice === 2) {
-                        await ncol = await conn.sendMessage(from, { 
+                        await conn.sendMessage(from, { 
                             document: { url: finalUrl }, 
                             mimetype: 'video/mp4', 
                             fileName: fileName, 

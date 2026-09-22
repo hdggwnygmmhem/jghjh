@@ -2,6 +2,8 @@
 
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { cmd } from '../command.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,19 +34,16 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         const BASE_URL = 'https://api.omegatech.app/api/movie/MovieBox-pro';
         const searchUrl = `${BASE_URL}?action=search&keyword=${encodeURIComponent(q)}`;
         
-        console.log(`[MOVIEBOX LOG] Searching API: ${searchUrl}`);
         let searchRes;
         try {
             searchRes = await axios.get(searchUrl, { timeout: 60000 });
         } catch (apiErr) {
-            console.error('[MOVIEBOX ERROR] Search API failed:', apiErr.message);
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *API request failed or timed out!*");
         }
 
         const resData = searchRes.data;
         if (!resData?.success || !resData?.data?.results?.length) {
-            console.log('[MOVIEBOX LOG] No results found from API.');
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ *Koi result nahi mila!*");
         }
@@ -115,8 +114,6 @@ ${resultsList}
                     itemTitle = selectedItem?.title || 'Movie';
                     finalUrl = selectedItem?.proxyDownload || selectedItem?.proxyStream;
 
-                    console.log(`[MOVIEBOX LOG] Selected Movie: "${itemTitle}" | URL: ${finalUrl}`);
-
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
                         cleanup();
@@ -147,7 +144,6 @@ ${resultsList}
 
                     currentStep = 'format'; 
                     lastMsgId = formatMsg.key.id;
-                    console.log(`[MOVIEBOX LOG] Step updated to 'format'. New Message ID: ${lastMsgId}`);
 
                 } else if (currentStep === 'format') {
                     if (choice !== 1 && choice !== 2) { 
@@ -155,23 +151,46 @@ ${resultsList}
                         return; 
                     }
 
-                    console.log(`[MOVIEBOX LOG] Format chosen: ${choice === 2 ? 'Document' : 'Video'}`);
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
                     const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
+                    const tempFilePath = path.join('/tmp', cleanFileName);
+
+                    console.log(`[MOVIEBOX LOG] Downloading to temp file: ${tempFilePath}`);
+
+                    const response = await axios({
+                        method: 'GET',
+                        url: finalUrl,
+                        responseType: 'stream',
+                        timeout: 300000
+                    });
+
+                    const writer = fs.createWriteStream(tempFilePath);
+                    response.data.pipe(writer);
+
+                    await new Promise((resolve, reject) => {
+                        writer.on('finish', resolve);
+                        writer.on('error', reject);
+                    });
+
+                    console.log(`[MOVIEBOX LOG] Download finished. Sending to WhatsApp...`);
 
                     if (choice === 2) {
                         await conn.sendMessage(from, { 
-                            document: { url: finalUrl }, 
+                            document: { url: tempFilePath }, 
                             mimetype: 'video/mp4', 
                             fileName: cleanFileName, 
                             caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
                     } else {
                         await conn.sendMessage(from, { 
-                            video: { url: finalUrl }, 
+                            video: { url: tempFilePath }, 
                             caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
+                    }
+
+                    if (fs.existsSync(tempFilePath)) {
+                        fs.unlinkSync(tempFilePath);
                     }
 
                     await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
@@ -180,6 +199,9 @@ ${resultsList}
 
             } catch (err) { 
                 console.error('MovieBox handler error -->', err); 
+                if (received) {
+                    await conn.sendMessage(from, { text: `❎ *Error:* ${err.message}` }, { quoted: received });
+                }
                 cleanup(); 
             }
         };

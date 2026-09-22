@@ -211,14 +211,16 @@ ${resultsList}
 
                     } catch (dlErr) {
                         console.error('[MOVIEBOX FAST DOWNLOAD ERROR] -->', dlErr.message);
-                        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+                        if (fs.existsSync(tempFilePath)) {
+                            fs.unlinkSync(tempFilePath);
+                        }
                         await conn.sendMessage(from, { text: `❎ *Download Error:* ${dlErr.message}` }, { quoted: received });
                     }
 
                     cleanup();
                 }
 
-            }cha catch (err) { 
+            } catch (err) { 
                 console.error('MovieBox handler error -->', err); 
                 cleanup(); 
             }

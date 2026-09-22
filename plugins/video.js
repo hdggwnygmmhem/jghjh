@@ -1,108 +1,72 @@
-Import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CORE VIDEO LOGIC ====================
-async function executeVideo(conn, mek, m, query, from, reply) {
+// ==================== YOUTUBE PLAYLIST / DRAMA LIST COMMAND ====================
+cmd({
+    pattern: "playlist",
+    alias: ["dramalist", "ytplaylist", "pl"],
+    desc: "Fetch and show YouTube playlist details via Starlight API",
+    category: "downloader",
+    react: "📜",
+    filename: __filename
+}, async (conn, mek, m, extra) => {
+    const { from, text, reply } = extra;
+    
     try {
-        if (!query) {
+        if (!text || (!text.includes("youtube.com") && !text.includes("youtu.be"))) {
             return reply(
-                `⚠️ Please provide a video name or search query!\n\n` +
-                `Example:\n` +
-                `• .videoz song pal`
+                `📜 *KAMRAN-MD PLAYLIST FETCHING*\n\n` +
+                `❌ *Please provide a valid YouTube Playlist URL!*\n\n` +
+                `💡 *Example:* \`.playlist https://youtube.com/playlist?list=PLWVo2tank-zzCWQ4dfIwZAAGqUEDY1Mxv\``
             );
         }
 
-        // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        // Call the API endpoint
-        const encodedQuery = encodeURIComponent(query.trim());
-        const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodedQuery}`;
+        const playlistUrl = text.trim();
+        const apiUrl = `https://apis-starlights-team.koyeb.app/starlight/youtube-playlist?url=${encodeURIComponent(playlistUrl)}`;
         
+        console.log("Calling Playlist API:", apiUrl);
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
         if (!resData || !resData.status || !resData.result) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not find any video results for that query.");
+            return reply("❌ *Oops!* Could not fetch the playlist details.");
         }
 
-        const info = resData.result;
-        const videoUrl = info.download_url;
-        const title = info.searched_title || query;
-        const videoPageUrl = info.searched_url || '';
+        const playlist = resData.result;
+        const title = playlist.title || "YouTube Playlist";
+        const totalVideos = playlist.videos ? playlist.videos.length : 0;
 
-        if (!videoUrl) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Failed to retrieve the video download link from the API response.");
+        // Construct a clean message listing the videos or playlist info
+        let messageText = `📜 *PLAYLIST INFO*\n\n`;
+        messageText += `📌 *Title:* ${title}\n`;
+        messageText += `📊 *Total Videos:* ${totalVideos}\n\n`;
+        messageText += `🔗 *Playlist URL:* ${playlistUrl}\n\n`;
+
+        // Agar videos ki list hai toh kuch top videos ke naam dikha dein
+        if (playlist.videos && playlist.videos.length > 0) {
+            messageText += `📋 *Top Videos in Playlist:*\n`;
+            playlist.videos.slice(0, 10).forEach((vid, index) => {
+                messageText += `${index + 1}. ${vid.title || 'Video'} (${vid.duration || 'N/A'})\n`;
+            });
+            if (playlist.videos.length > 10) {
+                messageText += `\n_...and ${playlist.videos.length - 10} more videos._\r\n`;
+            }
         }
 
-        // Send caption info first
-        let caption = `🎬 *Title:* ${title}\n`;
-        if (videoPageUrl) caption += `🔗 *YouTube:* ${videoPageUrl}\n`;
-        caption += `🤖 *Bot:* KAMRAN-MD\n`;
-        caption += `📁 *Status:* Downloading video buffer...`;
-        await reply(caption);
+        messageText += `\n> Powered by KAMRAN-MD`;
 
-        // Download video as arraybuffer with proper headers to bypass streaming block
-        const videoBufferRes = await axios.get(videoUrl, {
-            responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://www.youtube.com/'
-            },
-            timeout: 60000 // 60 seconds for large files
-        });
-
-        // Send the video buffer directly
-        await conn.sendMessage(from, {
-            video: Buffer.from(videoBufferRes.data),
-            mimetype: 'video/mp4',
-            caption: `🎥 ${title}\n> Powered by KAMRAN-MD`
-        }, { quoted: mek });
-
-        // Success reaction
+        await conn.sendMessage(from, { text: messageText }, { quoted: mek });
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("KAMRAN-MD Video Error:", error);
-        reply(`❌ Error: ${error.message}`);
+        console.error("Playlist API Error:", error);
+        reply(`❌ *Error:* ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
-}
-
-// ==================== AUTO VIDEO LISTENER (BODY HOOK) ====================
-cmd({
-    on: "body"
-}, async (conn, mek, m, { from, body }) => {
-    try {
-        if (!body) return;
-        const rawText = body.trim().toLowerCase();
-        const triggers = ['video', 'ytmp4', 'ytvideo', 'playvid', 'videoz'];
-
-        // Triggers automatically in both Inbox and Groups if it matches the command or starts with it followed by space/query
-        const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
-        if (matchedTrigger) {
-            const query = body.slice(matchedTrigger.length).trim();
-            await executeVideo(conn, mek, m, query, from, (text) => conn.sendMessage(from, { text }, { quoted: mek }));
-        }
-    } catch (error) {
-        console.error("Auto-Body Video Error:", error);
-    }
-});
-
-// ==================== VIDEO COMMAND (Prefix Version) ====================
-cmd({
-    pattern: "video",
-    alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
-    desc: "Search and download videos from YouTube via DR",
-    category: "downloader",
-    react: "📥",
-    filename: __filename
-}, async (conn, mek, m, extra) => {
-    const { from, text, reply } = extra;
-    await executeVideo(conn, mek, m, text, from, reply);
 });

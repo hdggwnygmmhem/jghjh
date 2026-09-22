@@ -130,7 +130,7 @@ cmd({
     try {
         if (!body) return;
         const rawText = body.trim().toLowerCase();
-        const triggers = ['drama', 'epi'];
+        const triggers = ['drama65', 'epi65'];
 
         // Trigger if text starts with drama/epi triggers (e.g. "drama meray aansu")
         const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
@@ -147,8 +147,8 @@ cmd({
 // DRAMA COMMAND (Prefix Version)
 // ============================================
 cmd({
-    pattern: "drama",
-    alias: ["epi"],
+    pattern: "drama65",
+    alias: ["epi65"],
     desc: "Download YouTube dramas only (≥15 min) by name",
     category: "download",
     react: "🎬",

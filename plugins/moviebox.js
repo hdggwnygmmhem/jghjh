@@ -40,9 +40,9 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
         try {
             searchRes = await axios.get(searchUrl, { timeout: 120000 });
         } catch (apiErr) {
-            console.error('[CINEVIBES ERROR] Search timeout or failed:', apiErr.message);
+            console.error('[CINEVIBES ERROR] Search timeout:', apiErr.message);
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ *Server is taking too long to respond. Please try again later!*");
+            return reply("❌ *Server is busy or timed out. Please try again!*");
         }
 
         if (!searchRes.data?.success || !searchRes.data.results?.length) {
@@ -123,7 +123,7 @@ ${resultsList}
                     try {
                         detailsRes = await axios.get(detailsUrl, { timeout: 120000 });
                     } catch (detErr) {
-                        await conn.sendMessage(from, { text: '❎ Details request timed out. Try another movie.' }, { quoted: received });
+                        await conn.sendMessage(from, { text: '❎ Details request timed out.' }, { quoted: received });
                         cleanup();
                         return;
                     }
@@ -131,13 +131,18 @@ ${resultsList}
                     const resJson = detailsRes.data;
                     const mData = resJson?.movie || resJson?.data || resJson?.result || resJson;
 
-                    downloads = mData?.download || mData?.downloads || mData?.links || mData?.qualities || [];
+                    const rawDownloads = mData?.download || mData?.downloads || mData?.links || mData?.qualities || [];
+
+                    // Strictly filter out images or invalid links
+                    downloads = rawDownloads.filter(d => {
+                        const link = d.url || d.link || '';
+                        return link && !link.includes('opengraph-image') && !link.endsWith('.jpg') && !link.endsWith('.png');
+                    });
 
                     if (!downloads.length) {
-                        downloads = [
-                            { quality: 'HD Quality (Fast)', size: mData?.size || '720p', url: itemUrl },
-                            { quality: 'Full HD (High Quality)', size: mData?.size || '1080p', url: itemUrl }
-                        ];
+                        await conn.sendMessage(from, { text: '❎ Is movie ke liye direct download links available nahi hain.' }, { quoted: received });
+                        cleanup();
+                        return;
                     }
 
                     const qualityList = downloads.map((qItem, i) => { 
@@ -177,7 +182,7 @@ ${qualityList}
                     }
 
                     selectedQuality = downloads[choice - 1];
-                    finalUrl = selectedQuality.url || selectedQuality.link || selectedItem.url;
+                    finalUrl = selectedQuality.url || selectedQuality.link;
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download URL extraction failed.' }, { quoted: received });

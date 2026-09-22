@@ -156,44 +156,67 @@ ${resultsList}
                     const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
                     const tempFilePath = path.join('/tmp', cleanFileName);
 
-                    console.log(`[MOVIEBOX LOG] Downloading to temp file: ${tempFilePath}`);
+                    console.log(`[MOVIEBOX LOG] Starting download for: ${itemTitle}`);
 
-                    const response = await axios({
-                        method: 'GET',
-                        url: finalUrl,
-                        responseType: 'stream',
-                        timeout: 300000
-                    });
+                    try {
+                        const response = await axios({
+                            method: 'GET',
+                            url: finalUrl,
+                            responseType: 'stream',
+                            timeout: 45000 // 45 seconds strict timeout
+                        });
 
-                    const writer = fs.createWriteStream(tempFilePath);
-                    response.data.pipe(writer);
+                        const writer = fs.createWriteStream(tempFilePath);
+                        response.data.pipe(writer);
 
-                    await new Promise((resolve, reject) => {
-                        writer.on('finish', resolve);
-                        writer.on('error', reject);
-                    });
+                        let downloadTimeout = setTimeout(() => {
+                            writer.destroy();
+                            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+                            throw new Error("Download timed out because external server is not sending data.");
+                        }, 45000);
 
-                    console.log(`[MOVIEBOX LOG] Download finished. Sending to WhatsApp...`);
+                        await new Promise((resolve, reject) => {
+                            writer.on('finish', () => {
+                                clearTimeout(downloadTimeout);
+                                resolve();
+                            });
+                            writer.on('error', (err) => {
+                                clearTimeout(downloadTimeout);
+                                reject(err);
+                            });
+                        });
 
-                    if (choice === 2) {
+                        console.log(`[MOVIEBOX LOG] Download finished. Sending to WhatsApp...`);
+
+                        if (choice === 2) {
+                            await conn.sendMessage(from, { 
+                                document: { url: tempFilePath }, 
+                                mimetype: 'video/mp4', 
+                                fileName: cleanFileName, 
+                                caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                            }, { quoted: received });
+                        } else {
+                            await conn.sendMessage(from, { 
+                                video: { url: tempFilePath }, 
+                                caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                            }, { quoted: received });
+                        }
+
+                        if (fs.existsSync(tempFilePath)) {
+                            fs.unlinkSync(tempFilePath);
+                        }
+
+                        await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
+
+                    } catch (dlErr) {
+                        console.error('[MOVIEBOX DOWNLOAD ERROR] -->', dlErr.message);
+                        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+                        
                         await conn.sendMessage(from, { 
-                            document: { url: tempFilePath }, 
-                            mimetype: 'video/mp4', 
-                            fileName: cleanFileName, 
-                            caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
-                        }, { quoted: received });
-                    } else {
-                        await conn.sendMessage(from, { 
-                            video: { url: tempFilePath }, 
-                            caption: `*${itemTitle}*\n\n> *👑 Powered by KAMRAN MD*` 
+                            text: `❌ *Download Failed:* External stream server is not responding or hanging. \n\n🔗 *Direct Link:* ${finalUrl}\n\n> *👑 Powered by KAMRAN MD*` 
                         }, { quoted: received });
                     }
 
-                    if (fs.existsSync(tempFilePath)) {
-                        fs.unlinkSync(tempFilePath);
-                    }
-
-                    await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
                     cleanup();
                 }
 

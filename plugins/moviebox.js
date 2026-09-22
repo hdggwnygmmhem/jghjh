@@ -56,7 +56,7 @@ async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => 
             const title = item?.title || 'Unknown'; 
             const year = item?.releaseDate ? item.releaseDate.split('-')[0] : 'N/A';
             const rating = item?.imdbRatingValue ? `⭐ ${item.imdbRatingValue}` : '';
-            return `*${i + 1} ┃${title}* (${year})${rating}`; 
+            return `*${i + 1} ┃ ${title}* (${year}) ${rating}`; 
         }).join('\n\n');
 
         const searchCaption = `
@@ -91,7 +91,7 @@ ${resultsList}
                 if (fromId !== from) return;
 
                 const quotedId = received.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                console.log(`[MOVIEBOX LOG] Incoming message detected. Quoted ID: ${quotedId} \vert{} Expected ID:${lastMsgId}`);
+                console.log(`[MOVIEBOX LOG] Incoming message detected. Quoted ID: ${quotedId} | Expected ID: ${lastMsgId}`);
 
                 if (!quotedId || quotedId !== lastMsgId) return;
 
@@ -149,7 +149,7 @@ ${resultsList}
                              `╚════════════════════════╝\n\n` +
                              `🎬 *Title:* ${itemTitle}\n` +
                              `⭐ *Rating:* ${rating}\n` +
-                             `🎭 *Genre:* `${genre}\n` +
+                             `🎭 *Genre:* ${genre}\n` +
                              `📅 *Release:* ${releaseDate}\n\n` +
                              `> *👑 Powered by KAMRAN MD*` 
                 }, { quoted: received });

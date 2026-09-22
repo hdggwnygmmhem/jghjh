@@ -1,134 +1,173 @@
+import { cmd } from "../command.js";
+import yts from "yt-search";
+import axios from "axios";
 import { fileURLToPath } from 'url';
-import { cmd } from '../command.js';
-import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== CORE VIDEO LOGIC ====================
-async function executeVideo(conn, mek, m, query, from, reply) {
+const API_CONFIG = {
+    VIDEO_API: Buffer.from("aHR0cHM6Ly9hcGkubmV4cmF5LmV1LmNjL2Rvd25sb2FkZXIvdjEveXRtcDQ/dXJsPQ==", "base64").toString()
+};
+
+function normalizeYouTubeUrl(url) {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/shorts\/|youtube\.com\/.*[?&]v=)([a-zA-Z0-9_-]{11})/);
+    return match ? `https://youtube.com/watch?v=${match[1]}` : null;
+}
+
+async function fetchVideoData(url, quality = '360', retries = 2) {
     try {
-        if (!query) {
-            return reply(
-                `╭───────────────◆\n` +
-                `│ ⚠️ *PLEASE PROVIDE A QUERY*\n` +
-                `╰───────────────◆\n\n` +
-                `✨ *Example Usage:*\n` +
-                `• \`.video song pal\`\n` +
-                `• \`.videoz lo-fi beats\``
-            );
+        const apiUrl = `${API_CONFIG.VIDEO_API}${encodeURIComponent(url)}&resolusi=${quality}`;
+        const { data } = await axios.get(apiUrl, { timeout: 20000 });
+
+        if (data?.status && data?.result?.url) {
+            return {
+                video_url: data.result.url,
+                title: data.result.title || "YouTube Video",
+                quality: quality
+            };
         }
-
-        // Loading reaction
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-
-        // Call the API endpoint
-        const encodedQuery = encodeURIComponent(query.trim());
-        const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodedQuery}`;
-        
-        const response = await axios.get(apiUrl, { timeout: 30000 });
-        const resData = response.data;
-
-        if (!resData || !resData.status || !resData.result) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ *Oops!* Could not find any video results for your query.");
-        }
-
-        const info = resData.result;
-        const videoUrl = info.download_url;
-        const title = info.searched_title || query;
-        const videoPageUrl = info.searched_url || '';
-        const thumbnail = info.thumbnail || info.image || '';
-        const duration = info.duration || info.timestamp || 'Unknown';
-        const views = info.views || 'N/A';
-
-        if (!videoUrl) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Failed to retrieve the video download link from the API.");
-        }
-
-        // Send Stylish Preview / Info Card First (with Thumbnail if available)
-        let caption = `╭───────────────◆\n`;
-        caption += `│ 📥 *KAMRAN-MD DOWNLOADER*\n`;
-        caption += `├───────────────◆\n`;
-        caption += `│ 🎬 *Title:* ${title}\n`;
-        caption += `│ ⏱️ *Duration:* ${duration}\n`;
-        caption += `│ 👀 *Views:* ${views}\n`;
-        if (videoPageUrl) caption += `│ 🔗 *YouTube:* ${videoPageUrl}\n`;
-        caption += `├───────────────◆\n`;
-        caption += `│ 🔄 *Status:* Downloading video buffer...\n`;
-        caption += `╰───────────────◆`;
-
-        if (thumbnail) {
-            await conn.sendMessage(from, { 
-                image: { url: thumbnail }, 
-                caption: caption 
-            }, { quoted: mek });
-        } else {
-            await reply(caption);
-        }
-
-        // Download video as arraybuffer with proper headers to bypass streaming block
-        const videoBufferRes = await axios.get(videoUrl, {
-            responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://www.youtube.com/'
-            },
-            timeout: 60000 // 60 seconds for large files
-        });
-
-        // Send the video buffer directly with stylish styling
-        const finalCaption = 
-            `╭───────────────◆\n` +
-            `│ 🎥 *${title}*\n` +
-            `├───────────────◆\n` +
-            `│ ⚡ *Powered by:* KAMRAN-MD\n` +
-            `╰───────────────◆`;
-
-        await conn.sendMessage(from, {
-            video: Buffer.from(videoBufferRes.data),
-            mimetype: 'video/mp4',
-            caption: finalCaption
-        }, { quoted: mek });
-
-        // Success reaction
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
+        throw new Error("API failed to return download link.");
     } catch (error) {
-        console.error("KAMRAN-MD Video Error:", error);
-        reply(`❌ *An Error Occurred:* ${error.message}`);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        if (retries > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            return fetchVideoData(url, quality, retries - 1);
+        }
+        return null;
     }
 }
 
-// ==================== AUTO VIDEO LISTENER (BODY HOOK) ====================
-cmd({
-    on: "body"
-}, async (conn, mek, m, { from, body }) => {
+// ==========================================
+// 🔧 Common function — Video download karne ke liye
+// ==========================================
+async function downloadVideo(conn, mek, m, { from, q, reply }) {
     try {
-        if (!body) return;
-        const rawText = body.trim().toLowerCase();
-        const triggers = ['video', 'ytmp4', 'ytvideo', 'playvid', 'videoz'];
-
-        const matchedTrigger = triggers.find(t => rawText === t || rawText.startsWith(t + ' '));
-        if (matchedTrigger) {
-            const query = body.slice(matchedTrigger.length).trim();
-            await executeVideo(conn, mek, m, query, from, (text) => conn.sendMessage(from, { text }, { quoted: mek }));
+        if (!q) {
+            return reply(`🎥 *Video Downloader*\n\nUsage: \`video <name or link>\`\nExample: \`video perfect ed sheeran\``);
         }
-    } catch (error) {
-        console.error("Auto-Body Video Error:", error);
-    }
-});
 
-// ==================== VIDEO COMMAND (Prefix Version) ====================
+        await conn.sendMessage(from, { react: { text: "🔍", key: mek.key } });
+
+        // Step 1: Search for the video
+        const url = normalizeYouTubeUrl(q);
+        let ytdata;
+
+        if (url) {
+            const searchResults = await yts({ videoId: q.split('v=')[1]?.split('&')[0] || q.split('/').pop() });
+            ytdata = searchResults;
+        } else {
+            const searchResults = await yts(q);
+            if (!searchResults.videos.length) return reply("❌ No videos found for your query!");
+            ytdata = searchResults.videos[0];
+        }
+
+        // Step 2: Send info message
+        const infoText = `
+🎥 *YT VIDEO DOWNLOADER* 🎥
+
+📌 *Title:* ${ytdata.title}
+🎬 *Channel:* ${ytdata.author?.name || 'Unknown'}
+⏱️ *Duration:* ${ytdata.timestamp}
+👁️ *Views:* ${ytdata.views.toLocaleString()}
+
+_📥 Processing your video file, please wait..._
+
+> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ KAMRAN-MD`;
+
+        await conn.sendMessage(from, { image: { url: ytdata.thumbnail || ytdata.image }, caption: infoText }, { quoted: mek });
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+
+        // Step 3: Fetch download link
+        let qualities = ['720', '480', '360', '144'];
+        let dlData = null;
+
+        for (const quality of qualities) {
+            dlData = await fetchVideoData(ytdata.url, quality);
+            if (dlData) break;
+        }
+
+        if (!dlData || !dlData.video_url) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Download link could not be generated. Please try again later.");
+        }
+
+        // Step 4: Send the Video file
+        await conn.sendMessage(
+            from,
+            {
+                video: { url: dlData.video_url },
+                mimetype: "video/mp4",
+                caption: `✅ *${dlData.title}*\n📹 Quality: ${dlData.quality}p\n\n*🚀 Powered by KAMRAN-MD*`
+            },
+            { quoted: mek }
+        );
+
+        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+
+    } catch (e) {
+        console.error("Video DL Error:", e);
+        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        reply(`⚠️ *Error:* ${e.message || "Something went wrong."}`);
+    }
+}
+
+// ==========================================
+// 📌 1. Prefix wala handler (.video, .ytmp4, .vdl)
+// ==========================================
 cmd({
     pattern: "video",
-    alias: ["ytmp4", "ytvideo", "playvid", "videoz"],
-    desc: "Search and download stylish videos from YouTube via KAMRAN-MD",
-    category: "downloader",
-    react: "📥",
+    alias: ["ytmp4", "vdl"],
+    react: "🎥",
+    desc: "Search and download high-quality videos from YouTube.",
+    category: "download",
     filename: __filename
-}, async (conn, mek, m, extra) => {
-    const { from, text, reply } = extra;
-    await executeVideo(conn, mek, m, text, from, reply);
+}, async (conn, mek, m, { from, q, reply }) => {
+    await downloadVideo(conn, mek, m, { from, q, reply });
+});
+
+// ==========================================
+// 📌 2. Bina prefix wala handler (video, ytmp4, vdl)
+// ==========================================
+cmd({
+    'on': "body"
+}, async (conn, mek, store, {
+    from,
+    body,
+    isCreator,
+    reply,
+    sender,
+    userConfig,
+    prefix
+}) => {
+    try {
+        // Normalize body
+        const userText = (body || "").normalize("NFC").trim();
+        if (!userText) return;
+
+        // Pehla word nikaalo
+        const firstWord = userText.split(/\s+/)[0].toLowerCase();
+
+        // Video triggers (bina prefix)
+        const videoTriggers = ["video", "ytmp4", "vdl"];
+
+        // Check: kya pehla word trigger hai?
+        if (!videoTriggers.includes(firstWord)) return;
+
+        // Baaki text (video name ya link)
+        const query = userText.slice(firstWord.length).trim();
+
+        // Reply function
+        const replyFn = async (text) => {
+            await conn.sendMessage(from, { text }, { quoted: mek });
+        };
+
+        // Video download karo
+        await downloadVideo(conn, mek, { }, {
+            from,
+            q: query,
+            reply: replyFn
+        });
+
+    } catch (error) {
+        console.error("Video No-Prefix Error:", error);
+    }
 });

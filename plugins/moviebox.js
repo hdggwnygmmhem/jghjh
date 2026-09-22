@@ -76,17 +76,17 @@ ${resultsList}
             caption: searchCaption 
         }, { quoted: mek });
 
-        let step = 'movie', 
-            lastMsgId = searchMsg.key.id, 
-            selectedItem = null, 
-            finalUrl = null, 
-            itemTitle = '', 
-            timeout = null;
+        let currentStep = 'movie'; 
+        let lastMsgId = searchMsg.key.id;
+        let selectedItem = null;
+        let finalUrl = null;
+        let itemTitle = '';
+        let timeout = null;
 
         const handler = async (msgUpdate) => {
             try {
                 const received = msgUpdate.messages[0];
-                if (!received) return;
+                if (!received || !received.message) return;
                 
                 const fromId = received.key.remoteJid || received.key.participant;
                 if (fromId !== from) return;
@@ -105,7 +105,7 @@ ${resultsList}
 
                 await conn.sendMessage(from, { react: { text: '⏳', key: received.key } });
 
-                if (step === 'movie') {
+                if (currentStep === 'movie') {
                     if (choice < 1 || choice > results.length) { 
                         await conn.sendMessage(from, { text: `❎ Select a valid number (1-${results.length})` }, { quoted: received }); 
                         return; 
@@ -114,6 +114,8 @@ ${resultsList}
                     selectedItem = results[choice - 1];
                     itemTitle = selectedItem?.title || 'Movie';
                     finalUrl = selectedItem?.proxyDownload || selectedItem?.proxyStream;
+
+                    console.log(`[MOVIEBOX LOG] Selected Movie: "${itemTitle}" | URL: ${finalUrl}`);
 
                     if (!finalUrl) {
                         await conn.sendMessage(from, { text: '❎ Download link not available for this item.' }, { quoted: received });
@@ -143,15 +145,17 @@ ${resultsList}
                         caption: formatCaption 
                     }, { quoted: received });
 
-                    step = 'format'; 
+                    currentStep = 'format'; 
                     lastMsgId = formatMsg.key.id;
+                    console.log(`[MOVIEBOX LOG] Step updated to 'format'. New Message ID: ${lastMsgId}`);
 
-                } else if (step === 'format') {
+                } else if (currentStep === 'format') {
                     if (choice !== 1 && choice !== 2) { 
                         await conn.sendMessage(from, { text: '❎ Please select 1 (Video) or 2 (Document).' }, { quoted: received }); 
                         return; 
                     }
 
+                    console.log(`[MOVIEBOX LOG] Format chosen: ${choice === 2 ? 'Document' : 'Video'}`);
                     await conn.sendMessage(from, { react: { text: '📥', key: received.key } });
 
                     const cleanFileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
@@ -175,7 +179,7 @@ ${resultsList}
                 }
 
             } catch (err) { 
-                console.error('MovieBox handler error:', err); 
+                console.error('MovieBox handler error -->', err); 
                 cleanup(); 
             }
         };
@@ -186,10 +190,10 @@ ${resultsList}
         };
 
         conn.ev.on('messages.upsert', handler);
-        timeout = setTimeout(() => cleanup(), 60 * 1000);
+        timeout = setTimeout(() => cleanup(), 5 * 60 * 1000);
 
     } catch (e) {
-        console.error('MovieBox command error:', e);
+        console.error('MovieBox command error -->', e);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
         return reply("❌ *Kuch galat ho gaya, kripya thodi der baad koshish karein!*");
     }

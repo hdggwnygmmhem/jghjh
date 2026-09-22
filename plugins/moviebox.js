@@ -136,34 +136,32 @@ ${resultsList}
                 const rating = selectedItem?.imdbRatingValue || 'N/A';
                 const genre = selectedItem?.genre || 'N/A';
                 const releaseDate = selectedItem?.releaseDate || 'N/A';
-                const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
+                const posterUrl = selectedItem?.cover?.url || firstImage;
 
-                console.log(`[MOVIEBOX LOG] Downloading file buffer from URL...`);
-                
-                // Fetching buffer to ensure smooth delivery without stream timeout
-                const videoBufferRes = await axios.get(downloadUrl, { 
-                    responseType: 'arraybuffer',
-                    timeout: 120000 
-                });
+                console.log(`[MOVIEBOX LOG] Sending direct download link message...`);
 
-                const videoBuffer = Buffer.from(videoBufferRes.data);
-                console.log(`[MOVIEBOX LOG] Buffer downloaded successfully. Size: ${videoBuffer.length} bytes. Sending document...`);
+                const downloadCaption = `
+╔════════════════════════╗
+║   🎬 MOVIE READY 🎬      
+╚════════════════════════╝
+
+🎬 *Title:* ${itemTitle}
+⭐ *Rating:* ${rating}
+🎭 *Genre:* ${genre}
+📅 *Release:* ${releaseDate}
+
+📥 *Direct Download Link:* 
+${downloadUrl}
+
+> ⚡ *Version:* \`12.00\`
+> 👑 *Powered by KAMRAN MD*`.trim();
 
                 await conn.sendMessage(from, { 
-                    document: videoBuffer, 
-                    mimetype: 'video/mp4', 
-                    fileName: fileName, 
-                    caption: `╔════════════════════════╗\n` +
-                             `║   🎬 MOVIE DOWNLOAD 🎬   \n` +
-                             `╚════════════════════════╝\n\n` +
-                             `🎬 *Title:* ${itemTitle}\n` +
-                             `⭐ *Rating:* ${rating}\n` +
-                             `🎭 *Genre:* ${genre}\n` +
-                             `📅 *Release:* ${releaseDate}\n\n` +
-                             `> *👑 Powered by KAMRAN MD*` 
+                    image: { url: posterUrl },
+                    caption: downloadCaption 
                 }, { quoted: received });
 
-                console.log('[MOVIEBOX LOG] Movie document sent successfully!');
+                console.log('[MOVIEBOX LOG] Movie download link sent successfully!');
                 await conn.sendMessage(from, { react: { text: '✅', key: received.key } });
 
             } catch (err) { 

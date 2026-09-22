@@ -9,13 +9,15 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "cinevibes",
     alias: ["cv", "cine"],
-    desc: "Search and download movies/series from CineVibes using Vajira API",
+    desc: "Search and download movies from CineVibes",
     category: "download",
     react: "🎬",
     filename: __filename
 },
 async (conn, mek, m, { from, quoted, body, isCmd, command, args, q, reply }) => {
     try {
+        console.log(`[CINEVIBES LOG] Command triggered with query: "${q}"`);
+
         if (!q) {
             return reply(
                 `╔════════════════════════╗\n` +
@@ -206,7 +208,7 @@ ${qualityList}
                     const fileName = `${itemTitle.replace(/[^a-zA-Z0-9]/g, '_')} [${qSize}] CineVibes.mp4`;
 
                     if (choice === 2) {
-                        await conn.sendMessage(from, { 
+                        await ncol = await conn.sendMessage(from, { 
                             document: { url: finalUrl }, 
                             mimetype: 'video/mp4', 
                             fileName: fileName, 

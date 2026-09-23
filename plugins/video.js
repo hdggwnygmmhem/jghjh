@@ -1,9 +1,5 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -67,77 +63,8 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== 2. YMCDN SCRAPER & DOWNLOADER ====================
-function extractVideoId(url) {
-    if (!url) return null;
-    let match = null;
-    if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/')) {
-        match = /\/([a-zA-Z0-9\-_]{11})/.exec(url);
-    } else if (url.includes('youtube.com')) {
-        match = /v=([a-zA-Z0-9\-_]{11})/.exec(url);
-    } else {
-        match = /[a-zA-Z0-9\-_]{11}/.exec(url);
-    }
-    return match ? match[1] : null;
-}
-
-async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
-    const videoId = extractVideoId(youtubeUrl);
-    if (!videoId) throw new Error('Invalid YouTube URL.');
-    
-    const lowerFormat = format.toLowerCase();
-    const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Origin': 'https://id.ytmp3.mobi',
-        'Referer': 'https://id.ytmp3.mobi/'
-    };
-
-    const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
-    const initRes = await fetch(initUrl, { headers });
-    const initJson = await initRes.json();
-    
-    let convertUrl = initJson.convertURL;
-    let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
-    let convertJson;
-    
-    while (true) {
-        const convertRes = await fetch(convertRequestUrl, { headers });
-        convertJson = await convertRes.json();
-        if (convertJson.redirect > 0 && convertJson.redirectURL) {
-            convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
-            continue;
-        }
-        break;
-    }
-
-    const progressUrl = convertJson.progressURL;
-    const downloadUrl = convertJson.downloadURL;
-    let title = convertJson.title || 'YouTube';
-
-    let progress = 0;
-    let pollCount = 0;
-    while (progress < 3 && pollCount < 60) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        pollCount++;
-        const progressRes = await fetch(progressUrl, { headers });
-        const progressJson = await progressRes.json();
-        progress = progressJson.progress;
-        if (progressJson.title) title = progressJson.title;
-    }
-
-    return { title, downloadUrl };
-}
-
 function cleanName(name = 'file') {
     return String(name).replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 150);
-}
-
-async function downloadBuffer(url) {
-    const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://id.ytmp3.mobi/' }
-    });
-    const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
 }
 
 // ==================== COMMAND: .VIDEO / .PLAYVID (SEARCH & SELECT) ====================
@@ -221,18 +148,40 @@ cmd({
         searchSessions.delete(stanzaId);
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-        await conn.sendMessage(from, { text: `📥 Downloading *${selectedVideo.title}* (via YMCDN), please wait...` }, { quoted: mek });
+        await conn.sendMessage(from, { text: `📥 Fetching download link for *${selectedVideo.title}*, please wait...` }, { quoted: mek });
 
-        // Scrape and download using YMCDN
-        const res = await scrapeYtmp3(selectedVideo.url, 'mp4');
-        const buffer = await downloadBuffer(res.downloadUrl);
-        const safeTitle = cleanName(selectedVideo.title);
+        // Fetch download link using Faa API via selected video URL
+        const apiUrl = `https://api-faa.my.id/faa/ytplayvid?q=${encodeURIComponent(selectedVideo.url)}`;
+        const apiRes = await axios.get(apiUrl, { timeout: 30000 });
+        const resData = apiRes.data;
+
+        if (!resData || !resData.status || !resData.result || !resData.result.download_url) {
+            throw new Error("Failed to retrieve download link from API.");
+        }
+
+        const downloadUrl = resData.result.download_url;
+        const title = resData.result.searched_title || selectedVideo.title;
+        const safeTitle = cleanName(title);
+
+        await conn.sendMessage(from, { text: `📥 Downloading video buffer...` }, { quoted: mek });
+
+        // Download video buffer safely with large size support
+        const fileRes = await axios.get(downloadUrl, {
+            responseType: 'arraybuffer',
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.youtube.com/'
+            },
+            timeout: 120000
+        });
 
         await conn.sendMessage(from, {
-            video: buffer,
+            video: Buffer.from(fileRes.data),
             mimetype: 'video/mp4',
             fileName: `${safeTitle}.mp4`,
-            caption: `🎥 *${selectedVideo.title}*\n🔗 *YouTube:* ${selectedVideo.url}\n> Powered by KAMRAN-MD`
+            caption: `🎥 *${title}*\n🔗 *YouTube:* ${selectedVideo.url}\n> Powered by KAMRAN-MD`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });

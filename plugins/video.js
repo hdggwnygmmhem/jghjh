@@ -8,6 +8,8 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
+const searchSessions = new Map();
+
 // ==================== YOUTUBE SEARCH FUNCTION ====================
 async function searchYoutube(query) {
   const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
@@ -49,7 +51,6 @@ async function searchYoutube(query) {
               results.push({
                 title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
                 channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown',
-                views: videoRenderer.viewCountText?.simpleText || '0 views',
                 duration: videoRenderer.lengthText?.simpleText || 'LIVE',
                 url: `https://www.youtube.com/watch?v=${videoId}`,
                 thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
@@ -82,7 +83,7 @@ function extractVideoId(url) {
     return match ? match[1] : null;
 }
 
-async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
+async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
         throw new Error('Invalid YouTube URL: Could not extract video ID.');
@@ -107,9 +108,6 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
     while (true) {
         const convertRes = await fetch(convertRequestUrl, { headers });
         convertJson = await convertRes.json();
-        if (convertJson.error > 0) {
-            throw new Error(`Convert API returned error: ${convertJson.error}`);
-        }
         if (convertJson.redirect > 0 && convertJson.redirectURL) {
             convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
             continue;
@@ -199,13 +197,13 @@ function compressMP4(inputBuffer) {
     });
 }
 
-// ==================== COMMAND: .VIDEO (AUTO SEARCH & DOWNLOAD) ====================
+// ==================== COMMAND: .VIDEO (SEARCH & SELECT) ====================
 cmd({
     pattern: "video",
     alias: ["ytsearch", "yts", "playvid"],
-    desc: "Auto search, show info and download video via YMCDN",
+    desc: "Search YouTube, select and download",
     category: "downloader",
-    react: "📥",
+    react: "🔍",
     filename: __filename
 }, async (conn, mek, m, extra) => {
     const { from, text, reply } = extra;
@@ -213,141 +211,199 @@ cmd({
     try {
         if (!text) {
             return reply(
-                `🎬 *KAMRAN-MD VIDEO DOWNLOADER*\n\n` +
-                `❌ *Please provide a video name or YouTube link!*\n\n` +
-                `💡 *Example:* \`[span_0](start_span)[span_0](end_span).video song pal\``
+                `🎬 *KAMRAN-MD YOUTUBE SEARCH*\n\n` +
+                `❌ *Please provide a search query or link!*\n\n` +
+                `💡 *Example:* \`.video song pal\``
             );
         }
 
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-
-        let videoUrl = text.trim();
-        let videoInfo = null;
-
-        // Agar direct link nahi hai, toh search karke exact URL nikal lo
-        if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
-            await reply('_✨ Searching video on YouTube..._');
-            const searchResults = await searchYoutube(videoUrl);
+        if (text.includes("youtube.com") || text.includes("youtu.be")) {
+            await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+            await reply('_✨ Processing your video link, please wait..._');
             
-            if (!searchResults || searchResults.length === 0) {
-                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ No video found.`);
+            const res = await scrapeYtmp3(text.trim(), 'mp4');
+            if (res.status === 'error') throw new Error(res.message);
+
+            const mediaBuffer = await downloadBuffer(res.downloadUrl);
+            let finalBuffer = mediaBuffer;
+            if (await checkFFmpeg()) {
+                try { finalBuffer = await compressMP4(mediaBuffer); } catch {}
             }
-            
-            videoInfo = searchResults[0];
-            videoUrl = videoInfo.url; // Exact YouTube link mil gaya
-
-            let infoText = `╭──「 *KAMRAN-MD VIDEO INFO* 」\n`;
-            infoText += `│ 📌 *Title:* ${videoInfo.title}\n`;
-            infoText += `│ 👤 *Channel:* ${videoInfo.channel}\n`;
-            infoText += `│ ⏱ *Duration:* ${videoInfo.duration} \vert{} 👁 *Views:* ${videoInfo.views}\n`;
-            infoText += `╰─────────────────────────\n\n`;
-            infoText += `_📥 Downloading video via YMCDN, please wait..._`;
 
             await conn.sendMessage(from, {
-                image: { url: videoInfo.thumbnail },
-                caption: infoText
+                video: finalBuffer,
+                mimetype: 'video/mp4',
+                fileName: `${cleanName(res.title)}.mp4`,
+                caption: `🎬 *${res.title}*\n\n> Powered by KAMRAN-MD`
             }, { quoted: mek });
-        } else {
-            await reply('_📥 Downloading video via YMCDN, please wait..._');
+            
+            await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+            return;
         }
 
-        // Ab is exact URL ko YMCDN scraper ko bhejenge
-        const res = await scrapeYtmp3(videoUrl, 'mp4');
-        if (res.status === 'error') throw new Error(res.message);
+        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+        const results = await searchYoutube(text.trim());
 
-        const mediaBuffer = await downloadBuffer(res.downloadUrl);
-        let finalBuffer = mediaBuffer;
-        
-        if (await checkFFmpeg()) {
-            try { finalBuffer = await compressMP4(mediaBuffer); } catch {}
+        if (!results || results.length === 0) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply(`❌ No results found for "${text}".`);
         }
 
-        await conn.sendMessage(from, {
-            video: finalBuffer,
-            mimetype: 'video/mp4',
-            fileName: `${cleanName(res.title)}.mp4`,
-            caption: `🎬 *${res.title}*\n\n> Powered by KAMRAN-MD`
+        const topResults = results.slice(0, 5);
+        let messageText = `╭──「 *KAMRAN-MD SEARCH* 」\n`;
+        messageText += `│ 🔍 *Query:* ${text}\n`;
+        messageText += `╰─────────────────────────\n\n`;
+
+        topResults.forEach((video, index) => {
+            messageText += `*${index + 1}.* ${video.title}\n`;
+            messageText += `👤 *Channel:* ${video.channel} | ⏱ ${video.duration}\n\n`;
+        });
+
+        messageText += `📌 *Reply with a number (1-5) to select video!*`;
+
+        // Send message with Thumbnail (DP) on top
+        const sentMsg = await conn.sendMessage(from, {
+            image: { url: topResults[0].thumbnail },
+            caption: messageText
         }, { quoted: mek });
 
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+        await conn.sendMessage(from, { react: { text: '✅', key: mek.key } });
+
+        searchSessions.set(sentMsg.key.id, {
+            results: topResults,
+            from: from,
+            step: 'select_video'
+        });
 
     } catch (e) {
-        console.error('[VIDEO ERROR]', e);
+        console.error('[SEARCH ERROR]', e);
         reply(`❌ Error: ${e?.message || e}`);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 });
 
-// ==================== COMMAND: .YTMP3 (AUDIO) ====================
+// ==================== AUDIO COMMAND (.YTMP3) ====================
 cmd({
     pattern: "ytmp3",
     alias: ["yta", "audio", "playaudio"],
-    desc: "Auto search and download audio via YMCDN",
+    desc: "Download YouTube audio directly",
     category: "downloader",
     react: "🎵",
     filename: __filename
 }, async (conn, mek, m, extra) => {
     const { from, text, reply } = extra;
-
     try {
-        if (!text) {
-            return reply(
-                `🎵 *KAMRAN-MD AUDIO DOWNLOADER*\n\n` +
-                `❌ *Please provide a song name or YouTube link!*\n\n` +
-                `💡 *Example:* \`.ytmp3 song pal\``
-            );
-        }
-
+        if (!text) return reply(`❌ Please provide a YouTube URL!`);
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+        await reply('_✨ Processing audio, please wait..._');
 
-        let audioUrl = text.trim();
-        let audioInfo = null;
-
-        if (!audioUrl.includes("youtube.com") && !audioUrl.includes("youtu.be")) {
-            await reply('_✨ Searching audio on YouTube..._');
-            const searchResults = await searchYoutube(audioUrl);
-            
-            if (!searchResults || searchResults.length === 0) {
-                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ No audio found.`);
-            }
-            
-            audioInfo = searchResults[0];
-            audioUrl = audioInfo.url;
-
-            let infoText = `╭──「 *KAMRAN-MD AUDIO INFO* 」\n`;
-            infoText += `│ 📌 *Title:* ${audioInfo.title}\n`;
-            infoText += `│ 👤 *Channel:* ${audioInfo.channel}\n`;
-            infoText += `│ ⏱ *Duration:* ${audioInfo.duration} | 👁 *Views:* ${audioInfo.views}\n`;
-            infoText += `╰─────────────────────────\n\n`;
-            infoText += `_🎵 Downloading audio via YMCDN, please wait..._`;
-
-            await conn.sendMessage(from, {
-                image: { url: audioInfo.thumbnail },
-                caption: infoText
-            }, { quoted: mek });
-        } else {
-            await reply('_🎵 Downloading audio via YMCDN, please wait..._');
-        }
-
-        const res = await scrapeYtmp3(audioUrl, 'mp3');
+        const res = await scrapeYtmp3(text.trim(), 'mp3');
         if (res.status === 'error') throw new Error(res.message);
 
         const mediaBuffer = await downloadBuffer(res.downloadUrl);
-
         await conn.sendMessage(from, {
             audio: mediaBuffer,
             mimetype: 'audio/mpeg',
             fileName: `${cleanName(res.title)}.mp3`,
             caption: `🎵 *${res.title}*\n\n> Powered by KAMRAN-MD`
         }, { quoted: mek });
-
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
     } catch (e) {
-        console.error('[AUDIO ERROR]', e);
-        reply(`❌ Error: ${e?.message || e}`);
+        reply(`❌ Error: ${e.message}`);
+    }
+});
+
+// ==================== INTERACTIVE REPLY HANDLER ====================
+cmd({
+    on: "body"
+}, async (conn, mek, m, { from, body }) => {
+    try {
+        if (!body) return;
+        const text = body.trim();
+
+        const quotedMsg = mek.message?.extendedTextMessage?.contextInfo;
+        if (!quotedMsg) return;
+
+        const stanzaId = quotedMsg.stanzaId;
+        if (!searchSessions.has(stanzaId)) return;
+
+        const session = searchSessions.get(stanzaId);
+        if (session.from !== from) return;
+
+        if (session.step === 'select_video') {
+            const choice = parseInt(text);
+            if (isNaN(choice) || choice < 1 || choice > session.results.length) return;
+
+            const selectedVideo = session.results[choice - 1];
+            searchSessions.delete(stanzaId);
+
+            const formatMenu = 
+                `╭───────────────────────╮\n` +
+                `  🎬 *${selectedVideo.title}*\n` +
+                `╰───────────────────────╯\n\n` +
+                `📌 *Format select karein (Reply karein):*\n\n` +
+                `1️⃣ *Video (MP4)*\n` +
+                `2️⃣ *Audio (MP3)*\n` +
+                `3️⃣ *Document File (MP4)*\n\n` +
+                `> Powered by KAMRAN-MD`;
+
+            const formatMsg = await conn.sendMessage(from, { text: formatMenu }, { quoted: mek });
+
+            searchSessions.set(formatMsg.key.id, {
+                videoUrl: selectedVideo.url,
+                title: selectedVideo.title,
+                from: from,
+                step: 'select_format'
+            });
+            return;
+        }
+
+        if (session.step === 'select_format') {
+            if (!['1', '2', '3'].includes(text)) return;
+
+            searchSessions.delete(stanzaId);
+            await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+            await conn.sendMessage(from, { text: `📥 Downloading *${session.title}* via YMCDN, please wait...` }, { quoted: mek });
+
+            if (text === '1') {
+                const res = await scrapeYtmp3(session.videoUrl, 'mp4');
+                const buffer = await downloadBuffer(res.downloadUrl);
+                let finalBuf = buffer;
+                if (await checkFFmpeg()) {
+                    try { finalBuf = await compressMP4(buffer); } catch {}
+                }
+                await conn.sendMessage(from, {
+                    video: finalBuf,
+                    mimetype: 'video/mp4',
+                    caption: `🎥 *${res.title}*\n> Powered by KAMRAN-MD`
+                }, { quoted: mek });
+
+            } else if (text === '2') {
+                const res = await scrapeYtmp3(session.videoUrl, 'mp3');
+                const buffer = await downloadBuffer(res.downloadUrl);
+                await conn.sendMessage(from, {
+                    audio: buffer,
+                    mimetype: 'audio/mpeg',
+                    caption: `🎵 *${res.title}*\n> Powered by KAMRAN-MD`
+                }, { quoted: mek });
+
+            } else if (text === '3') {
+                const res = await scrapeYtmp3(session.videoUrl, 'mp4');
+                const buffer = await downloadBuffer(res.downloadUrl);
+                const safeTitle = cleanName(res.title);
+                await conn.sendMessage(from, {
+                    document: buffer,
+                    mimetype: 'video/mp4',
+                    fileName: `${safeTitle}.mp4`,
+                    caption: `📁 *${res.title}*\n> Powered by KAMRAN-MD`
+                }, { quoted: mek });
+            }
+
+            await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+        }
+
+    } catch (err) {
+        console.error("Interactive Selection Error:", err);
+        await conn.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: mek });
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 });

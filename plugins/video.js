@@ -8,7 +8,6 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// Session memory to store search & format choices
 const searchSessions = new Map();
 
 // ==================== YOUTUBE SEARCH FUNCTION ====================
@@ -48,11 +47,13 @@ async function searchYoutube(query) {
           for (const item of items) {
             const videoRenderer = item.videoRenderer || item.richItemRenderer?.content?.videoRenderer;
             if (videoRenderer && videoRenderer.videoId) {
+              const videoId = videoRenderer.videoId;
               results.push({
                 title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
                 channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown',
                 duration: videoRenderer.lengthText?.simpleText || 'LIVE',
-                url: `https://www.youtube.com/watch?v=${videoRenderer.videoId}`
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
               });
             }
           }
@@ -89,123 +90,60 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     }
     
     const lowerFormat = format.toLowerCase();
-    if (lowerFormat !== 'mp3' && lowerFormat !== 'mp4') {
-        throw new Error('Invalid format: Must be either "mp3" or "mp4".');
-    }
-    
     const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
         'Origin': 'https://id.ytmp3.mobi',
-        'Referer': 'https://id.ytmp3.mobi/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site'
+        'Referer': 'https://id.ytmp3.mobi/'
     };
 
-    try {
-        const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
-        const initRes = await fetch(initUrl, { headers });
-        
-        if (!initRes.ok) {
-            throw new Error(`Init request failed with status code ${initRes.status}`);
+    const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
+    const initRes = await fetch(initUrl, { headers });
+    const initJson = await initRes.json();
+    
+    let convertUrl = initJson.convertURL;
+    let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
+    let convertJson;
+    
+    while (true) {
+        const convertRes = await fetch(convertRequestUrl, { headers });
+        convertJson = await convertRes.json();
+        if (convertJson.redirect > 0 && convertJson.redirectURL) {
+            convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
+            continue;
         }
-        
-        const initJson = await initRes.json();
-        if (initJson.error > 0) {
-            throw new Error(`Init API returned error: ${initJson.error}`);
-        }
-
-        let convertUrl = initJson.convertURL;
-        let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
-        let convertJson;
-        
-        while (true) {
-            const convertRes = await fetch(convertRequestUrl, { headers });
-            if (!convertRes.ok) {
-                throw new Error(`Convert request failed with status code ${convertRes.status}`);
-            }
-            
-            convertJson = await convertRes.json();
-            if (convertJson.error > 0) {
-                throw new Error(`Convert API returned error: ${convertJson.error}`);
-            }
-            
-            if (convertJson.redirect > 0 && convertJson.redirectURL) {
-                convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
-                continue;
-            }
-            break;
-        }
-
-        const progressUrl = convertJson.progressURL;
-        const downloadUrl = convertJson.downloadURL;
-        let title = convertJson.title || 'YouTube';
-
-        if (!progressUrl || !downloadUrl) {
-            throw new Error('API conversion response is missing progress or download URL.');
-        }
-
-        let progress = 0;
-        let pollCount = 0;
-        const maxPolls = 60;
-        
-        while (progress < 3 && pollCount < maxPolls) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            pollCount++;
-            
-            const progressRes = await fetch(progressUrl, { headers });
-            if (!progressRes.ok) continue;
-            
-            const progressJson = await progressRes.json();
-            if (progressJson.error > 0) continue;
-            
-            progress = progressJson.progress;
-            if (progressJson.title) {
-                title = progressJson.title;
-            }
-        }
-
-        if (progress < 3) {
-            throw new Error('Conversion process timed out (exceeded 60 seconds).');
-        }
-
-        return {
-            status: 'success',
-            videoId,
-            title,
-            format: lowerFormat,
-            downloadUrl
-        };
-    } catch (error) {
-        return {
-            status: 'error',
-            message: error?.message || String(error)
-        };
+        break;
     }
+
+    const progressUrl = convertJson.progressURL;
+    const downloadUrl = convertJson.downloadURL;
+    let title = convertJson.title || 'YouTube';
+
+    let progress = 0;
+    let pollCount = 0;
+    while (progress < 3 && pollCount < 60) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        pollCount++;
+        const progressRes = await fetch(progressUrl, { headers });
+        const progressJson = await progressRes.json();
+        progress = progressJson.progress;
+        if (progressJson.title) title = progressJson.title;
+    }
+
+    return { title, downloadUrl };
 }
 
 function cleanName(name = 'file') {
-    return String(name)
-        .replace(/[\\/:*?"<>|]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 150);
+    return String(name).replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 150);
 }
 
 async function downloadBuffer(url) {
     const res = await fetch(url, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0',
             'Referer': 'https://id.ytmp3.mobi/'
         }
     });
-    
-    if (!res.ok) {
-        throw new Error(`Gagal mengunduh file, status: ${res.status}`);
-    }
-    
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
 }
@@ -279,7 +217,6 @@ cmd({
             );
         }
 
-        // Agar user ne direct link diya hai, toh seedha download start kar do
         if (text.includes("youtube.com") || text.includes("youtu.be")) {
             await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
             await reply('_✨ Processing your video link, please wait..._');
@@ -304,7 +241,6 @@ cmd({
             return;
         }
 
-        // Agar text diya hai toh search list dikhayein
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
         const results = await searchYoutube(text.trim());
 
@@ -314,22 +250,25 @@ cmd({
         }
 
         const topResults = results.slice(0, 5);
-        let messageText = `╭──「 *KAMRAN-MD SEARCH RESULTS* 」\n`;
+        let messageText = `╭──「 *KAMRAN-MD SEARCH* 」\n`;
         messageText += `│ 🔍 *Query:* ${text}\n`;
         messageText += `╰─────────────────────────\n\n`;
 
         topResults.forEach((video, index) => {
             messageText += `*${index + 1}.* ${video.title}\n`;
-            messageText += `👤 *Channel:* ${video.channel} | ⏱ ${video.duration}\n`;
-            messageText += `🔗 *Link:* ${video.url}\n\n`;
+            messageText += `👤 *Channel:* ${video.channel} | ⏱ ${video.duration}\n\n`;
         });
 
         messageText += `📌 *Reply with a number (1-5) to select video!*`;
 
-        const sentMsg = await conn.sendMessage(from, { text: messageText }, { quoted: mek });
+        // Send message with Thumbnail (DP) on top
+        const sentMsg = await conn.sendMessage(from, {
+            image: { url: topResults[0].thumbnail },
+            caption: messageText
+        }, { quoted: mek });
+
         await conn.sendMessage(from, { react: { text: '✅', key: mek.key } });
 
-        // Save session for step 1 (Video Selection)
         searchSessions.set(sentMsg.key.id, {
             results: topResults,
             from: from,
@@ -342,8 +281,7 @@ cmd({
     }
 });
 
-
-// ==================== AUDIO COMMAND (.YTMP3 / .AUDIO) ====================
+// ==================== AUDIO COMMAND (.YTMP3) ====================
 cmd({
     pattern: "ytmp3",
     alias: ["yta", "audio", "playaudio"],
@@ -374,7 +312,6 @@ cmd({
     }
 });
 
-
 // ==================== INTERACTIVE REPLY HANDLER ====================
 cmd({
     on: "body"
@@ -392,7 +329,6 @@ cmd({
         const session = searchSessions.get(stanzaId);
         if (session.from !== from) return;
 
-        // STEP 1: User selected a video number (1-5)
         if (session.step === 'select_video') {
             const choice = parseInt(text);
             if (isNaN(choice) || choice < 1 || choice > session.results.length) return;
@@ -400,7 +336,6 @@ cmd({
             const selectedVideo = session.results[choice - 1];
             searchSessions.delete(stanzaId);
 
-            // Ask for format selection (Video, Audio, or Document)
             const formatMenu = 
                 `╭───────────────────────╮\n` +
                 `  🎬 *${selectedVideo.title}*\n` +
@@ -413,7 +348,6 @@ cmd({
 
             const formatMsg = await conn.sendMessage(from, { text: formatMenu }, { quoted: mek });
 
-            // Save session for step 2 (Format Selection)
             searchSessions.set(formatMsg.key.id, {
                 videoUrl: selectedVideo.url,
                 title: selectedVideo.title,
@@ -423,7 +357,6 @@ cmd({
             return;
         }
 
-        // STEP 2: User selected format (1, 2, or 3)
         if (session.step === 'select_format') {
             if (!['1', '2', '3'].includes(text)) return;
 
@@ -432,7 +365,6 @@ cmd({
             await conn.sendMessage(from, { text: `📥 Downloading *${session.title}* via YMCDN, please wait...` }, { quoted: mek });
 
             if (text === '1') {
-                // Video MP4
                 const res = await scrapeYtmp3(session.videoUrl, 'mp4');
                 const buffer = await downloadBuffer(res.downloadUrl);
                 let finalBuf = buffer;
@@ -446,7 +378,6 @@ cmd({
                 }, { quoted: mek });
 
             } else if (text === '2') {
-                // Audio MP3
                 const res = await scrapeYtmp3(session.videoUrl, 'mp3');
                 const buffer = await downloadBuffer(res.downloadUrl);
                 await conn.sendMessage(from, {
@@ -456,7 +387,6 @@ cmd({
                 }, { quoted: mek });
 
             } else if (text === '3') {
-                // Document MP4
                 const res = await scrapeYtmp3(session.videoUrl, 'mp4');
                 const buffer = await downloadBuffer(res.downloadUrl);
                 const safeTitle = cleanName(res.title);

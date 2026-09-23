@@ -1,16 +1,11 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
 const searchSessions = new Map();
 
-// ==================== YOUTUBE SEARCH FUNCTION ====================
 async function searchYoutube(query) {
   const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
   const payload = {
@@ -63,7 +58,6 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
     if (!url) return null;
     let match = null;
@@ -79,11 +73,11 @@ function extractVideoId(url) {
 
 async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     const videoId = extractVideoId(youtubeUrl);
-    if (!videoId) throw new Error('Invalid YouTube URL: Could not extract video ID.');
+    if (!videoId) throw new Error('Invalid YouTube URL.');
     
     const lowerFormat = format.toLowerCase();
     const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Origin': 'https://id.ytmp3.mobi',
         'Referer': 'https://id.ytmp3.mobi/'
     };
@@ -136,10 +130,9 @@ async function downloadBuffer(url) {
     return Buffer.from(arrayBuffer);
 }
 
-// ==================== COMMAND: .YTS (SEARCH & SELECT) ====================
 cmd({
-    pattern: "yts",
-    alias: ["ytsearch", "video", "playvid"],
+    pattern: "video",
+    alias: ["ytsearch", "yts", "playvid"],
     desc: "Search YouTube, select and download",
     category: "downloader",
     react: "🔍",
@@ -148,7 +141,7 @@ cmd({
     const { from, text, reply } = extra;
     try {
         if (!text) {
-            return reply(`❌ Please provide a search query!\nExample: \`.yts song pal\``);
+            return reply(`❌ Please provide a search query!\nExample: \`.video song pal\``);
         }
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
@@ -165,7 +158,7 @@ cmd({
         });
         txt += `📌 *Reply with a number (1-5) to download!*\n> Powered by KAMRAN-MD`;
 
-        const sentMsg = await reply(txt);
+        const sentMsg = await conn.sendMessage(from, { text: txt }, { quoted: mek });
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
         searchSessions.set(sentMsg.key.id, {
@@ -177,7 +170,6 @@ cmd({
     }
 });
 
-// ==================== SELECTION & YMCDN DOWNLOAD HANDLER ====================
 cmd({
     on: "body"
 }, async (conn, mek, m, { from, body }) => {
@@ -203,7 +195,6 @@ cmd({
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
         await conn.sendMessage(from, { text: `📥 Processing *${selectedVideo.title}* via YMCDN...` }, { quoted: mek });
 
-        // Using YMCDN scraper with the selected YouTube link
         const res = await scrapeYtmp3(selectedVideo.url, 'mp4');
         const buffer = await downloadBuffer(res.downloadUrl);
         const safeTitle = cleanName(res.title || selectedVideo.title);

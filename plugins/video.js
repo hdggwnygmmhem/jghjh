@@ -261,7 +261,7 @@ cmd({
 
         messageText += `📌 *Reply with a number (1-5) to select video!*`;
 
-        // Send message with Thumbnail (DP) on top
+        // Send message with Thumbnail (DP) on top and links completely removed from text
         const sentMsg = await conn.sendMessage(from, {
             image: { url: topResults[0].thumbnail },
             caption: messageText

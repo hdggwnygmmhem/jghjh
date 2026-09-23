@@ -4,8 +4,27 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
+
+// ==================== YOUTUBE SEARCH FALLBACK (IF QUERY INSTEAD OF LINK) ====================
+async function getYouTubeUrlFromQuery(query) {
+    if (query.includes('youtube.com') || query.includes('youtu.be')) {
+        return query.trim();
+    }
+    
+    try {
+        const searchApi = `https://api-faa.my.id/faa/ytplayvid?q=${encodeURIComponent(query)}`;
+        const response = await axios.get(searchApi, { timeout: 20000 });
+        if (response.data && response.data.status && response.data.result) {
+            return response.data.result.searched_url;
+        }
+    } catch (e) {
+        console.error("Auto-Search Error:", e.message);
+    }
+    return query;
+}
 
 function extractVideoId(url) {
     if (!url) return null;
@@ -25,7 +44,7 @@ function extractVideoId(url) {
 async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error('Invalid YouTube URL: Could not extract video ID.');
+        throw new Error('Invalid YouTube URL or Video ID could not be found.');
     }
     
     const lowerFormat = format.toLowerCase();
@@ -218,11 +237,11 @@ function compressMP4(inputBuffer) {
     });
 }
 
-// ==================== KAMRAN-MD COMMAND ====================
+// ==================== KAMRAN-MD VIDEO COMMAND ====================
 cmd({
     pattern: "ytmp4",
     alias: ["ytv", "playvid", "video"],
-    desc: "Download YouTube video using YTMP3/4 Scraper",
+    desc: "Download YouTube video using YTMP3/4 Scraper with auto-search",
     category: "downloader",
     react: "📥",
     filename: __filename
@@ -233,15 +252,17 @@ cmd({
         if (!text) {
             return reply(
                 `🎬 *KAMRAN-MD YTMP4 DOWNLOADER*\n\n` +
-                `❌ *Please provide a YouTube URL!*\n\n` +
-                `💡 *Example:* \`.ytmp4 https://youtu.be/xxxx\``
+                `❌ *Please provide a video name or YouTube URL!*\n\n` +
+                `💡 *Example:* \`.ytmp4 song pal\` or \`.ytmp4 https://youtu.be/xxxx\``
             );
         }
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-        await reply('_✨ Processing your request, please wait..._');
+        await reply('_✨ Searching and processing video, please wait..._');
 
-        const res = await scrapeYtmp3(text.trim(), 'mp4');
+        const resolvedUrl = await getYouTubeUrlFromQuery(text.trim());
+        const res = await scrapeYtmp3(resolvedUrl, 'mp4');
+        
         if (res.status === 'error') {
             throw new Error(res.message);
         }
@@ -282,7 +303,7 @@ cmd({
 cmd({
     pattern: "ytmp3",
     alias: ["yta", "playaudio", "audio"],
-    desc: "Download YouTube audio using YTMP3 Scraper",
+    desc: "Download YouTube audio using YTMP3 Scraper with auto-search",
     category: "downloader",
     react: "🎵",
     filename: __filename
@@ -293,15 +314,17 @@ cmd({
         if (!text) {
             return reply(
                 `🎵 *KAMRAN-MD YTMP3 DOWNLOADER*\n\n` +
-                `❌ *Please provide a YouTube URL!*\n\n` +
-                `💡 *Example:* \`.ytmp3 https://youtu.be/xxxx\``
+                `❌ *Please provide a song name or YouTube URL!*\n\n` +
+                `💡 *Example:* \`.ytmp3 song pal\` or \`.ytmp3 https://youtu.be/xxxx\``
             );
         }
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-        await reply('_✨ Processing your request, please wait..._');
+        await reply('_✨ Searching and processing audio, please wait..._');
 
-        const res = await scrapeYtmp3(text.trim(), 'mp3');
+        const resolvedUrl = await getYouTubeUrlFromQuery(text.trim());
+        const res = await scrapeYtmp3(resolvedUrl, 'mp3');
+        
         if (res.status === 'error') {
             throw new Error(res.message);
         }

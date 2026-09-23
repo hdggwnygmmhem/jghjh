@@ -261,7 +261,6 @@ cmd({
 
         messageText += `📌 *Reply with a number (1-5) to select video!*`;
 
-        // Send message with Thumbnail (DP) on top and links completely removed from text
         const sentMsg = await conn.sendMessage(from, {
             image: { url: topResults[0].thumbnail },
             caption: messageText
@@ -360,12 +359,20 @@ cmd({
         if (session.step === 'select_format') {
             if (!['1', '2', '3'].includes(text)) return;
 
+            const targetUrl = session.videoUrl;
+            const targetTitle = session.title;
             searchSessions.delete(stanzaId);
+
+            if (!targetUrl) {
+                await conn.sendMessage(from, { text: `❌ Error: Video URL not found. Please try searching again.` }, { quoted: mek });
+                return;
+            }
+
             await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-            await conn.sendMessage(from, { text: `📥 Downloading *${session.title}* via YMCDN, please wait...` }, { quoted: mek });
+            await conn.sendMessage(from, { text: `📥 Downloading *${targetTitle}* via YMCDN, please wait...` }, { quoted: mek });
 
             if (text === '1') {
-                const res = await scrapeYtmp3(session.videoUrl, 'mp4');
+                const res = await scrapeYtmp3(targetUrl, 'mp4');
                 const buffer = await downloadBuffer(res.downloadUrl);
                 let finalBuf = buffer;
                 if (await checkFFmpeg()) {
@@ -378,7 +385,7 @@ cmd({
                 }, { quoted: mek });
 
             } else if (text === '2') {
-                const res = await scrapeYtmp3(session.videoUrl, 'mp3');
+                const res = await scrapeYtmp3(targetUrl, 'mp3');
                 const buffer = await downloadBuffer(res.downloadUrl);
                 await conn.sendMessage(from, {
                     audio: buffer,
@@ -387,7 +394,7 @@ cmd({
                 }, { quoted: mek });
 
             } else if (text === '3') {
-                const res = await scrapeYtmp3(session.videoUrl, 'mp4');
+                const res = await scrapeYtmp3(targetUrl, 'mp4');
                 const buffer = await downloadBuffer(res.downloadUrl);
                 const safeTitle = cleanName(res.title);
                 await conn.sendMessage(from, {

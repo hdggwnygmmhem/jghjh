@@ -224,7 +224,6 @@ cmd({
         let videoUrl = text.trim();
         let videoInfo = null;
 
-        // Agar direct link nahi hai, toh search karo aur info nikalo
         if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
             await reply('_✨ Searching video details on YouTube..._');
             const searchResults = await searchYoutube(videoUrl);
@@ -234,10 +233,9 @@ cmd({
                 return reply(`❌ No video found for "${videoUrl}".`);
             }
             
-            videoInfo = searchResults[0]; // Top result
+            videoInfo = searchResults[0];
             videoUrl = videoInfo.url;
 
-            // Pehle Thumbnail aur Video ki details bhej do
             let infoText = `╭──「 *KAMRAN-MD VIDEO INFO* 」\n`;
             infoText += `│ 📌 *Title:* ${videoInfo.title}\n`;
             infoText += `│ 👤 *Channel:* ${videoInfo.channel}\n`;
@@ -253,7 +251,6 @@ cmd({
             await reply('_📥 Downloading video via YMCDN, please wait..._');
         }
 
-        // YMCDN Scraper se download karo
         const res = await scrapeYtmp3(videoUrl, 'mp4');
         if (res.status === 'error') throw new Error(res.message);
 
@@ -264,7 +261,6 @@ cmd({
             try { finalBuffer = await compressMP4(mediaBuffer); } catch {}
         }
 
-        // Seedha video file send kar do
         await conn.sendMessage(from, {
             video: finalBuffer,
             mimetype: 'video/mp4',

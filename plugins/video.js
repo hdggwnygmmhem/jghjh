@@ -8,28 +8,69 @@ import axios from 'axios';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== YOUTUBE SEARCH FALLBACK (IF QUERY INSTEAD OF LINK) ====================
-async function getYouTubeUrlFromQuery(query) {
-    if (query.includes('youtube.com') || query.includes('youtu.be')) {
-        return query.trim();
-    }
+// Global sessions to store search results for selection
+const searchSessions = new Map();
+
+// ==================== 1. YOUTUBE SEARCH FUNCTION ====================
+async function searchYoutube(query) {
+  const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
+  const payload = {
+    context: {
+      client: {
+        clientName: 'WEB',
+        clientVersion: '2.20240514.01.00',
+        hl: 'en',
+        gl: 'US',
+      }
+    },
+    query: query
+  };
+
+  try {
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20240514.01.00',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+      },
+      timeout: 10000
+    });
+
+    const data = response.data;
+    const results = [];
+    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
     
-    try {
-        const searchApi = `https://api-faa.my.id/faa/ytplayvid?q=${encodeURIComponent(query)}`;
-        const response = await axios.get(searchApi, { timeout: 20000 });
-        if (response.data && response.data.status && response.data.result) {
-            return response.data.result.searched_url;
+    if (contents && Array.isArray(contents)) {
+      for (const section of contents) {
+        const items = section.itemSectionRenderer?.contents || section.richGridRenderer?.contents;
+        if (items && Array.isArray(items)) {
+          for (const item of items) {
+            const videoRenderer = item.videoRenderer || item.richItemRenderer?.content?.videoRenderer;
+            if (videoRenderer && videoRenderer.videoId) {
+              results.push({
+                id: videoRenderer.videoId,
+                title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
+                channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown Channel',
+                duration: videoRenderer.lengthText?.simpleText || 'LIVE',
+                url: `https://www.youtube.com/watch?v=${videoRenderer.videoId}`
+              });
+            }
+          }
         }
-    } catch (e) {
-        console.error("Auto-Search Error:", e.message);
+      }
     }
-    return query;
+    return results;
+  } catch (error) {
+    console.error('YouTube Search Error:', error.message);
+    throw error;
+  }
 }
 
+// ==================== 2. YMCDN SCRAPER & DOWNLOADER ====================
 function extractVideoId(url) {
     if (!url) return null;
     let match = null;
-    
     if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/')) {
         match = /\/([a-zA-Z0-9\-_]{11})/.exec(url);
     } else if (url.includes('youtube.com')) {
@@ -37,315 +78,168 @@ function extractVideoId(url) {
     } else {
         match = /[a-zA-Z0-9\-_]{11}/.exec(url);
     }
-    
     return match ? match[1] : null;
 }
 
 async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     const videoId = extractVideoId(youtubeUrl);
-    if (!videoId) {
-        throw new Error('Invalid YouTube URL or Video ID could not be found.');
-    }
+    if (!videoId) throw new Error('Invalid YouTube URL.');
     
     const lowerFormat = format.toLowerCase();
-    if (lowerFormat !== 'mp3' && lowerFormat !== 'mp4') {
-        throw new Error('Invalid format: Must be either "mp3" or "mp4".');
-    }
-    
     const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Origin': 'https://id.ytmp3.mobi',
-        'Referer': 'https://id.ytmp3.mobi/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site'
+        'Referer': 'https://id.ytmp3.mobi/'
     };
 
-    try {
-        const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
-        const initRes = await fetch(initUrl, { headers });
-        
-        if (!initRes.ok) {
-            throw new Error(`Init request failed with status code ${initRes.status}`);
+    const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
+    const initRes = await fetch(initUrl, { headers });
+    const initJson = await initRes.json();
+    
+    let convertUrl = initJson.convertURL;
+    let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
+    let convertJson;
+    
+    while (true) {
+        const convertRes = await fetch(convertRequestUrl, { headers });
+        convertJson = await convertRes.json();
+        if (convertJson.redirect > 0 && convertJson.redirectURL) {
+            convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
+            continue;
         }
-        
-        const initJson = await initRes.json();
-        if (initJson.error > 0) {
-            throw new Error(`Init API returned error: ${initJson.error}`);
-        }
-
-        let convertUrl = initJson.convertURL;
-        let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
-        let convertJson;
-        
-        while (true) {
-            const convertRes = await fetch(convertRequestUrl, { headers });
-            if (!convertRes.ok) {
-                throw new Error(`Convert request failed with status code ${convertRes.status}`);
-            }
-            
-            convertJson = await convertRes.json();
-            if (convertJson.error > 0) {
-                throw new Error(`Convert API returned error: ${convertJson.error}`);
-            }
-            
-            if (convertJson.redirect > 0 && convertJson.redirectURL) {
-                convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
-                continue;
-            }
-            break;
-        }
-
-        const progressUrl = convertJson.progressURL;
-        const downloadUrl = convertJson.downloadURL;
-        let title = convertJson.title || 'YouTube';
-
-        if (!progressUrl || !downloadUrl) {
-            throw new Error('API conversion response is missing progress or download URL.');
-        }
-
-        let progress = 0;
-        let pollCount = 0;
-        const maxPolls = 60;
-        
-        while (progress < 3 && pollCount < maxPolls) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            pollCount++;
-            
-            const progressRes = await fetch(progressUrl, { headers });
-            if (!progressRes.ok) continue;
-            
-            const progressJson = await progressRes.json();
-            if (progressJson.error > 0) continue;
-            
-            progress = progressJson.progress;
-            if (progressJson.title) {
-                title = progressJson.title;
-            }
-        }
-
-        if (progress < 3) {
-            throw new Error('Conversion process timed out (exceeded 60 seconds).');
-        }
-
-        return {
-            status: 'success',
-            videoId,
-            title,
-            format: lowerFormat,
-            downloadUrl
-        };
-    } catch (error) {
-        return {
-            status: 'error',
-            message: error?.message || String(error)
-        };
+        break;
     }
+
+    const progressUrl = convertJson.progressURL;
+    const downloadUrl = convertJson.downloadURL;
+    let title = convertJson.title || 'YouTube';
+
+    let progress = 0;
+    let pollCount = 0;
+    while (progress < 3 && pollCount < 60) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        pollCount++;
+        const progressRes = await fetch(progressUrl, { headers });
+        const progressJson = await progressRes.json();
+        progress = progressJson.progress;
+        if (progressJson.title) title = progressJson.title;
+    }
+
+    return { title, downloadUrl };
 }
 
 function cleanName(name = 'file') {
-    return String(name)
-        .replace(/[\\/:*?"<>|]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 150);
+    return String(name).replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 150);
 }
 
 async function downloadBuffer(url) {
     const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://id.ytmp3.mobi/'
-        }
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://id.ytmp3.mobi/' }
     });
-    
-    if (!res.ok) {
-        throw new Error(`Gagal mengunduh file, status: ${res.status}`);
-    }
-    
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
 }
 
-function checkFFmpeg() {
-    return new Promise(resolve => {
-        const ffmpeg = spawn('ffmpeg', ['-version']);
-        ffmpeg.on('error', () => resolve(false));
-        ffmpeg.on('close', code => resolve(code === 0));
-    });
-}
-
-function compressMP4(inputBuffer) {
-    return new Promise((resolve, reject) => {
-        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kamran-ytmp4-'));
-        const inputPath = path.join(tempDir, 'input.mp4');
-        const outputPath = path.join(tempDir, 'output.mp4');
-
-        try {
-            fs.writeFileSync(inputPath, inputBuffer);
-            const args = [
-                '-y', '-i', inputPath,
-                '-c:v', 'libx264',
-                '-vf', 'scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2',
-                '-preset', 'veryfast', '-crf', '28',
-                '-c:a', 'aac', '-b:a', '96k',
-                '-pix_fmt', 'yuv420p',
-                '-movflags', '+faststart',
-                '-map_metadata', '-1',
-                outputPath
-            ];
-
-            const ffmpeg = spawn('ffmpeg', args);
-
-            ffmpeg.on('error', error => {
-                cleanup();
-                reject(new Error(`FFmpeg error: ${error.message}`));
-            });
-
-            ffmpeg.on('close', code => {
-                if (code !== 0) {
-                    cleanup();
-                    reject(new Error(`FFmpeg compression failed (code ${code})`));
-                    return;
-                }
-                try {
-                    if (!fs.existsSync(outputPath)) {
-                        cleanup();
-                        reject(new Error('Compressed file not found.'));
-                        return;
-                    }
-                    const result = fs.readFileSync(outputPath);
-                    cleanup();
-                    resolve(result);
-                } catch (error) {
-                    cleanup();
-                    reject(error);
-                }
-            });
-
-            function cleanup() {
-                try { if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath); } catch {}
-                try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch {}
-                try { fs.rmdirSync(tempDir); } catch {}
-            }
-        } catch (error) {
-            cleanup();
-            reject(error);
-        }
-    });
-}
-
-// ==================== KAMRAN-MD VIDEO COMMAND ====================
+// ==================== COMMAND: .VIDEO / .PLAYVID (SEARCH & SELECT) ====================
 cmd({
-    pattern: "ytmp4",
-    alias: ["ytv", "playvid", "video"],
-    desc: "Download YouTube video using YTMP3/4 Scraper with auto-search",
+    pattern: "video",
+    alias: ["playvid", "yts", "ytsearch"],
+    react: "🔍",
+    desc: "Search YouTube, select a result, and download",
     category: "downloader",
-    react: "📥",
     filename: __filename
 }, async (conn, mek, m, extra) => {
     const { from, text, reply } = extra;
-
+    
     try {
         if (!text) {
             return reply(
-                `🎬 *KAMRAN-MD YTMP4 DOWNLOADER*\n\n` +
-                `❌ *Please provide a video name or YouTube URL!*\n\n` +
-                `💡 *Example:* \`.ytmp4 song pal\` or \`.ytmp4 https://youtu.be/xxxx\``
+                `🎬 *KAMRAN-MD YOUTUBE SEARCH & DOWNLOADER*\n\n` +
+                `❌ *Please provide a search query or song name!*\n\n` +
+                `💡 *Example:* \`.video song pal\``
             );
         }
 
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-        await reply('_✨ Searching and processing video, please wait..._');
+        await conn.sendMessage(from, { react: { text: '⏳', key: mek.key } });
+        const results = await searchYoutube(text.trim());
 
-        const resolvedUrl = await getYouTubeUrlFromQuery(text.trim());
-        const res = await scrapeYtmp3(resolvedUrl, 'mp4');
-        
-        if (res.status === 'error') {
-            throw new Error(res.message);
+        if (!results || results.length === 0) {
+            await conn.sendMessage(from, { react: { text: '❌', key: mek.key } });
+            return reply(`❌ No results found for "${text}".`);
         }
 
-        const { title, downloadUrl } = res;
-        const safeTitle = cleanName(title || 'YouTube');
+        const topResults = results.slice(0, 5);
+        let messageText = `╭──「 *KAMRAN-MD SEARCH RESULTS* 」\n`;
+        messageText += `│ 🔍 *Query:* ${text}\n`;
+        messageText += `╰─────────────────────────\n\n`;
 
-        const mediaBuffer = await downloadBuffer(downloadUrl);
-        let finalBuffer = mediaBuffer;
+        topResults.forEach((video, index) => {
+            messageText += `*${index + 1}.* ${video.title}\n`;
+            messageText += `👤 *Channel:* ${video.channel}\n`;
+            messageText += `⏱ *Duration:* ${video.duration}\n`;
+            messageText += `🔗 *Link:* ${video.url}\n\n`;
+        });
 
-        const hasFFmpeg = await checkFFmpeg();
-        if (hasFFmpeg) {
-            try {
-                finalBuffer = await compressMP4(mediaBuffer);
-            } catch (err) {
-                console.error('[YTMP4 COMPRESS ERROR]', err);
-            }
-        }
+        messageText += `📌 *Reply with a number (1-${topResults.length}) to select video!*`;
 
-        await conn.sendMessage(from, {
-            video: finalBuffer,
-            mimetype: 'video/mp4',
-            fileName: `${safeTitle}.mp4`,
-            caption: `🎬 *${title}*\n\n> Powered by KAMRAN-MD`
-        }, { quoted: mek });
+        const sentMsg = await conn.sendMessage(from, { text: messageText }, { quoted: mek });
+        await conn.sendMessage(from, { react: { text: '✅', key: mek.key } });
 
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+        // Save session
+        searchSessions.set(sentMsg.key.id, {
+            results: topResults,
+            from: from
+        });
 
-    } catch (e) {
-        console.error('[YTMP4 ERROR]', e);
-        reply(`❌ Error: ${e?.message || e}`);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+    } catch (error) {
+        console.error("Search error:", error);
+        reply(`❌ Error: ${error.message}`);
     }
 });
 
-
-// ==================== KAMRAN-MD AUDIO COMMAND ====================
+// ==================== SELECTION & DOWNLOAD HANDLER ====================
 cmd({
-    pattern: "ytmp3",
-    alias: ["yta", "playaudio", "audio"],
-    desc: "Download YouTube audio using YTMP3 Scraper with auto-search",
-    category: "downloader",
-    react: "🎵",
-    filename: __filename
-}, async (conn, mek, m, extra) => {
-    const { from, text, reply } = extra;
-
+    on: "body"
+}, async (conn, mek, m, { from, body }) => {
     try {
-        if (!text) {
-            return reply(
-                `🎵 *KAMRAN-MD YTMP3 DOWNLOADER*\n\n` +
-                `❌ *Please provide a song name or YouTube URL!*\n\n` +
-                `💡 *Example:* \`.ytmp3 song pal\` or \`.ytmp3 https://youtu.be/xxxx\``
-            );
-        }
+        if (!body) return;
+        const text = body.trim();
+
+        const quotedMsg = mek.message?.extendedTextMessage?.contextInfo;
+        if (!quotedMsg) return;
+
+        const stanzaId = quotedMsg.stanzaId;
+        if (!searchSessions.has(stanzaId)) return;
+
+        const session = searchSessions.get(stanzaId);
+        if (session.from !== from) return;
+
+        const choice = parseInt(text);
+        if (isNaN(choice) || choice < 1 || choice > session.results.length) return;
+
+        const selectedVideo = session.results[choice - 1];
+        searchSessions.delete(stanzaId);
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-        await reply('_✨ Searching and processing audio, please wait..._');
+        await conn.sendMessage(from, { text: `📥 Downloading *${selectedVideo.title}* (via YMCDN), please wait...` }, { quoted: mek });
 
-        const resolvedUrl = await getYouTubeUrlFromQuery(text.trim());
-        const res = await scrapeYtmp3(resolvedUrl, 'mp3');
-        
-        if (res.status === 'error') {
-            throw new Error(res.message);
-        }
-
-        const { title, downloadUrl } = res;
-        const safeTitle = cleanName(title || 'YouTube');
-
-        const mediaBuffer = await downloadBuffer(downloadUrl);
+        // Scrape and download using YMCDN
+        const res = await scrapeYtmp3(selectedVideo.url, 'mp4');
+        const buffer = await downloadBuffer(res.downloadUrl);
+        const safeTitle = cleanName(selectedVideo.title);
 
         await conn.sendMessage(from, {
-            audio: mediaBuffer,
-            mimetype: 'audio/mpeg',
-            fileName: `${safeTitle}.mp3`,
-            caption: `🎵 *${title}*\n\n> Powered by KAMRAN-MD`
+            video: buffer,
+            mimetype: 'video/mp4',
+            fileName: `${safeTitle}.mp4`,
+            caption: `🎥 *${selectedVideo.title}*\n🔗 *YouTube:* ${selectedVideo.url}\n> Powered by KAMRAN-MD`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
-    } catch (e) {
-        console.error('[YTMP3 ERROR]', e);
-        reply(`❌ Error: ${e?.message || e}`);
+    } catch (err) {
+        console.error("Selection Download Error:", err);
+        await conn.sendMessage(from, { text: `❌ Download failed: ${err.message}` }, { quoted: mek });
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 });

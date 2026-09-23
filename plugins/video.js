@@ -66,7 +66,7 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== YMCDN SCRAPER FUNCTIONS ====================
+// ==================== ORIGINAL YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
     if (!url) return null;
     let match = null;
@@ -199,11 +199,11 @@ function compressMP4(inputBuffer) {
     });
 }
 
-// ==================== COMMAND: .VIDEO (AUTO SEARCH & DOWNLOAD WITH INFO) ====================
+// ==================== COMMAND: .VIDEO (AUTO SEARCH & DOWNLOAD) ====================
 cmd({
     pattern: "video",
     alias: ["ytsearch", "yts", "playvid"],
-    desc: "Search YouTube, show info and auto download video",
+    desc: "Auto search, show info and download video via YMCDN",
     category: "downloader",
     react: "📥",
     filename: __filename
@@ -215,7 +215,7 @@ cmd({
             return reply(
                 `🎬 *KAMRAN-MD VIDEO DOWNLOADER*\n\n` +
                 `❌ *Please provide a video name or YouTube link!*\n\n` +
-                `💡 *Example:* \`.video song pal\``
+                `💡 *Example:* \`[span_0](start_span)[span_0](end_span).video song pal\``
             );
         }
 
@@ -224,24 +224,25 @@ cmd({
         let videoUrl = text.trim();
         let videoInfo = null;
 
+        // Agar direct link nahi hai, toh search karke exact URL nikal lo
         if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
-            await reply('_✨ Searching video details on YouTube..._');
+            await reply('_✨ Searching video on YouTube..._');
             const searchResults = await searchYoutube(videoUrl);
             
             if (!searchResults || searchResults.length === 0) {
                 await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ No video found for "${videoUrl}".`);
+                return reply(`❌ No video found.`);
             }
             
             videoInfo = searchResults[0];
-            videoUrl = videoInfo.url;
+            videoUrl = videoInfo.url; // Exact YouTube link mil gaya
 
             let infoText = `╭──「 *KAMRAN-MD VIDEO INFO* 」\n`;
             infoText += `│ 📌 *Title:* ${videoInfo.title}\n`;
             infoText += `│ 👤 *Channel:* ${videoInfo.channel}\n`;
             infoText += `│ ⏱ *Duration:* ${videoInfo.duration} \vert{} 👁 *Views:* ${videoInfo.views}\n`;
             infoText += `╰─────────────────────────\n\n`;
-            infoText += `_📥 Downloading video automatically, please wait..._`;
+            infoText += `_📥 Downloading video via YMCDN, please wait..._`;
 
             await conn.sendMessage(from, {
                 image: { url: videoInfo.thumbnail },
@@ -251,6 +252,7 @@ cmd({
             await reply('_📥 Downloading video via YMCDN, please wait..._');
         }
 
+        // Ab is exact URL ko YMCDN scraper ko bhejenge
         const res = await scrapeYtmp3(videoUrl, 'mp4');
         if (res.status === 'error') throw new Error(res.message);
 
@@ -277,11 +279,11 @@ cmd({
     }
 });
 
-// ==================== COMMAND: .YTMP3 (AUTO SEARCH & AUDIO) ====================
+// ==================== COMMAND: .YTMP3 (AUDIO) ====================
 cmd({
     pattern: "ytmp3",
     alias: ["yta", "audio", "playaudio"],
-    desc: "Search YouTube, show info and auto download audio",
+    desc: "Auto search and download audio via YMCDN",
     category: "downloader",
     react: "🎵",
     filename: __filename
@@ -303,12 +305,12 @@ cmd({
         let audioInfo = null;
 
         if (!audioUrl.includes("youtube.com") && !audioUrl.includes("youtu.be")) {
-            await reply('_✨ Searching audio details on YouTube..._');
+            await reply('_✨ Searching audio on YouTube..._');
             const searchResults = await searchYoutube(audioUrl);
             
             if (!searchResults || searchResults.length === 0) {
                 await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ No audio found for "${audioUrl}".`);
+                return reply(`❌ No audio found.`);
             }
             
             audioInfo = searchResults[0];
@@ -319,7 +321,7 @@ cmd({
             infoText += `│ 👤 *Channel:* ${audioInfo.channel}\n`;
             infoText += `│ ⏱ *Duration:* ${audioInfo.duration} | 👁 *Views:* ${audioInfo.views}\n`;
             infoText += `╰─────────────────────────\n\n`;
-            infoText += `_🎵 Downloading audio automatically, please wait..._`;
+            infoText += `_🎵 Downloading audio via YMCDN, please wait..._`;
 
             await conn.sendMessage(from, {
                 image: { url: audioInfo.thumbnail },

@@ -270,8 +270,7 @@ cmd({
 
         searchSessions.set(sentMsg.key.id, {
             results: topResults,
-            from: from,
-            step: 'select_video'
+            from: from
         });
 
     } catch (e) {
@@ -328,45 +327,13 @@ cmd({
         const session = searchSessions.get(stanzaId);
         if (session.from !== from) return;
 
-        if (session.step === 'select_video') {
-            const choice = parseInt(text);
-            if (isNaN(choice) || choice < 1 || choice > session.results.length) return;
-
-            const selectedVideo = session.results[choice - 1];
-            searchSessions.delete(stanzaId);
-
-            const formatMenu = 
-                `╭───────────────────────╮\n` +
-                `  🎬 *${selectedVideo.title}*\n` +
-                `╰───────────────────────╯\n\n` +
-                `📌 *Format select karein (Reply karein):*\n\n` +
-                `1️⃣ *Video (MP4)*\n` +
-                `2️⃣ *Audio (MP3)*\n` +
-                `3️⃣ *Document File (MP4)*\n\n` +
-                `> Powered by KAMRAN-MD`;
-
-            const formatMsg = await conn.sendMessage(from, { text: formatMenu }, { quoted: mek });
-
-            searchSessions.set(formatMsg.key.id, {
-                videoUrl: selectedVideo.url,
-                title: selectedVideo.title,
-                from: from,
-                step: 'select_format'
-            });
-            return;
-        }
-
-        if (session.step === 'select_format') {
-            if (!['1', '2', '3'].includes(text)) return;
-
+        // Check if session has stored videoUrl directly (Step 2)
+        if (session.videoUrl) {
             const targetUrl = session.videoUrl;
             const targetTitle = session.title;
             searchSessions.delete(stanzaId);
 
-            if (!targetUrl) {
-                await conn.sendMessage(from, { text: `❌ Error: Video URL not found. Please try searching again.` }, { quoted: mek });
-                return;
-            }
+            if (!['1', '2', '3'].includes(text)) return;
 
             await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
             await conn.sendMessage(from, { text: `📥 Downloading *${targetTitle}* via YMCDN, please wait...` }, { quoted: mek });
@@ -406,6 +373,35 @@ cmd({
             }
 
             await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
+            return;
+        }
+
+        // Step 1: User selected video number (1-5)
+        if (session.results) {
+            const choice = parseInt(text);
+            if (isNaN(choice) || choice < 1 || choice > session.results.length) return;
+
+            const selectedVideo = session.results[choice - 1];
+            searchSessions.delete(stanzaId);
+
+            const formatMenu = 
+                `╭───────────────────────╮\n` +
+                `  🎬 *${selectedVideo.title}*\n` +
+                `╰───────────────────────╯\n\n` +
+                `📌 *Format select karein (Reply karein):*\n\n` +
+                `1️⃣ *Video (MP4)*\n` +
+                `2️⃣ *Audio (MP3)*\n` +
+                `3️⃣ *Document File (MP4)*\n\n` +
+                `> Powered by KAMRAN-MD`;
+
+            const formatMsg = await conn.sendMessage(from, { text: formatMenu }, { quoted: mek });
+
+            // Store videoUrl directly in the new session map
+            searchSessions.set(formatMsg.key.id, {
+                videoUrl: selectedVideo.url,
+                title: selectedVideo.title,
+                from: from
+            });
         }
 
     } catch (err) {

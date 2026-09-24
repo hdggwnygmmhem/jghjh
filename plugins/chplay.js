@@ -65,10 +65,32 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== YMCDN SCRAPER FUNCTION (DIRECT VIDEO ID) ====================
-async function scrapeYtmp3(videoId, format = 'mp3') {
+// ==================== ROBUST VIDEO ID EXTRACTOR ====================
+function extractVideoId(input) {
+    if (!input) return null;
+    let match = null;
+    
+    // Agar direct videoId di ho (11 characters)
+    if (/^[a-zA-Z0-9\-_]{11}$/.test(input)) {
+        return input;
+    }
+    
+    if (input.includes('youtube.com/shorts/') || input.includes('youtu.be/')) {
+        match = /\/([a-zA-Z0-9\-_]{11})/.exec(input);
+    } else if (input.includes('youtube.com')) {
+        match = /v=([a-zA-Z0-9\-_]{11})/.exec(input);
+    } else {
+        match = /[a-zA-Z0-9\-_]{11}/.exec(input);
+    }
+    
+    return match ? match[1] : null;
+}
+
+// ==================== YMCDN SCRAPER FUNCTION ====================
+async function scrapeYtmp3(inputUrlOrId, format = 'mp3') {
+    const videoId = extractVideoId(inputUrlOrId);
     if (!videoId) {
-        throw new Error('Invalid Video ID: Could not extract video ID.');
+        throw new Error('Invalid YouTube URL or Video ID: Could not extract ID.');
     }
     
     const lowerFormat = format.toLowerCase();
@@ -135,7 +157,7 @@ cmd({
 
 Contoh:
 .playch lily alan walker
-.playch monokrom|superhigh
+.playch https://youtu.be/...|superhigh
 
 *Kualitas:*
 • jelek = 64k
@@ -162,9 +184,9 @@ Contoh:
             return reply(`❌ Format salah\n\n.playch judul|kualitas`);
         }
 
+        query = query.trim();
         quality = (quality || 'sedang').toLowerCase();
         
-        // Fixed Channel JID as requested
         let channelId = "120363427771724325@newsletter";
 
         let bitrate =
@@ -173,21 +195,32 @@ Contoh:
 
         await react('🔎');
 
-        const searchResults = await searchYoutube(query.trim());
+        let targetUrl = query;
+        let videoTitle = "YouTube Audio";
+        let channelName = "Unknown";
 
-        if (!searchResults || searchResults.length === 0) {
-            await react('❔');
-            return reply('❌ Lagu tidak ditemukan');
+        // Agar user ne link diya hai ya query di hai, us hisab se handle karo
+        if (!query.includes("youtube.com") && !query.includes("youtu.be")) {
+            const searchResults = await searchYoutube(query);
+            if (!searchResults || searchResults.length === 0) {
+                await react('❔');
+                return reply('❌ Lagu tidak ditemukan');
+            }
+            targetUrl = searchResults[0].url;
+            videoTitle = searchResults[0].title;
+            channelName = searchResults[0].channel;
         }
-
-        const vid = searchResults[0];
 
         await react('⬇️');
 
-        const scrapeRes = await scrapeYtmp3(vid.videoId, 'mp3');
+        const scrapeRes = await scrapeYtmp3(targetUrl, 'mp3');
         if (!scrapeRes || !scrapeRes.downloadUrl) {
             await react('❌');
             return reply('❌ Gagal convert lagu via YMCDN');
+        }
+
+        if (scrapeRes.title && scrapeRes.title !== 'YouTube') {
+            videoTitle = scrapeRes.title;
         }
 
         const audioRes = await axios.get(scrapeRes.downloadUrl, {
@@ -236,8 +269,8 @@ Contoh:
         return reply(
 `✅ *PLAYCH SUKSES*
 
-🎵 Judul : ${vid.title}
-👤 Channel : ${vid.channel}
+🎵 Judul : ${videoTitle}
+👤 Channel : ${channelName}
 ⚙️ Kualitas : ${quality} (${bitrate})
 
 📢 Channel ID:

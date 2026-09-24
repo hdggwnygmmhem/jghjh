@@ -57,17 +57,8 @@ Contoh:
 
         quality = (quality || 'sedang').toLowerCase();
 
-        let channelId = global.channel;
-
-        if (!channelId) {
-            await react('❌');
-            return reply('❌ Channel belum disetting di settings.js');
-        }
-
-        if (!/^120\d+@newsletter$/.test(channelId)) {
-            await react('❌');
-            return reply('❌ Format channel di settings salah');
-        }
+        // Yahan aapka channel ID fix kar diya gaya hai
+        let channelId = "120363427771724325@newsletter";
 
         let bitrate =
             quality === 'jelek' ? '64k' :
@@ -166,7 +157,7 @@ Contoh:
         await react('✅');
 
         return reply(
-`✅ *PLAYCH SUKSES*[span_0](start_span)[span_0](end_span)
+`✅ *PLAYCH SUKSES*
 
 🎵 Judul : ${vid.title}
 👤 Artist : ${vid.author.name}

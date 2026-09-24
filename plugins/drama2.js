@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 
 const searchSessions = new Map();
 
-// ==================== YOUTUBE SEARCH FUNCTION ====================
+// ==================== FAST YOUTUBE SEARCH FUNCTION ====================
 async function searchYoutube(query) {
   const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
   const payload = {
@@ -33,7 +33,7 @@ async function searchYoutube(query) {
         'X-YouTube-Client-Version': '2.20240514.01.00',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
-      timeout: 10000
+      timeout: 7000
     });
 
     const data = response.data;
@@ -68,7 +68,7 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== YMCDN SCRAPER FUNCTIONS ====================
+// ==================== FAST YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
     if (!url) return null;
     let match = null;
@@ -91,32 +91,17 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
     }
     
     const lowerFormat = format.toLowerCase();
-    if (lowerFormat !== 'mp3' && lowerFormat !== 'mp4') {
-        throw new Error('Invalid format: Must be either "mp3" or "mp4".');
-    }
-    
     const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*',
         'Origin': 'https://id.ytmp3.mobi',
-        'Referer': 'https://id.ytmp3.mobi/',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'cross-site'
+        'Referer': 'https://id.ytmp3.mobi/'
     };
 
     try {
         const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
         const initRes = await fetch(initUrl, { headers });
-        
-        if (!initRes.ok) {
-            throw new Error(`Init request failed with status code ${initRes.status}`);
-        }
-        
         const initJson = await initRes.json();
-        if (initJson.error > 0) {
-            throw new Error(`Init API returned error: ${initJson.error}`);
-        }
 
         let convertUrl = initJson.convertURL;
         let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
@@ -124,15 +109,7 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
         
         while (true) {
             const convertRes = await fetch(convertRequestUrl, { headers });
-            if (!convertRes.ok) {
-                throw new Error(`Convert request failed with status code ${convertRes.status}`);
-            }
-            
             convertJson = await convertRes.json();
-            if (convertJson.error > 0) {
-                throw new Error(`Convert API returned error: ${convertJson.error}`);
-            }
-            
             if (convertJson.redirect > 0 && convertJson.redirectURL) {
                 convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
                 continue;
@@ -146,8 +123,9 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
 
         let progress = 0;
         let pollCount = 0;
-        while (progress < 3 && pollCount < 60) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        // Fast polling (every 500ms)
+        while (progress < 3 && pollCount < 120) {
+            await new Promise(resolve => setTimeout(resolve, 500));
             pollCount++;
             const progressRes = await fetch(progressUrl, { headers });
             const progressJson = await progressRes.json();
@@ -196,7 +174,7 @@ function compressMP4(inputBuffer) {
                 '-y', '-i', inputPath,
                 '-c:v', 'libx264',
                 '-vf', 'scale=w=1280:h=720:force_original_aspect_ratio=decrease:force_divisible_by=2',
-                '-preset', 'veryfast', '-crf', '28',
+                '-preset', 'ultrafast', '-crf', '28', // ultrafast for maximum speed
                 '-c:a', 'aac', '-b:a', '96k',
                 '-pix_fmt', 'yuv420p',
                 '-movflags', '+faststart',
@@ -225,7 +203,7 @@ function compressMP4(inputBuffer) {
     });
 }
 
-// ==================== COMMAND: .DRAMA (SEARCH, DP INFO & SELECTION MENU) ====================
+// ==================== COMMAND: .DRAMA (FAST SEARCH, DP & SELECTION) ====================
 cmd({
     pattern: "drama",
     alias: ["movie", "longvid"],
@@ -311,14 +289,14 @@ cmd({
             searchSessions.delete(stanzaId);
 
             await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-            await conn.sendMessage(from, { text: `📥 Downloading *${targetTitle}* via YMCDN, please wait...` }, { quoted: mek });
+            await conn.sendMessage(from, { text: `📥 Downloading *${targetTitle}* fastly via YMCDN...` }, { quoted: mek });
 
             const res = await scrapeYtmp3(targetUrl, 'mp4');
             const buffer = await downloadBuffer(res.downloadUrl);
             const safeTitle = cleanName(res.title);
 
             if (text === '1') {
-                // Option 1: Normal Video
+                // Option 1: Fast Compressed Video
                 let finalBuf = buffer;
                 if (await checkFFmpeg()) {
                     try { finalBuf = await compressMP4(buffer); } catch {}

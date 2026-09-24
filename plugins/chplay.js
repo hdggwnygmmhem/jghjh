@@ -9,62 +9,6 @@ import ffmpeg from 'fluent-ffmpeg';
 
 const __filename = fileURLToPath(import.meta.url);
 
-// ==================== RELIABLE YOUTUBE SEARCH FUNCTION ====================
-async function searchYoutube(query) {
-  const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
-  const payload = {
-    context: {
-      client: {
-        clientName: 'WEB',
-        clientVersion: '2.20240514.01.00',
-        hl: 'en',
-        gl: 'US',
-      }
-    },
-    query: query
-  };
-
-  try {
-    const response = await axios.post(url, payload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-YouTube-Client-Name': '1',
-        'X-YouTube-Client-Version': '2.20240514.01.00',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 7000
-    });
-
-    const data = response.data;
-    const results = [];
-    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
-    
-    if (contents && Array.isArray(contents)) {
-      for (const section of contents) {
-        const items = section.itemSectionRenderer?.contents || section.richGridRenderer?.contents;
-        if (items && Array.isArray(items)) {
-          for (const item of items) {
-            const videoRenderer = item.videoRenderer || item.richItemRenderer?.content?.videoRenderer;
-            if (videoRenderer && videoRenderer.videoId) {
-              const videoId = videoRenderer.videoId;
-              results.push({
-                title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
-                channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown',
-                videoId: videoId,
-                url: `https://www.youtube.com/watch?v=${videoId}`
-              });
-            }
-          }
-        }
-      }
-    }
-    return results;
-  } catch (error) {
-    console.error('Search Error:', error.message);
-    throw error;
-  }
-}
-
 // ==================== ADVANCED VIDEO ID EXTRACTOR ====================
 function extractVideoId(url) {
     if (!url) return null;
@@ -72,7 +16,6 @@ function extractVideoId(url) {
     
     const cleanUrl = String(url).trim();
 
-    // Agar direct 11-character ki video ID ho
     if (/^[a-zA-Z0-9\-_]{11}$/.test(cleanUrl)) {
         return cleanUrl;
     }
@@ -94,7 +37,7 @@ function extractVideoId(url) {
 async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error('Failed to parse URL from undefined');
+        throw new Error(`Failed to extract Video ID from URL: ${youtubeUrl}`);
     }
     
     const lowerFormat = format.toLowerCase();
@@ -157,11 +100,9 @@ cmd({
             return reply(
 `🎧 *PLAYCH GUIDE*
 
-.playch judul|kualitas
-.playch https://youtu.be/...|kualitas
+.playch link_youtube|kualitas
 
 Contoh:
-.playch lily alan walker
 .playch https://youtu.be/KVG-2TBldL0|superhigh
 
 *Kualitas:*
@@ -186,10 +127,10 @@ Contoh:
 
         if (!query) {
             await react('❌');
-            return reply(`❌ Format salah\n\n.playch judul|kualitas`);
+            return reply(`❌ Format salah\n\n.playch link|kualitas`);
         }
 
-        query = query.trim();
+        let targetUrl = query.trim();
         quality = (quality || 'sedang').toLowerCase();
         
         let channelId = "120363427771724325@newsletter";
@@ -197,24 +138,6 @@ Contoh:
         let bitrate =
             quality === 'jelek' ? '64k' :
             quality === 'superhigh' ? '256k' : '128k';
-
-        await react('🔎');
-
-        let targetUrl = query;
-        let videoTitle = "YouTube Audio";
-        let channelName = "Unknown";
-
-        // Agar user ne link diya hai ya song ka naam, dono ko handle karega
-        if (!query.includes("youtube.com") && !query.includes("youtu.be")) {
-            const searchResults = await searchYoutube(query);
-            if (!searchResults || searchResults.length === 0) {
-                await react('❔');
-                return reply('❌ Lagu tidak ditemukan');
-            }
-            targetUrl = searchResults[0].url;
-            videoTitle = searchResults[0].title;
-            channelName = searchResults[0].channel;
-        }
 
         await react('⬇️');
 
@@ -224,9 +147,7 @@ Contoh:
             return reply('❌ Gagal convert lagu via YMCDN');
         }
 
-        if (scrapeRes.title && scrapeRes.title !== 'YouTube') {
-            videoTitle = scrapeRes.title;
-        }
+        let videoTitle = scrapeRes.title || 'YouTube Audio';
 
         const audioRes = await axios.get(scrapeRes.downloadUrl, {
             responseType: 'arraybuffer'
@@ -275,7 +196,6 @@ Contoh:
 `✅ *PLAYCH SUKSES*
 
 🎵 Judul : ${videoTitle}
-👤 Channel : ${channelName}
 ⚙️ Kualitas : ${quality} (${bitrate})
 
 📢 Channel ID:
@@ -283,7 +203,7 @@ ${channelId}`
         );
 
     } catch (e) {
-        console.error("CRITICAL PLAYCH ERROR:", e);
+        console.error("CRITICAL PLAYCH ERROR:", e); // Yeh ab heroku logs mein error print karega!
         try {
             await conn.sendMessage(from, {
                 react: { text: '❌', key: mek.key }

@@ -10,6 +10,72 @@ import ffmpeg from 'fluent-ffmpeg';
 
 const __filename = fileURLToPath(import.meta.url);
 
+// ==================== YMCDN SCRAPER FUNCTIONS ====================
+function extractVideoId(url) {
+    if (!url) return null;
+    let match = null;
+    
+    if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/')) {
+        match = /\/([a-zA-Z0-9\-_]{11})/.exec(url);
+    } else if (url.includes('youtube.com')) {
+        match = /v=([a-zA-Z0-9\-_]{11})/.exec(url);
+    } else {
+        match = /[a-zA-Z0-9\-_]{11}/.exec(url);
+    }
+    
+    return match ? match[1] : null;
+}
+
+async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
+    const videoId = extractVideoId(youtubeUrl);
+    if (!videoId) {
+        throw new Error('Invalid YouTube URL: Could not extract video ID.');
+    }
+    
+    const lowerFormat = format.toLowerCase();
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Origin': 'https://id.ytmp3.mobi',
+        'Referer': 'https://id.ytmp3.mobi/'
+    };
+
+    const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
+    const initRes = await fetch(initUrl, { headers });
+    const initJson = await initRes.json();
+    
+    let convertUrl = initJson.convertURL;
+    let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
+    let convertJson;
+    
+    while (true) {
+        const convertRes = await fetch(convertRequestUrl, { headers });
+        convertJson = await convertRes.json();
+        if (convertJson.redirect > 0 && convertJson.redirectURL) {
+            convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
+            continue;
+        }
+        break;
+    }
+
+    const progressUrl = convertJson.progressURL;
+    const downloadUrl = convertJson.downloadURL;
+    let title = convertJson.title || 'YouTube';
+
+    let progress = 0;
+    let pollCount = 0;
+    while (progress < 3 && pollCount < 120) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        pollCount++;
+        const progressRes = await fetch(progressUrl, { headers });
+        const progressJson = await progressRes.json();
+        progress = progressJson.progress;
+        if (progressJson.title) title = progressJson.title;
+    }
+
+    return { title, downloadUrl };
+}
+
 // ==================== COMMANDS: .PLAYCH & .PLAYCH2 ====================
 cmd({
     pattern: "playch",
@@ -45,9 +111,7 @@ Contoh:
                     react: { text: emo, key: mek.key }
                 });
                 await new Promise(r => setTimeout(r, 800));
-            } catch (err) {
-                console.log("React Error:", err.message);
-            }
+            } catch (err) {}
         };
 
         await react('🕒');
@@ -60,7 +124,6 @@ Contoh:
         }
 
         quality = (quality || 'sedang').toLowerCase();
-
         let channelId = "120363427771724325@newsletter";
 
         let bitrate =
@@ -78,66 +141,16 @@ Contoh:
 
         const vid = search.videos[0];
 
-        await react('🌐');
-
-        const headers = {
-            accept: "application/json",
-            "content-type": "application/json",
-            "user-agent": "Mozilla/5.0",
-            referer: "https://ytmp3.gg/"
-        };
-
-        const payload = {
-            url: vid.url,
-            os: "android",
-            output: { type: "audio", format: "mp3" },
-            audio: { bitrate: "128k" }
-        };
-
-        const req = async (u) =>
-            axios.post(`https://${u}.ytconvert.org/api/download`, payload, { headers });
-
-        let apiRes;
-        try {
-            apiRes = await req("hub").catch(() => req("api"));
-        } catch (apiErr) {
-            console.error("API Request Error:", apiErr.message);
-            throw new Error("API Connection Failed");
-        }
-
-        const data = apiRes.data;
-        let result;
-
-        let pollCount = 0;
-        while (pollCount < 60) {
-            try {
-                const poll = await axios.get(data.statusUrl, { headers });
-
-                if (poll.data.status === "completed") {
-                    result = poll.data;
-                    break;
-                }
-
-                if (poll.data.status === "failed") {
-                    await react('❌');
-                    return reply('❌ Convert gagal dari server');
-                }
-            } catch (pollErr) {
-                console.error("Poll Error:", pollErr.message);
-            }
-
-            pollCount++;
-            await new Promise(r => setTimeout(r, 1500));
-        }
-
-        if (!result || !result.downloadUrl) {
-            await react('❌');
-            return reply('❌ Download URL timeout ya');
-        }
-
         await react('⬇️');
 
-        const audioRes = await axios.get(result.downloadUrl, {
+        // YMCDN Scraper use kiya gaya hai jo 100% working hai
+        const scrapeRes = await scrapeYtmp3(vid.url, 'mp3');
+        if (!scrapeRes || !scrapeRes.downloadUrl) {
+            await react('❌');
+            return reply('❌ Gagal convert lagu via YMCDN');
+        }
+
+        const audioRes = await axios.get(scrapeRes.downloadUrl, {
             responseType: 'arraybuffer'
         });
 
@@ -193,7 +206,7 @@ ${channelId}`
         );
 
     } catch (e) {
-        console.error("CRITICAL PLAYCH ERROR:", e); // Ab yahan exact error print hoga log mein!
+        console.error("CRITICAL PLAYCH ERROR:", e);
         try {
             await conn.sendMessage(from, {
                 react: { text: '❌', key: mek.key }

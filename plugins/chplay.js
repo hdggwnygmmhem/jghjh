@@ -40,11 +40,15 @@ Contoh:
         }
 
         const react = async (emo) => {
-            await conn.sendMessage(from, {
-                react: { text: emo, key: mek.key }
-            })
-            await new Promise(r => setTimeout(r, 800))
-        }
+            try {
+                await conn.sendMessage(from, {
+                    react: { text: emo, key: mek.key }
+                });
+                await new Promise(r => setTimeout(r, 800));
+            } catch (err) {
+                console.log("React Error:", err.message);
+            }
+        };
 
         await react('🕒');
 
@@ -57,7 +61,6 @@ Contoh:
 
         quality = (quality || 'sedang').toLowerCase();
 
-        // Yahan aapka channel ID fix kar diya gaya hai
         let channelId = "120363427771724325@newsletter";
 
         let bitrate =
@@ -68,7 +71,7 @@ Contoh:
 
         const search = await yts(query);
 
-        if (!search.videos.length) {
+        if (!search || !search.videos || !search.videos.length) {
             await react('❔');
             return reply('❌ Lagu tidak ditemukan');
         }
@@ -94,24 +97,42 @@ Contoh:
         const req = async (u) =>
             axios.post(`https://${u}.ytconvert.org/api/download`, payload, { headers });
 
-        const { data } = await req("hub").catch(() => req("api"));
+        let apiRes;
+        try {
+            apiRes = await req("hub").catch(() => req("api"));
+        } catch (apiErr) {
+            console.error("API Request Error:", apiErr.message);
+            throw new Error("API Connection Failed");
+        }
 
+        const data = apiRes.data;
         let result;
 
-        while (true) {
-            const poll = await axios.get(data.statusUrl, { headers });
+        let pollCount = 0;
+        while (pollCount < 60) {
+            try {
+                const poll = await axios.get(data.statusUrl, { headers });
 
-            if (poll.data.status === "completed") {
-                result = poll.data;
-                break;
+                if (poll.data.status === "completed") {
+                    result = poll.data;
+                    break;
+                }
+
+                if (poll.data.status === "failed") {
+                    await react('❌');
+                    return reply('❌ Convert gagal dari server');
+                }
+            } catch (pollErr) {
+                console.error("Poll Error:", pollErr.message);
             }
 
-            if (poll.data.status === "failed") {
-                await react('❌');
-                return reply('❌ Convert gagal');
-            }
-
+            pollCount++;
             await new Promise(r => setTimeout(r, 1500));
+        }
+
+        if (!result || !result.downloadUrl) {
+            await react('❌');
+            return reply('❌ Download URL timeout ya');
         }
 
         await react('⬇️');
@@ -120,7 +141,7 @@ Contoh:
             responseType: 'arraybuffer'
         });
 
-        const inFile = path.join(os.tmpdir(), `in_${Date.now()}`);
+        const inFile = path.join(os.tmpdir(), `in_${Date.now()}.mp3`);
         const outFile = path.join(os.tmpdir(), `out_${Date.now()}.ogg`);
 
         fs.writeFileSync(inFile, audioRes.data);
@@ -135,7 +156,10 @@ Contoh:
                 .audioBitrate(bitrate)
                 .format('ogg')
                 .on('end', resolve)
-                .on('error', reject)
+                .on('error', (err) => {
+                    console.error("FFmpeg Error:", err);
+                    reject(err);
+                })
                 .save(outFile);
         });
 
@@ -150,8 +174,8 @@ Contoh:
         });
 
         try {
-            fs.unlinkSync(inFile);
-            fs.unlinkSync(outFile);
+            if (fs.existsSync(inFile)) fs.unlinkSync(inFile);
+            if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
         } catch {}
 
         await react('✅');
@@ -169,10 +193,12 @@ ${channelId}`
         );
 
     } catch (e) {
-        console.log(e);
-        await conn.sendMessage(from, {
-            react: { text: '❌', key: mek.key }
-        });
-        return reply('❌ Gagal playch');
+        console.error("CRITICAL PLAYCH ERROR:", e); // Ab yahan exact error print hoga log mein!
+        try {
+            await conn.sendMessage(from, {
+                react: { text: '❌', key: mek.key }
+            });
+        } catch {}
+        return reply(`❌ Gagal playch: ${e.message || e}`);
     }
 });

@@ -37,7 +37,7 @@ function extractVideoId(url) {
 async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error(`Failed to extract Video ID from URL: ${youtubeUrl}`);
+        throw new Error(`Failed to extract Video ID from: ${youtubeUrl}`);
     }
     
     const lowerFormat = format.toLowerCase();
@@ -203,7 +203,7 @@ ${channelId}`
         );
 
     } catch (e) {
-        console.error("CRITICAL PLAYCH ERROR:", e); // Yeh ab heroku logs mein error print karega!
+        console.error("CRITICAL PLAYCH ERROR:", e);
         try {
             await conn.sendMessage(from, {
                 react: { text: '❌', key: mek.key }

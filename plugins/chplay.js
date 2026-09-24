@@ -65,32 +65,36 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== ROBUST VIDEO ID EXTRACTOR ====================
-function extractVideoId(input) {
-    if (!input) return null;
+// ==================== ADVANCED VIDEO ID EXTRACTOR ====================
+function extractVideoId(url) {
+    if (!url) return null;
     let match = null;
     
-    // Agar direct videoId di ho (11 characters)
-    if (/^[a-zA-Z0-9\-_]{11}$/.test(input)) {
-        return input;
+    const cleanUrl = String(url).trim();
+
+    // Agar direct 11-character ki video ID ho
+    if (/^[a-zA-Z0-9\-_]{11}$/.test(cleanUrl)) {
+        return cleanUrl;
     }
     
-    if (input.includes('youtube.com/shorts/') || input.includes('youtu.be/')) {
-        match = /\/([a-zA-Z0-9\-_]{11})/.exec(input);
-    } else if (input.includes('youtube.com')) {
-        match = /v=([a-zA-Z0-9\-_]{11})/.exec(input);
+    if (cleanUrl.includes('youtu.be/')) {
+        match = /youtu\.be\/([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
+    } else if (cleanUrl.includes('youtube.com/shorts/')) {
+        match = /shorts\/([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
+    } else if (cleanUrl.includes('youtube.com')) {
+        match = /v=([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
     } else {
-        match = /[a-zA-Z0-9\-_]{11}/.exec(input);
+        match = /[a-zA-Z0-9\-_]{11}/.exec(cleanUrl);
     }
     
     return match ? match[1] : null;
 }
 
 // ==================== YMCDN SCRAPER FUNCTION ====================
-async function scrapeYtmp3(inputUrlOrId, format = 'mp3') {
-    const videoId = extractVideoId(inputUrlOrId);
+async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
+    const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error('Invalid YouTube URL or Video ID: Could not extract ID.');
+        throw new Error('Failed to parse URL from undefined');
     }
     
     const lowerFormat = format.toLowerCase();
@@ -154,10 +158,11 @@ cmd({
 `🎧 *PLAYCH GUIDE*
 
 .playch judul|kualitas
+.playch https://youtu.be/...|kualitas
 
 Contoh:
 .playch lily alan walker
-.playch https://youtu.be/...|superhigh
+.playch https://youtu.be/KVG-2TBldL0|superhigh
 
 *Kualitas:*
 • jelek = 64k
@@ -199,7 +204,7 @@ Contoh:
         let videoTitle = "YouTube Audio";
         let channelName = "Unknown";
 
-        // Agar user ne link diya hai ya query di hai, us hisab se handle karo
+        // Agar user ne link diya hai ya song ka naam, dono ko handle karega
         if (!query.includes("youtube.com") && !query.includes("youtu.be")) {
             const searchResults = await searchYoutube(query);
             if (!searchResults || searchResults.length === 0) {

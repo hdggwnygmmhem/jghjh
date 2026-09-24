@@ -115,11 +115,11 @@ async function scrapeYtmp3(videoId, format = 'mp3') {
     return { title, downloadUrl };
 }
 
-// ==================== COMMANDS: .PLAYCH & .PLAYCH2 ====================
+// ==================== COMMAND: .PLAYCH & .PLAYCH2 ====================
 cmd({
     pattern: "playch",
     alias: ["playch2"],
-    desc: "Play and send audio to channel as PTT",
+    desc: "Play and send audio to newsletter channel as PTT",
     category: "downloader",
     react: "🎧",
     filename: __filename
@@ -163,6 +163,8 @@ Contoh:
         }
 
         quality = (quality || 'sedang').toLowerCase();
+        
+        // Fixed Channel JID as requested
         let channelId = "120363427771724325@newsletter";
 
         let bitrate =
@@ -182,7 +184,6 @@ Contoh:
 
         await react('⬇️');
 
-        // Direct videoId pass kiya gaya hai taaki URL parsing ka error khatam ho jaye
         const scrapeRes = await scrapeYtmp3(vid.videoId, 'mp3');
         if (!scrapeRes || !scrapeRes.downloadUrl) {
             await react('❌');
@@ -236,10 +237,10 @@ Contoh:
 `✅ *PLAYCH SUKSES*
 
 🎵 Judul : ${vid.title}
-👤 Artist : ${vid.channel}
+👤 Channel : ${vid.channel}
 ⚙️ Kualitas : ${quality} (${bitrate})
 
-📢 Channel otomatis:
+📢 Channel ID:
 ${channelId}`
         );
 

@@ -5,10 +5,65 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import axios from 'axios';
-import yts from 'yt-search';
 import ffmpeg from 'fluent-ffmpeg';
 
 const __filename = fileURLToPath(import.meta.url);
+
+// ==================== RELIABLE YOUTUBE SEARCH FUNCTION ====================
+async function searchYoutube(query) {
+  const url = 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false';
+  const payload = {
+    context: {
+      client: {
+        clientName: 'WEB',
+        clientVersion: '2.20240514.01.00',
+        hl: 'en',
+        gl: 'US',
+      }
+    },
+    query: query
+  };
+
+  try {
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': '2.20240514.01.00',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 7000
+    });
+
+    const data = response.data;
+    const results = [];
+    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents;
+    
+    if (contents && Array.isArray(contents)) {
+      for (const section of contents) {
+        const items = section.itemSectionRenderer?.contents || section.richGridRenderer?.contents;
+        if (items && Array.isArray(items)) {
+          for (const item of items) {
+            const videoRenderer = item.videoRenderer || item.richItemRenderer?.content?.videoRenderer;
+            if (videoRenderer && videoRenderer.videoId) {
+              const videoId = videoRenderer.videoId;
+              results.push({
+                title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
+                channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown',
+                duration: videoRenderer.lengthText?.simpleText || 'LIVE',
+                url: `https://www.youtube.com/watch?v=${videoId}`
+              });
+            }
+          }
+        }
+      }
+    }
+    return results;
+  } catch (error) {
+    console.error('Search Error:', error.message);
+    throw error;
+  }
+}
 
 // ==================== YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
@@ -132,18 +187,17 @@ Contoh:
 
         await react('🔎');
 
-        const search = await yts(query);
+        const searchResults = await searchYoutube(query.trim());
 
-        if (!search || !search.videos || !search.videos.length) {
+        if (!searchResults || searchResults.length === 0) {
             await react('❔');
             return reply('❌ Lagu tidak ditemukan');
         }
 
-        const vid = search.videos[0];
+        const vid = searchResults[0];
 
         await react('⬇️');
 
-        // YMCDN Scraper use kiya gaya hai jo 100% working hai
         const scrapeRes = await scrapeYtmp3(vid.url, 'mp3');
         if (!scrapeRes || !scrapeRes.downloadUrl) {
             await react('❌');
@@ -197,8 +251,7 @@ Contoh:
 `✅ *PLAYCH SUKSES*
 
 🎵 Judul : ${vid.title}
-👤 Artist : ${vid.author.name}
-⏱ Durasi : ${vid.timestamp}
+👤 Artist : ${vid.channel}
 ⚙️ Kualitas : ${quality} (${bitrate})
 
 📢 Channel otomatis:

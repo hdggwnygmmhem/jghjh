@@ -50,7 +50,7 @@ async function searchYoutube(query) {
               results.push({
                 title: videoRenderer.title?.runs?.map(r => r.text).join('') || 'No Title',
                 channel: videoRenderer.ownerText?.runs?.map(r => r.text).join('') || 'Unknown',
-                duration: videoRenderer.lengthText?.simpleText || 'LIVE',
+                videoId: videoId,
                 url: `https://www.youtube.com/watch?v=${videoId}`
               });
             }
@@ -65,26 +65,10 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== YMCDN SCRAPER FUNCTIONS ====================
-function extractVideoId(url) {
-    if (!url) return null;
-    let match = null;
-    
-    if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/')) {
-        match = /\/([a-zA-Z0-9\-_]{11})/.exec(url);
-    } else if (url.includes('youtube.com')) {
-        match = /v=([a-zA-Z0-9\-_]{11})/.exec(url);
-    } else {
-        match = /[a-zA-Z0-9\-_]{11}/.exec(url);
-    }
-    
-    return match ? match[1] : null;
-}
-
-async function scrapeYtmp3(youtubeUrl, format = 'mp3') {
-    const videoId = extractVideoId(youtubeUrl);
+// ==================== YMCDN SCRAPER FUNCTION (DIRECT VIDEO ID) ====================
+async function scrapeYtmp3(videoId, format = 'mp3') {
     if (!videoId) {
-        throw new Error('Invalid YouTube URL: Could not extract video ID.');
+        throw new Error('Invalid Video ID: Could not extract video ID.');
     }
     
     const lowerFormat = format.toLowerCase();
@@ -198,7 +182,8 @@ Contoh:
 
         await react('⬇️');
 
-        const scrapeRes = await scrapeYtmp3(vid.url, 'mp3');
+        // Direct videoId pass kiya gaya hai taaki URL parsing ka error khatam ho jaye
+        const scrapeRes = await scrapeYtmp3(vid.videoId, 'mp3');
         if (!scrapeRes || !scrapeRes.downloadUrl) {
             await react('❌');
             return reply('❌ Gagal convert lagu via YMCDN');

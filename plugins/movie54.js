@@ -68,26 +68,37 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== FAST YMCDN SCRAPER FUNCTIONS ====================
+// ==================== BULLETPROOF VIDEO ID EXTRACTOR ====================
 function extractVideoId(url) {
     if (!url) return null;
-    let match = null;
+    const cleanUrl = String(url).trim();
     
-    if (url.includes('youtube.com/shorts/') || url.includes('youtu.be/')) {
-        match = /\/([a-zA-Z0-9\-_]{11})/.exec(url);
-    } else if (url.includes('youtube.com')) {
-        match = /v=([a-zA-Z0-9\-_]{11})/.exec(url);
-    } else {
-        match = /[a-zA-Z0-9\-_]{11}/.exec(url);
+    // Agar direct 11-character ki ID ho
+    if (/^[a-zA-Z0-9\-_]{11}$/.test(cleanUrl)) {
+        return cleanUrl;
     }
-    
+
+    try {
+        const parsed = new URL(cleanUrl);
+        if (parsed.hostname.includes('youtu.be')) {
+            return parsed.pathname.slice(1, 12);
+        } else if (parsed.hostname.includes('youtube.com')) {
+            if (parsed.pathname.startsWith('/shorts/')) {
+                return parsed.pathname.split('/')[2];
+            }
+            return parsed.searchParams.get('v');
+        }
+    } catch {}
+
+    // Fallback Regex match agar URL parsing fail ho jaye
+    const match = /(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
     return match ? match[1] : null;
 }
 
 async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error('Invalid YouTube URL: Could not extract video ID.');
+        throw new Error(`Failed to parse URL from undefined (Invalid link: ${youtubeUrl})`);
     }
     
     const lowerFormat = format.toLowerCase();
@@ -123,7 +134,6 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
 
         let progress = 0;
         let pollCount = 0;
-        // Fast polling (up to 240 seconds for long movies/videos)
         while (progress < 3 && pollCount < 240) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             pollCount++;
@@ -239,7 +249,6 @@ cmd({
         const buffer = await downloadBuffer(res.downloadUrl);
         const safeTitle = cleanName(res.title || 'Movie');
 
-        // Movies ko document format mein bhejna best hai taaki quality aur size fat na ho
         await conn.sendMessage(from, {
             document: buffer,
             mimetype: 'video/mp4',
@@ -334,7 +343,6 @@ cmd({
         const session = searchSessions.get(stanzaId);
         if (session.from !== from) return;
 
-        // Step 2: Format Selection (1. Video, 2. Document)
         if (session.step === 'select_format') {
             if (!['1', '2'].includes(text)) return;
 
@@ -350,7 +358,6 @@ cmd({
             const safeTitle = cleanName(res.title);
 
             if (text === '1') {
-                // Option 1: Normal Video
                 let finalBuf = buffer;
                 if (await checkFFmpeg()) {
                     try { finalBuf = await compressMP4(buffer); } catch {}
@@ -362,7 +369,6 @@ cmd({
                 }, { quoted: mek });
 
             } else if (text === '2') {
-                // Option 2: Document File
                 await conn.sendMessage(from, {
                     document: buffer,
                     mimetype: 'video/mp4',
@@ -375,7 +381,6 @@ cmd({
             return;
         }
 
-        // Step 1: User selected drama number (1-5)
         if (session.step === 'select_video') {
             const choice = parseInt(text);
             if (isNaN(choice) || choice < 1 || choice > session.results.length) return;
@@ -390,7 +395,7 @@ cmd({
                 `📌 *Format select karein (Reply karein):*\n\n` +
                 `1️⃣ *Video (MP4)*\n` +
                 `2️⃣ *Document File (MP4)*\n\n` +
-                `> Powered by KAM_MD`;
+                `> Powered by KAMRAN-MD`;
 
             const formatMsg = await conn.sendMessage(from, { text: formatMenu }, { quoted: mek });
 

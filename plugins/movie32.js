@@ -43,7 +43,7 @@ cmd({
         let bestSource = null;
 
         // Step 2: Loop through top results to find one with an active stream link
-        const itemsToCheck = searchData.items.slice(0, 3); // Top 3 items check karenge
+        const itemsToCheck = searchData.items.slice(0, 3);
         
         for (const movie of itemsToCheck) {
             const subjectId = movie.subject_id;
@@ -60,7 +60,7 @@ cmd({
                     selectedMovie = movie;
                     bestSource = streamData.sources[streamData.sources.length - 1] || streamData.sources[0];
                     downloadUrl = bestSource.url;
-                    if (downloadUrl) break; // Agar link mil gaya toh loop rok dein
+                    if (downloadUrl) break;
                 }
             } catch (err) {
                 console.log(`Stream fetch failed for item: ${slug}`);
@@ -68,7 +68,7 @@ cmd({
         }
 
         if (!downloadUrl || !selectedMovie) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key }readyState ? "" : "" });
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Is naam se kisi bhi movie ka active stream link nahi mil saka.");
         }
 

@@ -60,8 +60,6 @@ cmd({
         }
 
         const sources = streamData.sources;
-
-        // Sabse acchi quality (highest resolution) select karein
         const bestSource = sources[sources.length - 1] || sources[0];
         const downloadUrl = bestSource.url;
         const resolution = bestSource.resolution || 'HD';
@@ -79,23 +77,26 @@ cmd({
         if (poster && poster.trim() !== "") {
             await conn.sendMessage(from, { 
                 image: { url: poster }, 
-                caption: caption + `\n📁 *Status:* Downloading movie file to server, please wait...` 
+                caption: caption + `\n📁 *Status:* Downloading movie file, please wait...` 
             }, { quoted: mek });
         } else {
-            await reply(caption + `\n📁 *Status:* Downloading movie file to server, please wait...`);
+            await reply(caption + `\n📁 *Status:* Downloading movie file, please wait...`);
         }
 
-        // Step 3: Download video buffer safely using proper headers to bypass 429 error
-        const videoResponse = await axios.get(downloadUrl, {
+        // Step 3: Download video buffer using native fetch to bypass 426 error
+        const videoRes = await fetch(downloadUrl, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
                 "Referer": "https://netfilm.world/"
-            },
-            responseType: 'arraybuffer',
-            timeout: 120000 // 2 minutes timeout for large files
+            }
         });
 
-        const videoBuffer = Buffer.from(videoResponse.data);
+        if (!videoRes.ok) {
+            throw new Error(`Failed to fetch video stream: ${videoRes.status} ${videoRes.statusText}`);
+        }
+
+        const arrayBuffer = await videoRes.arrayBuffer();
+        const videoBuffer = Buffer.from(arrayBuffer);
 
         const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '').trim();
         const fileName = `${safeTitle || 'Movie'}_${resolution}p.mp4`;

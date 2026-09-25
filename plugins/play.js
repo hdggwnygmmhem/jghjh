@@ -5,108 +5,66 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "play3",
-    alias: ["ytplay3", "song5", "plays5"],
-    desc: "Search and download songs from YouTube via Kamran API",
+    pattern: "video",
+    alias: ["ytmp4", "vid", "mp4"],
+    desc: "Download videos from YouTube and other platforms using Kamran AIO API",
     category: "downloader",
-    react: "🎵",
+    react: "🎥",
     filename: __filename
 }, async (conn, mek, m, { from, text, reply }) => {
     try {
         if (!text) {
             return reply(
-                `⚠️ Please provide a song name or search query!\n\n` +
+                `⚠️ Please provide a video name or video URL!\n\n` +
                 `Example:\n` +
-                `• .play Song pal`
+                `• .video Song pal\n` +
+                `• .video https://youtube.com/...`
             );
         }
 
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
+        // Call AIO endpoint for video download
         const encodedQuery = encodeURIComponent(text.trim());
-        const apiUrl = `https://www.kamran-api.my.id/api/download/ytplay?q=${encodedQuery}`;
+        const apiUrl = `https://www.kamran-api.my.id/api/download/aio?url=${encodedQuery}`;
         
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
         if (!resData || !resData.status) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not find any results for that song.");
+            return reply("❌ Could not fetch video from AIO API.");
         }
 
-        const title = resData.title || text;
-        const channel = resData.channel || '';
-        const duration = resData.duration || '';
-        const views = resData.views || '';
-        const thumbnail = resData.thumbnail || '';
-        const ytLink = resData.download_url || resData.url || '';
+        const result = resData.result || resData.data || resData;
+        const title = result.title || text;
+        const downloadUrl = result.download_url || result.downloadUrl || result.mp4 || result.url || '';
 
-        if (!ytLink) {
-             return reply("❌ YouTube video link nahi mil saka.");
-        }
-
-        let caption = `🎶 *Title:* ${title}\n`;
-        if (channel) caption += `👤 *Channel:* ${channel}\n`;
-        if (duration) caption += `⏱️ *Duration:* ${duration}\n`;
-        if (views) caption += `👁️ *Views:* ${views}\n`;
-        caption += `✨ *Creator:* ${resData.creator || "DRKAMRAN"}\n`;
-
-        if (thumbnail && thumbnail.trim() !== "") {
-            await conn.sendMessage(from, { 
-                image: { url: thumbnail }, 
-                caption: caption + `\n📁 *Status:* Sending audio...` 
-            }, { quoted: mek });
-        } else {
-            await reply(caption + `\n📁 *Status:* Sending audio...`);
-        }
-
-        let directAudioUrl = '';
-
-        // SaveTube endpoint try karte hain jo behtar direct link deta hai
-        try {
-            const saveTubeApi = `https://www.kamran-api.my.id/api/download/savetube?url=${encodeURIComponent(ytLink)}&quality=mp3`;
-            const saveRes = await axios.get(saveTubeApi, { timeout: 30000 });
-            
-            if (saveRes.data && saveRes.data.status) {
-                const saveResult = saveRes.data.result || saveRes.data.data || saveRes.data;
-                directAudioUrl = saveResult.download_url || saveResult.downloadUrl || saveResult.mp3 || saveResult.url || '';
-            }
-        } catch (e) {
-            console.log("SaveTube fallback failed.");
-        }
-
-        // Agar SaveTube se bhi na mile toh YTMP3 try karein
-        if (!directAudioUrl || directAudioUrl.includes("youtube.com/watch")) {
-            try {
-                const ytmp3Api = `https://www.kamran-api.my.id/api/download/ytmp3?url=${encodeURIComponent(ytLink)}`;
-                const mp3Res = await axios.get(ytmp3Api, { timeout: 30000 });
-                
-                if (mp3Res.data && mp3Res.data.status) {
-                    const mp3Result = mp3Res.data.result || mp3Res.data.data || mp3Res.data;
-                    directAudioUrl = mp3Result.download_url || mp3Result.downloadUrl || mp3Result.mp3 || mp3Result.url || '';
-                }
-            } catch (e) {
-                console.log("YTMP3 fallback failed.");
-            }
-        }
-
-        if (!directAudioUrl) {
+        if (!downloadUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Audio stream fetch nahi ho saki, link expire ho gaya hai.");
+            return reply("❌ Direct video download link not found.");
         }
 
-        // Send the audio file using buffer or direct stream url
+        // Prepare info caption
+        let caption = `🎬 *Title:* ${title}\n`;
+        if (result.duration) caption += `⏱️ *Duration:* ${result.duration}\n`;
+        if (result.channel || result.author) caption += `👤 *Channel/Author:* ${result.channel || result.author}\n`;
+        caption += `✨ *Creator:* ${resData.creator || "DRKAMRAN"}\n`;
+        caption += `📁 *Status:* Sending video...`;
+
+        // Send the video file directly
         await conn.sendMessage(from, {
-            audio: { url: directAudioUrl },
-            mimetype: 'audio/mpeg',
-            ptt: false 
+            video: { url: downloadUrl },
+            mimetype: 'video/mp4',
+            caption: caption
         }, { quoted: mek });
 
+        // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("YTPlay Fatal Error:", error);
+        console.error("Video Command Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }

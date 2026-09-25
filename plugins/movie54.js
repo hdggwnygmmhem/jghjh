@@ -73,7 +73,6 @@ function extractVideoId(url) {
     if (!url) return null;
     const cleanUrl = String(url).trim();
     
-    // Agar direct 11-character ki ID ho
     if (/^[a-zA-Z0-9\-_]{11}$/.test(cleanUrl)) {
         return cleanUrl;
     }
@@ -90,7 +89,6 @@ function extractVideoId(url) {
         }
     } catch {}
 
-    // Fallback Regex match agar URL parsing fail ho jaye
     const match = /(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
     return match ? match[1] : null;
 }
@@ -233,8 +231,11 @@ cmd({
             );
         }
 
-        let link = text.trim();
-        if (!link.includes("youtube.com") && !link.includes("youtu.be")) {
+        // Sirf link extract karne ke liye text ko space se split karke URL dhoondna
+        const args = text.trim().split(/\s+/);
+        let link = args.find(arg => arg.includes("youtube.com") || arg.includes("youtu.be")) || args[0];
+
+        if (!link || (!link.includes("youtube.com") && !link.includes("youtu.be"))) {
             return reply(`❌ Please provide a valid YouTube link for movies!`);
         }
 

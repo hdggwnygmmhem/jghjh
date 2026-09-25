@@ -66,7 +66,7 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== ADVANCED MULTI-SOURCE HD SCRAPER ====================
+// ==================== ULTRA-FAST YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
     if (!url) return null;
     let match = null;
@@ -82,34 +82,53 @@ function extractVideoId(url) {
     return match ? match[1] : null;
 }
 
-async function scrapeHDMovie(youtubeUrl) {
+async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error('Invalid YouTube URL or Video ID.');
+        throw new Error('Invalid YouTube URL: Could not extract video ID.');
     }
+    
+    const lowerFormat = format.toLowerCase();
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Origin': 'https://id.ytmp3.mobi',
+        'Referer': 'https://id.ytmp3.mobi/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site'
+    };
 
-    // Fallback 1: Cobalt / YMCDN High-Tier Endpoint
     try {
-        const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': '*/*',
-            'Origin': 'https://id.ytmp3.mobi',
-            'Referer': 'https://id.ytmp3.mobi/'
-        };
-
         const initUrl = `https://a.ymcdn.org/api/v1/init?p=y&23=1llum1n471&_=${Math.random()}`;
         const initRes = await fetch(initUrl, { headers });
+        
+        if (!initRes.ok) {
+            throw new Error(`Init request failed with status code ${initRes.status}`);
+        }
+        
         const initJson = await initRes.json();
+        if (initJson.error > 0) {
+            throw new Error(`Init API returned error: ${initJson.error}`);
+        }
 
         let convertUrl = initJson.convertURL;
-        let convertRequestUrl = `${convertUrl}&v=${videoId}&f=mp4&_=${Math.random()}`;
+        let convertRequestUrl = `${convertUrl}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
         let convertJson;
         
         while (true) {
             const convertRes = await fetch(convertRequestUrl, { headers });
+            if (!convertRes.ok) {
+                throw new Error(`Convert request failed with status code ${convertRes.status}`);
+            }
+            
             convertJson = await convertRes.json();
+            if (convertJson.error > 0) {
+                throw new Error(`Convert API returned error: ${convertJson.error}`);
+            }
+            
             if (convertJson.redirect > 0 && convertJson.redirectURL) {
-                convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=mp4&_=${Math.random()}`;
+                convertRequestUrl = `${convertJson.redirectURL}&v=${videoId}&f=${lowerFormat}&_=${Math.random()}`;
                 continue;
             }
             break;
@@ -117,41 +136,49 @@ async function scrapeHDMovie(youtubeUrl) {
 
         const progressUrl = convertJson.progressURL;
         const downloadUrl = convertJson.downloadURL;
-        let title = convertJson.title || 'Movie';
+        let title = convertJson.title || 'YouTube';
+
+        if (!progressUrl || !downloadUrl) {
+            throw new Error('API conversion response is missing progress or download URL.');
+        }
 
         let progress = 0;
         let pollCount = 0;
-        while (progress < 3 && pollCount < 300) {
+        const maxPolls = 300;
+        
+        while (progress < 3 && pollCount < maxPolls) {
             await new Promise(resolve => setTimeout(resolve, 300));
             pollCount++;
+            
             const progressRes = await fetch(progressUrl, { headers });
+            if (!progressRes.ok) continue;
+            
             const progressJson = await progressRes.json();
+            if (progressJson.error > 0) continue;
+            
             progress = progressJson.progress;
-            if (progressJson.title) title = progressJson.title;
+            if (progressJson.title) {
+                title = progressJson.title;
+            }
         }
 
-        if (downloadUrl) {
-            return { title, downloadUrl };
+        if (progress < 3) {
+            throw new Error('Conversion process timed out.');
         }
-    } catch (err) {
-        console.error("Primary Scraper Error, switching to backup:", err.message);
+
+        return {
+            status: 'success',
+            videoId,
+            title,
+            format: lowerFormat,
+            downloadUrl
+        };
+    } catch (error) {
+        return {
+            status: 'error',
+            message: error?.message || String(error)
+        };
     }
-
-    // Fallback 2: Alternative Public MP4 Stream Source
-    try {
-        const backupApi = `https://api-faa.my.id/faa/ytplay?query=https://www.youtube.com/watch?v=${videoId}`;
-        const res = await axios.get(backupApi, { timeout: 15000 });
-        if (res.data && res.data.status && res.data.result) {
-            return {
-                title: res.data.result.title || 'Movie',
-                downloadUrl: res.data.result.mp4 || res.data.result.download || res.data.result.url
-            };
-        }
-    } catch (err) {
-        console.error("Backup Scraper Error:", err.message);
-    }
-
-    throw new Error('Could not fetch HD download link from any source.');
 }
 
 function cleanName(name = 'file') {
@@ -162,11 +189,11 @@ function cleanName(name = 'file') {
         .slice(0, 150);
 }
 
-// ==================== COMMAND: .MOVIE (HD SECURE DOWNLOAD) ====================
+// ==================== COMMAND: .MOVIE (ULTRA-FAST SAFE MOVIE DOWNLOAD) ====================
 cmd({
     pattern: "movie",
     alias: ["playmovie", "dlmovie"],
-    desc: "Search and download Full HD movies safely as document",
+    desc: "Fast auto search with DP info and download full movie as document safely",
     category: "downloader",
     react: "🍿",
     filename: __filename
@@ -178,7 +205,7 @@ cmd({
     try {
         if (!text) {
             return reply(
-                `🍿 *KAMRAN-MD HD MOVIE DOWNLOADER*\n\n` +
+                `🍿 *KAMRAN-MD MOVIE DOWNLOADER*\n\n` +
                 `❌ *Please provide a movie name or YouTube link!*\n\n` +
                 `💡 *Example:* \`.movie hitman action movie\``
             );
@@ -200,30 +227,30 @@ cmd({
             movieInfo = searchResults[0];
             movieUrl = movieInfo.url;
 
-            let infoText = `╭──「 *KAMRAN-MD HD MOVIE INFO* 」\n`;
+            let infoText = `╭──「 *KAMRAN-MD MOVIE INFO* 」\n`;
             infoText += `│ 🍿 *Title:* ${movieInfo.title}\n`;
             infoText += `│ 👤 *Channel:* ${movieInfo.channel}\n`;
             infoText += `│ ⏱ *Duration:* ${movieInfo.duration} | 👁 *Views:* ${movieInfo.views}\n`;
             infoText += `╰─────────────────────────\n\n`;
-            infoText += `_⚡ Fetching Full HD movie streams securely..._`;
+            infoText += `_⚡ Fast downloading full movie securely..._`;
 
             await conn.sendMessage(from, {
                 image: { url: movieInfo.thumbnail },
                 caption: infoText
             }, { quoted: mek });
         } else {
-            await reply('_⚡ Fetching Full HD movie streams, please wait..._');
+            await reply('_⚡ Fast downloading movie via YMCDN, please wait..._');
         }
 
-        const res = await scrapeHDMovie(movieUrl);
-        if (!res || !res.downloadUrl) {
-            throw new Error('Failed to retrieve valid movie download stream.');
+        const res = await scrapeYtmp3(movieUrl, 'mp4');
+        if (res.status === 'error') {
+            throw new Error(res.message);
         }
 
         const { title, downloadUrl } = res;
         const safeTitle = cleanName(title || 'Movie');
 
-        tempFile = path.join(os.tmpdir(), `hd_movie_${Date.now()}.mp4`);
+        tempFile = path.join(os.tmpdir(), `movie_${Date.now()}.mp4`);
         
         const response = await axios({
             method: 'GET',
@@ -247,7 +274,7 @@ cmd({
             document: { url: tempFile },
             mimetype: 'video/mp4',
             fileName: `${safeTitle}.mp4`,
-            caption: `🍿 *${title}* (HD)\n\n> Powered by KAMRAN-MD`
+            caption: `🍿 *${title}*\n\n> Powered by KAMRAN-MD`
         }, { quoted: mek });
 
         try {
@@ -258,7 +285,7 @@ cmd({
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
-        console.error('[HD MOVIE ERROR]', e);
+        console.error('[MOVIE ERROR]', e);
         try {
             if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
         } catch {}

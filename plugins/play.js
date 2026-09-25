@@ -24,7 +24,7 @@ cmd({
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
         const encodedUrl = encodeURIComponent(text.trim());
-        const apiUrl = `https://www.kamran-api.my.id/api/download/ytmp4?url=${encodedUrl}&resolution=480`;
+        const apiUrl = `https://apis-site-kamran.vercel.app/api/download/ytmp4?url=${encodedUrl}&resolution=480`;
         
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;

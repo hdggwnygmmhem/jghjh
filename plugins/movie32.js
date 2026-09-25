@@ -5,7 +5,7 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "movie",
+    pattern: "movie2",
     alias: ["ytmovie", "downloadmovie", "moviefast"],
     desc: "Search and stream/download movies via MovieBox API",
     category: "downloader",

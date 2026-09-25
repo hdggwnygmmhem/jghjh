@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "movie2",
     alias: ["ytmovie", "downloadmovie", "moviefast"],
-    desc: "Search and select movie quality via MovieBox Pro API",
+    desc: "Search and download high-quality movies via MovieBox Pro API",
     category: "downloader",
     react: "🎬",
     filename: __filename
@@ -49,7 +49,7 @@ cmd({
             return reply("❌ Movie details fetch karne mein masla hua.");
         }
 
-        // Step 2: Fetch stream sources (Single safe request to avoid 429 error)
+        // Step 2: Fetch stream sources
         const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
         const streamRes = await axios.get(streamApi, { timeout: 30000 });
         const streamData = streamRes.data;
@@ -59,53 +59,60 @@ cmd({
             return reply("❌ Is movie ka stream link available nahi hai.");
         }
 
-        // Saari available qualities aur unke sizes prepare karein
-        let qualityListText = `🎬 *Movie:* ${title}\n✨ *Creator:* DRKAMRAN\n\n📥 *Available Qualities & Sizes:*\n`;
         const sources = streamData.sources;
 
-        sources.forEach((src, index) => {
-            const res = src.resolution || 'HD';
-            const sizeMB = src.size ? (src.size / (1024 * 1024)).toFixed(2) : 'Unknown';
-            qualityListText += `\n${index + 1}. 📺 *${res}p* ── 📂 *${sizeMB} MB*`;
-        });
-
-        qualityListText += `\n\n_Sending the best available HD quality file automatically..._`;
-
-        if (poster && poster.trim() !== "") {
-            await conn.sendMessage(from, { 
-                image: { url: poster }, 
-                caption: qualityListText 
-            }, { quoted: mek });
-        } else {
-            await reply(qualityListText);
-        }
-
-        // By default sabse acchi quality (ya highest resolution) send karein taaki user ko foran movie mil jaye
+        // Sabse acchi quality (highest resolution) select karein
         const bestSource = sources[sources.length - 1] || sources[0];
         const downloadUrl = bestSource.url;
         const resolution = bestSource.resolution || 'HD';
+        const fileSizeMB = bestSource.size ? (bestSource.size / (1024 * 1024)).toFixed(2) : 'Unknown';
 
         if (!downloadUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Direct download link nahi mil saka.");
         }
 
+        let caption = `🎬 *Movie:* ${title}\n`;
+        caption += `📺 *Quality:* ${resolution}p (${fileSizeMB} MB)\n`;
+        caption += `✨ *Creator:* DRKAMRAN\n`;
+
+        if (poster && poster.trim() !== "") {
+            await conn.sendMessage(from, { 
+                image: { url: poster }, 
+                caption: caption + `\n📁 *Status:* Downloading movie file to server, please wait...` 
+            }, { quoted: mek });
+        } else {
+            await reply(caption + `\n📁 *Status:* Downloading movie file to server, please wait...`);
+        }
+
+        // Step 3: Download video buffer safely using proper headers to bypass 429 error
+        const videoResponse = await axios.get(downloadUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+                "Referer": "https://netfilm.world/"
+            },
+            responseType: 'arraybuffer',
+            timeout: 120000 // 2 minutes timeout for large files
+        });
+
+        const videoBuffer = Buffer.from(videoResponse.data);
+
         const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '').trim();
         const fileName = `${safeTitle || 'Movie'}_${resolution}p.mp4`;
 
-        // Send full movie as Document
+        // Step 4: Send the buffer as Document
         await conn.sendMessage(from, {
-            document: { url: downloadUrl },
+            document: videoBuffer,
             mimetype: 'video/mp4',
             fileName: fileName,
-            caption: `🎬 *${title}* (${resolution}p)\n📁 Enjoy your movie!`
+            caption: `🎬 *${title}* (${resolution}p)\n📁 Size: ${fileSizeMB} MB`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("MovieBox Pro Error:", error);
-        reply(`❌ Error: ${error.message || "Too many requests or API timeout."}`);
+        console.error("Movie Download Error:", error);
+        reply(`❌ Error: ${error.message || "Failed to download movie file."}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 });

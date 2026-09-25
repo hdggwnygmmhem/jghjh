@@ -89,10 +89,6 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
     }
     
     const lowerFormat = format.toLowerCase();
-    if (lowerFormat !== 'mp3' && lowerFormat !== 'mp4') {
-        throw new Error('Invalid format: Must be either "mp3" or "mp4".');
-    }
-    
     const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': '*/*',
@@ -148,7 +144,7 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
 
         let progress = 0;
         let pollCount = 0;
-        const maxPolls = 300; // Badi movies ke liye timeout limit badha kar 300 seconds kar di hai
+        const maxPolls = 300;
         
         while (progress < 3 && pollCount < maxPolls) {
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -193,32 +189,18 @@ function cleanName(name = 'file') {
         .slice(0, 150);
 }
 
-async function downloadBuffer(url) {
-    const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://id.ytmp3.mobi/'
-        }
-    });
-    
-    if (!res.ok) {
-        throw new Error(`Gagal mengunduh file, status: ${res.status}`);
-    }
-    
-    const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-}
-
-// ==================== COMMAND: .MOVIE (AUTO SEARCH, DP INFO & DOCUMENT DOWNLOAD) ====================
+// ==================== COMMAND: .MOVIE (MEMORY SAFE MOVIE DOWNLOAD) ====================
 cmd({
     pattern: "movie",
     alias: ["playmovie", "dlmovie"],
-    desc: "Auto search with DP info and download full movie as document",
+    desc: "Auto search with DP info and download full movie safely without RAM crash",
     category: "downloader",
     react: "🍿",
     filename: __filename
 }, async (conn, mek, m, extra) => {
     const { from, text, reply } = extra;
+
+    let tempFile = null;
 
     try {
         if (!text) {
@@ -250,14 +232,14 @@ cmd({
             infoText += `│ 👤 *Channel:* ${movieInfo.channel}\n`;
             infoText += `│ ⏱ *Duration:* ${movieInfo.duration} \vert{} 👁 *Views:* ${movieInfo.views}\n`;
             infoText += `╰─────────────────────────\n\n`;
-            infoText += `_🍿 Downloading full movie via YMCDN (badi movie hai, thoda time lag sakta hai)..._`;
+            infoText += `_🍿 Downloading full movie safely (RAM optimization active)..._`;
 
             await conn.sendMessage(from, {
                 image: { url: movieInfo.thumbnail },
                 caption: infoText
             }, { quoted: mek });
         } else {
-            await reply('_🍿 Downloading movie via YMCDN, please wait..._');
+            await reply('_🍿 Downloading movie safely via YMCDN, please wait..._');
         }
 
         const res = await scrapeYtmp3(movieUrl, 'mp4');
@@ -268,20 +250,50 @@ cmd({
         const { title, downloadUrl } = res;
         const safeTitle = cleanName(title || 'Movie');
 
-        const mediaBuffer = await downloadBuffer(downloadUrl);
+        // RAM bachane ke liye file ko direct temp disk par stream karenge (Buffer load nahi hoga)
+        tempFile = path.join(os.tmpdir(), `movie_${Date.now()}.mp4`);
+        
+        const response = await axios({
+            method: 'GET',
+            url: downloadUrl,
+            responseType: 'stream',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://id.ytmp3.mobi/'
+            }
+        });
 
-        // Badi movies ke liye document bhejte hain taaki size limit aur crash ka issue na aaye
+        const writer = fs.createWriteStream(tempFile);
+        response.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+
+        // Disk se direct document bhejenge taaki Heroku R14/R15 memory error na aaye
         await conn.sendMessage(from, {
-            document: mediaBuffer,
+            document: { url: tempFile },
             mimetype: 'video/mp4',
             fileName: `${safeTitle}.mp4`,
             caption: `🍿 *${title}*\n\n> Powered by KAMRAN-MD`
         }, { quoted: mek });
 
+        // Cleanup temp file & force garbage collection if available
+        try {
+            if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        } catch {}
+        if (global.gc) { global.gc(); }
+
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (e) {
         console.error('[MOVIE ERROR]', e);
+        try {
+            if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        } catch {}
+        if (global.gc) { global.gc(); }
+
         reply(`❌ Error: ${e?.message || e}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
@@ -290,8 +302,8 @@ cmd({
 
 // ==================== COMMAND: .VIDEO (AUTO SEARCH, DP INFO & DOWNLOAD) ====================
 cmd({
-    pattern: "video65",
-    alias: ["ytv54", "playvid76", "ytmp476"],
+    pattern: "video54",
+    alias: ["ytv77", "playvid77", "ytmp477"],
     desc: "Auto search with DP info and download video",
     category: "downloader",
     react: "📥",

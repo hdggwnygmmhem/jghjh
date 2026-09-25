@@ -17,8 +17,8 @@ cmd({
             return reply(
                 `⚠️ Please provide a movie name!\n\n` +
                 `Example:\n` +
-                `• .movie Attack on Titan\n` +
-                `• .movie Breaking Bad`
+                `• .movie2 Attack on Titan\n` +
+                `• .movie2 Breaking Bad`
             );
         }
 
@@ -29,7 +29,7 @@ cmd({
 
         const apiBase = "https://mbox-apis.vercel.app";
 
-        // Step 1: Search movie using the provided search endpoint
+        // Step 1: Search movie using the search endpoint
         const searchRes = await axios.get(`${apiBase}/search?q=${encodeURIComponent(query)}`, { timeout: 30000 });
         const searchData = searchRes.data;
 
@@ -38,37 +38,44 @@ cmd({
             return reply("❌ Movie nahi mili. Kuch aur search karke dekhein.");
         }
 
-        const movie = searchData.items[0];
-        const subjectId = movie.subject_id;
-        const slug = movie.slug;
-        const title = movie.name || query;
-        const poster = movie.poster_url || '';
+        let downloadUrl = '';
+        let selectedMovie = null;
+        let bestSource = null;
 
-        if (!subjectId || !slug) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Movie details fetch karne mein masla hua.");
+        // Step 2: Loop through top results to find one with an active stream link
+        const itemsToCheck = searchData.items.slice(0, 3); // Top 3 items check karenge
+        
+        for (const movie of itemsToCheck) {
+            const subjectId = movie.subject_id;
+            const slug = movie.slug;
+
+            if (!subjectId || !slug) continue;
+
+            try {
+                const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
+                const streamRes = await axios.get(streamApi, { timeout: 15000 });
+                const streamData = streamRes.data;
+
+                if (streamData && streamData.sources && streamData.sources.length > 0) {
+                    selectedMovie = movie;
+                    bestSource = streamData.sources[streamData.sources.length - 1] || streamData.sources[0];
+                    downloadUrl = bestSource.url;
+                    if (downloadUrl) break; // Agar link mil gaya toh loop rok dein
+                }
+            } catch (err) {
+                console.log(`Stream fetch failed for item: ${slug}`);
+            }
         }
 
-        // Step 2: Fetch stream sources using the exact stream endpoint structure
-        const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
-        const streamRes = await axios.get(streamApi, { timeout: 30000 });
-        const streamData = streamRes.data;
-
-        if (!streamData || !streamData.sources || streamData.sources.length === 0) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Is movie ka stream link available nahi hai.");
+        if (!downloadUrl || !selectedMovie) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key }readyState ? "" : "" });
+            return reply("❌ Is naam se kisi bhi movie ka active stream link nahi mil saka.");
         }
 
-        // Sabse best resolution choose karein (highest quality)
-        const bestSource = streamData.sources[streamData.sources.length - 1] || streamData.sources[0];
-        const downloadUrl = bestSource.url;
+        const title = selectedMovie.name || query;
+        const poster = selectedMovie.poster_url || '';
         const resolution = bestSource.resolution || 'HD';
         const fileSize = bestSource.size ? `(~${(bestSource.size / (1024 * 1024)).toFixed(2)} MB)` : '';
-
-        if (!downloadUrl) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Direct download link nahi mil saka.");
-        }
 
         let caption = `🎬 *Movie:* ${title}\n`;
         caption += `📺 *Quality:* ${resolution} ${fileSize}\n`;

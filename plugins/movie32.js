@@ -5,9 +5,9 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "movie2",
-    alias: ["ytmovie2", "downloadmovie2", "moviefast2"],
-    desc: "Download YouTube movies in High Quality as Document via AIO API",
+    pattern: "movie",
+    alias: ["ytmovie", "downloadmovie", "moviefast"],
+    desc: "Search and download high-quality movies via MovieBox Pro API",
     category: "downloader",
     react: "🎬",
     filename: __filename
@@ -15,91 +15,90 @@ cmd({
     try {
         if (!text) {
             return reply(
-                `⚠️ Please provide a YouTube Movie URL!\n\n` +
+                `⚠️ Please provide a movie name!\n\n` +
                 `Example:\n` +
-                `• .movie https://www.youtube.com/watch?v=...`
+                `• .movie Attack on Titan\n` +
+                `• .movie Breaking Bad`
             );
         }
 
-        const movieUrl = text.trim();
-
-        // Validate basic YouTube URL
-        if (!movieUrl.includes("youtube.com") && !movieUrl.includes("youtu.be")) {
-            return reply("❌ Please provide a valid YouTube URL for the movie!");
-        }
+        const query = text.trim();
 
         // Loading reaction
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const apiUrl = `https://apis-one-iota.vercel.app/api/download/aio?url=${encodeURIComponent(movieUrl)}`;
-        
-        const response = await axios.get(apiUrl, { timeout: 60000 });
-        const resData = response.data;
+        const apiBase = "https://mbox-apis.vercel.app";
 
-        // Debugging ke liye API response ko console par print karwaya hai
-        console.log("=== AIO API MOVIE RESPONSE ===", JSON.stringify(resData, null, 2));
+        // Step 1: Search movie using the provided search endpoint
+        const searchRes = await axios.get(`${apiBase}/search?q=${encodeURIComponent(query)}`, { timeout: 30000 });
+        const searchData = searchRes.data;
 
-        if (!resData || (!resData.status && !resData.data && !resData.result)) {
+        if (!searchData || !searchData.items || searchData.items.length === 0) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not fetch movie data from the API.");
+            return reply("❌ Movie nahi mili. Kuch aur search karke dekhein.");
         }
 
-        const data = resData.result || resData.data || resData;
+        const movie = searchData.items[0];
+        const subjectId = movie.subject_id;
+        const slug = movie.slug;
+        const title = movie.name || query;
+        const poster = movie.poster_url || '';
 
-        const title = data.title || "YouTube_Movie";
-        const channel = data.channel || data.author || '';
-        const duration = data.duration || '';
-        const thumbnail = data.thumbnail || data.image || '';
-        
-        // Best quality link find karne ki koshish
-        let downloadUrl = '';
-
-        if (data.downloads && Array.isArray(data.downloads)) {
-            // Agar array of qualities milti hai toh highest quality choose karein
-            const highQuality = data.downloads.reverse().find(d => d.url || d.download_url);
-            downloadUrl = highQuality ? (highQuality.url || highQuality.download_url) : '';
+        if (!subjectId || !slug) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Movie details fetch karne mein masla hua.");
         }
 
-        // Agar upar na mile toh standard fields check karein
-        if (!downloadUrl) {
-            downloadUrl = data.download_url || data.downloadUrl || data.url || data.video || '';
+        // Step 2: Fetch stream sources using the exact stream endpoint structure
+        const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
+        const streamRes = await axios.get(streamApi, { timeout: 30000 });
+        const streamData = streamRes.data;
+
+        if (!streamData || !streamData.sources || streamData.sources.length === 0) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Is movie ka stream link available nahi hai.");
         }
+
+        // Sabse best resolution choose karein (highest quality)
+        const bestSource = streamData.sources[streamData.sources.length - 1] || streamData.sources[0];
+        const downloadUrl = bestSource.url;
+        const resolution = bestSource.resolution || 'HD';
+        const fileSize = bestSource.size ? `(~${(bestSource.size / (1024 * 1024)).toFixed(2)} MB)` : '';
 
         if (!downloadUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Movie download link nahi mil saka.");
+            return reply("❌ Direct download link nahi mil saka.");
         }
 
-        let caption = `🎬 *Movie Title:* ${title}\n`;
-        if (channel) caption += `👤 *Channel:* ${channel}\n`;
-        if (duration) caption += `⏱️ *Duration:* ${duration}\n`;
+        let caption = `🎬 *Movie:* ${title}\n`;
+        caption += `📺 *Quality:* ${resolution} ${fileSize}\n`;
         caption += `✨ *Creator:* DRKAMRAN\n`;
 
-        if (thumbnail && thumbnail.trim() !== "") {
+        if (poster && poster.trim() !== "") {
             await conn.sendMessage(from, { 
-                image: { url: thumbnail }, 
-                caption: caption + `\n📁 *Status:* Downloading full movie file, please wait...` 
+                image: { url: poster }, 
+                caption: caption + `\n📁 *Status:* Downloading full movie in HD document format...` 
             }, { quoted: mek });
         } else {
-            await reply(caption + `\n📁 *Status:* Downloading full movie file, please wait...`);
+            await reply(caption + `\n📁 *Status:* Downloading full movie in HD document format...`);
         }
 
-        // Sanitize file name for document
+        // Sanitize file name
         const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '').trim();
-        const fileName = `${safeTitle || 'Movie'}.mp4`;
+        const fileName = `${safeTitle || 'Movie'}_${resolution}.mp4`;
 
-        // Send the movie file as a Document
+        // Send full movie as Document
         await conn.sendMessage(from, {
             document: { url: downloadUrl },
             mimetype: 'video/mp4',
             fileName: fileName,
-            caption: `🎬 ${title}`
+            caption: `🎬 ${title} (${resolution})`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("Movie Document Download Fatal Error:", error);
+        console.error("MovieBox Pro Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }

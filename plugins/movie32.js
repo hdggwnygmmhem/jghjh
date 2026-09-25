@@ -5,9 +5,9 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "movie2",
+    pattern: "movie",
     alias: ["ytmovie", "downloadmovie", "moviefast"],
-    desc: "Search and download high-quality movies via MovieBox Pro API",
+    desc: "Search and select movie quality via MovieBox Pro API",
     category: "downloader",
     react: "🎬",
     filename: __filename
@@ -17,8 +17,8 @@ cmd({
             return reply(
                 `⚠️ Please provide a movie name!\n\n` +
                 `Example:\n` +
-                `• .movie2 Attack on Titan\n` +
-                `• .movie2 Breaking Bad`
+                `• .movie Attack on Titan\n` +
+                `• .movie Breaking Bad`
             );
         }
 
@@ -29,7 +29,7 @@ cmd({
 
         const apiBase = "https://mbox-apis.vercel.app";
 
-        // Step 1: Search movie using the search endpoint
+        // Step 1: Search movie
         const searchRes = await axios.get(`${apiBase}/search?q=${encodeURIComponent(query)}`, { timeout: 30000 });
         const searchData = searchRes.data;
 
@@ -38,75 +38,74 @@ cmd({
             return reply("❌ Movie nahi mili. Kuch aur search karke dekhein.");
         }
 
-        let downloadUrl = '';
-        let selectedMovie = null;
-        let bestSource = null;
+        const movie = searchData.items[0];
+        const subjectId = movie.subject_id;
+        const slug = movie.slug;
+        const title = movie.name || query;
+        const poster = movie.poster_url || '';
 
-        // Step 2: Loop through top results to find one with an active stream link
-        const itemsToCheck = searchData.items.slice(0, 3);
-        
-        for (const movie of itemsToCheck) {
-            const subjectId = movie.subject_id;
-            const slug = movie.slug;
-
-            if (!subjectId || !slug) continue;
-
-            try {
-                const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
-                const streamRes = await axios.get(streamApi, { timeout: 15000 });
-                const streamData = streamRes.data;
-
-                if (streamData && streamData.sources && streamData.sources.length > 0) {
-                    selectedMovie = movie;
-                    bestSource = streamData.sources[streamData.sources.length - 1] || streamData.sources[0];
-                    downloadUrl = bestSource.url;
-                    if (downloadUrl) break;
-                }
-            } catch (err) {
-                console.log(`Stream fetch failed for item: ${slug}`);
-            }
-        }
-
-        if (!downloadUrl || !selectedMovie) {
+        if (!subjectId || !slug) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Is naam se kisi bhi movie ka active stream link nahi mil saka.");
+            return reply("❌ Movie details fetch karne mein masla hua.");
         }
 
-        const title = selectedMovie.name || query;
-        const poster = selectedMovie.poster_url || '';
-        const resolution = bestSource.resolution || 'HD';
-        const fileSize = bestSource.size ? `(~${(bestSource.size / (1024 * 1024)).toFixed(2)} MB)` : '';
+        // Step 2: Fetch stream sources (Single safe request to avoid 429 error)
+        const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
+        const streamRes = await axios.get(streamApi, { timeout: 30000 });
+        const streamData = streamRes.data;
 
-        let caption = `🎬 *Movie:* ${title}\n`;
-        caption += `📺 *Quality:* ${resolution} ${fileSize}\n`;
-        caption += `✨ *Creator:* DRKAMRAN\n`;
+        if (!streamData || !streamData.sources || streamData.sources.length === 0) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Is movie ka stream link available nahi hai.");
+        }
+
+        // Saari available qualities aur unke sizes prepare karein
+        let qualityListText = `🎬 *Movie:* ${title}\n✨ *Creator:* DRKAMRAN\n\n📥 *Available Qualities & Sizes:*\n`;
+        const sources = streamData.sources;
+
+        sources.forEach((src, index) => {
+            const res = src.resolution || 'HD';
+            const sizeMB = src.size ? (src.size / (1024 * 1024)).toFixed(2) : 'Unknown';
+            qualityListText += `\n${index + 1}. 📺 *${res}p* ── 📂 *${sizeMB} MB*`;
+        });
+
+        qualityListText += `\n\n_Sending the best available HD quality file automatically..._`;
 
         if (poster && poster.trim() !== "") {
             await conn.sendMessage(from, { 
                 image: { url: poster }, 
-                caption: caption + `\n📁 *Status:* Downloading full movie in HD document format...` 
+                caption: qualityListText 
             }, { quoted: mek });
         } else {
-            await reply(caption + `\n📁 *Status:* Downloading full movie in HD document format...`);
+            await reply(qualityListText);
         }
 
-        // Sanitize file name
+        // By default sabse acchi quality (ya highest resolution) send karein taaki user ko foran movie mil jaye
+        const bestSource = sources[sources.length - 1] || sources[0];
+        const downloadUrl = bestSource.url;
+        const resolution = bestSource.resolution || 'HD';
+
+        if (!downloadUrl) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply("❌ Direct download link nahi mil saka.");
+        }
+
         const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '').trim();
-        const fileName = `${safeTitle || 'Movie'}_${resolution}.mp4`;
+        const fileName = `${safeTitle || 'Movie'}_${resolution}p.mp4`;
 
         // Send full movie as Document
         await conn.sendMessage(from, {
             document: { url: downloadUrl },
             mimetype: 'video/mp4',
             fileName: fileName,
-            caption: `🎬 ${title} (${resolution})`
+            caption: `🎬 *${title}* (${resolution}p)\n📁 Enjoy your movie!`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
         console.error("MovieBox Pro Error:", error);
-        reply(`❌ Error: ${error.message}`);
+        reply(`❌ Error: ${error.message || "Too many requests or API timeout."}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }
 });

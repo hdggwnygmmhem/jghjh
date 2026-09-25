@@ -5,8 +5,8 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "video",
-    alias: ["ytmp4", "vid", "mp4"],
+    pattern: "videot",
+    alias: ["ytmp4t", "vidt", "mp4t"],
     desc: "Download videos from YouTube and other platforms using Kamran AIO API",
     category: "downloader",
     react: "🎥",
@@ -32,28 +32,35 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        if (!resData || !resData.status) {
+        if (!resData || !resData.status || !resData.result) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
             return reply("❌ Could not fetch video from AIO API.");
         }
 
-        const result = resData.result || resData.data || resData;
+        const result = resData.result;
         const title = result.title || text;
-        const downloadUrl = result.download_url || result.downloadUrl || result.mp4 || result.url || '';
+
+        // Extracting direct video link from 'medias' array safely
+        let downloadUrl = '';
+        if (result.medias && Array.isArray(result.medias) && result.medias.length > 0) {
+            // Pehle mp4 format dhundte hain
+            const mp4Media = result.medias.find(media => media.ext === 'mp4' && media.url);
+            downloadUrl = mp4Media ? mp4Media.url : result.medias[0].url;
+        }
 
         if (!downloadUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Direct video download link not found.");
+            return reply("❌ Direct video download link not found in medias.");
         }
 
         // Prepare info caption
         let caption = `🎬 *Title:* ${title}\n`;
         if (result.duration) caption += `⏱️ *Duration:* ${result.duration}\n`;
-        if (result.channel || result.author) caption += `👤 *Channel/Author:* ${result.channel || result.author}\n`;
+        if (result.author) caption += `👤 *Channel/Author:* ${result.author}\n`;
         caption += `✨ *Creator:* ${resData.creator || "DRKAMRAN"}\n`;
         caption += `📁 *Status:* Sending video...`;
 
-        // Send the video file directly
+        // Send the video file directly using the valid stream url
         await conn.sendMessage(from, {
             video: { url: downloadUrl },
             mimetype: 'video/mp4',

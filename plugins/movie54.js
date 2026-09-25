@@ -68,35 +68,28 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== BULLETPROOF VIDEO ID EXTRACTOR ====================
+// ==================== FAST YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
     if (!url) return null;
+    let match = null;
+    
     const cleanUrl = String(url).trim();
     
-    if (/^[a-zA-Z0-9\-_]{11}$/.test(cleanUrl)) {
-        return cleanUrl;
+    if (cleanUrl.includes('youtube.com/shorts/') || cleanUrl.includes('youtu.be/')) {
+        match = /\/([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
+    } else if (cleanUrl.includes('youtube.com')) {
+        match = /v=([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
+    } else {
+        match = /[a-zA-Z0-9\-_]{11}/.exec(cleanUrl);
     }
-
-    try {
-        const parsed = new URL(cleanUrl);
-        if (parsed.hostname.includes('youtu.be')) {
-            return parsed.pathname.slice(1, 12);
-        } else if (parsed.hostname.includes('youtube.com')) {
-            if (parsed.pathname.startsWith('/shorts/')) {
-                return parsed.pathname.split('/')[2];
-            }
-            return parsed.searchParams.get('v');
-        }
-    } catch {}
-
-    const match = /(?:v=|\/shorts\/|youtu\.be\/)([a-zA-Z0-9\-_]{11})/.exec(cleanUrl);
+    
     return match ? match[1] : null;
 }
 
 async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-        throw new Error(`Failed to parse URL from undefined (Invalid link: ${youtubeUrl})`);
+        throw new Error('Invalid YouTube URL: Could not extract video ID.');
     }
     
     const lowerFormat = format.toLowerCase();
@@ -132,6 +125,7 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
 
         let progress = 0;
         let pollCount = 0;
+        // Extended polling limit (up to 240 seconds for long movies)
         while (progress < 3 && pollCount < 240) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             pollCount++;
@@ -231,9 +225,8 @@ cmd({
             );
         }
 
-        // Sirf link extract karne ke liye text ko space se split karke URL dhoondna
-        const args = text.trim().split(/\s+/);
-        let link = args.find(arg => arg.includes("youtube.com") || arg.includes("youtu.be")) || args[0];
+        // Clean text to extract exact link even if command has extra spacing
+        let link = text.trim().split(/\s+/)[0];
 
         if (!link || (!link.includes("youtube.com") && !link.includes("youtu.be"))) {
             return reply(`❌ Please provide a valid YouTube link for movies!`);
@@ -344,6 +337,7 @@ cmd({
         const session = searchSessions.get(stanzaId);
         if (session.from !== from) return;
 
+        // Step 2: Format Selection (1. Video, 2. Document)
         if (session.step === 'select_format') {
             if (!['1', '2'].includes(text)) return;
 
@@ -359,6 +353,7 @@ cmd({
             const safeTitle = cleanName(res.title);
 
             if (text === '1') {
+                // Option 1: Fast Compressed Video
                 let finalBuf = buffer;
                 if (await checkFFmpeg()) {
                     try { finalBuf = await compressMP4(buffer); } catch {}
@@ -370,11 +365,12 @@ cmd({
                 }, { quoted: mek });
 
             } else if (text === '2') {
+                // Option 2: Document File
                 await conn.sendMessage(from, {
                     document: buffer,
                     mimetype: 'video/mp4',
                     fileName: `${safeTitle}.mp4`,
-                    caption: `📁 *${res.title}*\n> Powered by KAMRAN-MD`
+                    caption: `📁 *${res.title}*\n> Powered by KAM_MD`
                 }, { quoted: mek });
             }
 
@@ -382,6 +378,7 @@ cmd({
             return;
         }
 
+        // Step 1: User selected drama number (1-5)
         if (session.step === 'select_video') {
             const choice = parseInt(text);
             if (isNaN(choice) || choice < 1 || choice > session.results.length) return;

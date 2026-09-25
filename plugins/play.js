@@ -5,7 +5,7 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "play64",
+    pattern: "play54",
     alias: ["ytplay5", "song5", "plays5"],
     desc: "Search and download songs from YouTube via Kamran API",
     category: "downloader",
@@ -60,8 +60,7 @@ cmd({
             await reply(caption + `\n📁 *Status:* Sending audio...`);
         }
 
-        // Agar aapke paas ytmp3 ka koi direct audio link wala endpoint hai, toh use yahan use karein. 
-        // Filhal agar ytLink direct audio file nahi hai balki YouTube page URL hai, toh aap apne ytmp3 endpoint ko call kar sakte hain:
+        // Fetch direct audio link using ytmp3 endpoint
         const ytmp3Api = `https://www.kamran-api.my.id/api/download/ytmp3?url=${encodeURIComponent(ytLink)}`;
         const mp3Res = await axios.get(ytmp3Api, { timeout: 30000 }).catch(() => null);
         
@@ -77,7 +76,7 @@ cmd({
         // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
-    }acch (error) {
+    } catch (error) {
         console.error("YTPlay Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });

@@ -66,7 +66,7 @@ async function searchYoutube(query) {
   }
 }
 
-// ==================== YMCDN SCRAPER FUNCTIONS ====================
+// ==================== ULTRA-FAST YMCDN SCRAPER FUNCTIONS ====================
 function extractVideoId(url) {
     if (!url) return null;
     let match = null;
@@ -147,7 +147,7 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
         const maxPolls = 300;
         
         while (progress < 3 && pollCount < maxPolls) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 300));
             pollCount++;
             
             const progressRes = await fetch(progressUrl, { headers });
@@ -163,7 +163,7 @@ async function scrapeYtmp3(youtubeUrl, format = 'mp4') {
         }
 
         if (progress < 3) {
-            throw new Error('Conversion process timed out (exceeded 300 seconds).');
+            throw new Error('Conversion process timed out.');
         }
 
         return {
@@ -189,11 +189,11 @@ function cleanName(name = 'file') {
         .slice(0, 150);
 }
 
-// ==================== COMMAND: .MOVIE (MEMORY SAFE MOVIE DOWNLOAD) ====================
+// ==================== COMMAND: .MOVIE (ULTRA-FAST SAFE MOVIE DOWNLOAD) ====================
 cmd({
     pattern: "movie",
     alias: ["playmovie", "dlmovie"],
-    desc: "Auto search with DP info and download full movie safely without RAM crash",
+    desc: "Fast auto search with DP info and download full movie as document safely",
     category: "downloader",
     react: "🍿",
     filename: __filename
@@ -211,7 +211,7 @@ cmd({
             );
         }
 
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
+        await conn.sendMessage(from, { react: { text: "⚡", key: mek.key } });
 
         let movieUrl = text.trim();
         let movieInfo = null;
@@ -230,16 +230,16 @@ cmd({
             let infoText = `╭──「 *KAMRAN-MD MOVIE INFO* 」\n`;
             infoText += `│ 🍿 *Title:* ${movieInfo.title}\n`;
             infoText += `│ 👤 *Channel:* ${movieInfo.channel}\n`;
-            infoText += `│ ⏱ *Duration:* ${movieInfo.duration} \vert{} 👁 *Views:* ${movieInfo.views}\n`;
+            infoText += `│ ⏱ *Duration:* ${movieInfo.duration} | 👁 *Views:* ${movieInfo.views}\n`;
             infoText += `╰─────────────────────────\n\n`;
-            infoText += `_🍿 Downloading full movie safely (RAM optimization active)..._`;
+            infoText += `_⚡ Fast downloading full movie securely..._`;
 
             await conn.sendMessage(from, {
                 image: { url: movieInfo.thumbnail },
                 caption: infoText
             }, { quoted: mek });
         } else {
-            await reply('_🍿 Downloading movie safely via YMCDN, please wait..._');
+            await reply('_⚡ Fast downloading movie via YMCDN, please wait..._');
         }
 
         const res = await scrapeYtmp3(movieUrl, 'mp4');
@@ -250,7 +250,6 @@ cmd({
         const { title, downloadUrl } = res;
         const safeTitle = cleanName(title || 'Movie');
 
-        // RAM bachane ke liye file ko direct temp disk par stream karenge (Buffer load nahi hoga)
         tempFile = path.join(os.tmpdir(), `movie_${Date.now()}.mp4`);
         
         const response = await axios({
@@ -271,7 +270,6 @@ cmd({
             writer.on('error', reject);
         });
 
-        // Disk se direct document bhejenge taaki Heroku R14/R15 memory error na aaye
         await conn.sendMessage(from, {
             document: { url: tempFile },
             mimetype: 'video/mp4',
@@ -279,7 +277,6 @@ cmd({
             caption: `🍿 *${title}*\n\n> Powered by KAMRAN-MD`
         }, { quoted: mek });
 
-        // Cleanup temp file & force garbage collection if available
         try {
             if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
         } catch {}
@@ -294,162 +291,6 @@ cmd({
         } catch {}
         if (global.gc) { global.gc(); }
 
-        reply(`❌ Error: ${e?.message || e}`);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-    }
-});
-
-
-// ==================== COMMAND: .VIDEO (AUTO SEARCH, DP INFO & DOWNLOAD) ====================
-cmd({
-    pattern: "video54",
-    alias: ["ytv77", "playvid77", "ytmp477"],
-    desc: "Auto search with DP info and download video",
-    category: "downloader",
-    react: "📥",
-    filename: __filename
-}, async (conn, mek, m, extra) => {
-    const { from, text, reply } = extra;
-
-    try {
-        if (!text) {
-            return reply(
-                `🎬 *KAMRAN-MD VIDEO DOWNLOADER*\n\n` +
-                `❌ *Please provide a video name or YouTube link!*\n\n` +
-                `💡 *Example:* \`.video song pal\``
-            );
-        }
-
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-
-        let videoUrl = text.trim();
-        let videoInfo = null;
-
-        if (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be")) {
-            const searchResults = await searchYoutube(videoUrl);
-            
-            if (!searchResults || searchResults.length === 0) {
-                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ No video found for "${videoUrl}".`);
-            }
-            
-            videoInfo = searchResults[0];
-            videoUrl = videoInfo.url;
-
-            let infoText = `╭──「 *KAMRAN-MD VIDEO INFO* 」\n`;
-            infoText += `│ 📌 *Title:* ${videoInfo.title}\n`;
-            infoText += `│ 👤 *Channel:* ${videoInfo.channel}\n`;
-            infoText += `│ ⏱ *Duration:* ${videoInfo.duration} \vert{} 👁 *Views:* ${videoInfo.views}\n`;
-            infoText += `╰─────────────────────────\n\n`;
-            infoText += `_📥 Downloading video automatically via YMCDN..._`;
-
-            await conn.sendMessage(from, {
-                image: { url: videoInfo.thumbnail },
-                caption: infoText
-            }, { quoted: mek });
-        } else {
-            await reply('_📥 Downloading video via YMCDN, please wait..._');
-        }
-
-        const res = await scrapeYtmp3(videoUrl, 'mp4');
-        if (res.status === 'error') {
-            throw new Error(res.message);
-        }
-
-        const { title, downloadUrl } = res;
-        const safeTitle = cleanName(title || 'YouTube');
-
-        const mediaBuffer = await downloadBuffer(downloadUrl);
-
-        await conn.sendMessage(from, {
-            video: mediaBuffer,
-            mimetype: 'video/mp4',
-            fileName: `${safeTitle}.mp4`,
-            caption: `🎬 *${title}*\n\n> Powered by KAMRAN-MD`
-        }, { quoted: mek });
-
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
-    } catch (e) {
-        console.error('[VIDEO ERROR]', e);
-        reply(`❌ Error: ${e?.message || e}`);
-        await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-    }
-});
-
-
-// ==================== COMMAND: .YTMP3 (AUTO SEARCH, DP INFO & AUDIO) ====================
-cmd({
-    pattern: "ytmp3",
-    alias: ["yta", "audio", "playaudio"],
-    desc: "Auto search with DP info and download audio",
-    category: "downloader",
-    react: "🎵",
-    filename: __filename
-}, async (conn, mek, m, extra) => {
-    const { from, text, reply } = extra;
-
-    try {
-        if (!text) {
-            return reply(
-                `🎵 *KAMRAN-MD AUDIO DOWNLOADER*\n\n` +
-                `❌ *Please provide a song name or YouTube link!*\n\n` +
-                `💡 *Example:* \`.ytmp3 song pal\``
-            );
-        }
-
-        await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
-
-        let audioUrl = text.trim();
-        let audioInfo = null;
-
-        if (!audioUrl.includes("youtube.com") && !audioUrl.includes("youtu.be")) {
-            const searchResults = await searchYoutube(audioUrl);
-            
-            if (!searchResults || searchResults.length === 0) {
-                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ No audio found for "${audioUrl}".`);
-            }
-            
-            audioInfo = searchResults[0];
-            audioUrl = audioInfo.url;
-
-            let infoText = `╭──「 *KAMRAN-MD AUDIO INFO* 」\n`;
-            infoText += `│ 📌 *Title:* ${audioInfo.title}\n`;
-            infoText += `│ 👤 *Channel:* ${audioInfo.channel}\n`;
-            infoText += `│ ⏱ *Duration:* ${audioInfo.duration} | 👁 *Views:* ${audioInfo.views}\n`;
-            infoText += `╰─────────────────────────\n\n`;
-            infoText += `_🎵 Downloading audio automatically via YMCDN..._`;
-
-            await conn.sendMessage(from, {
-                image: { url: audioInfo.thumbnail },
-                caption: infoText
-            }, { quoted: mek });
-        } else {
-            await reply('_🎵 Downloading audio via YMCDN, please wait..._');
-        }
-
-        const res = await scrapeYtmp3(audioUrl, 'mp3');
-        if (res.status === 'error') {
-            throw new Error(res.message);
-        }
-
-        const { title, downloadUrl } = res;
-        const safeTitle = cleanName(title || 'YouTube');
-
-        const mediaBuffer = await downloadBuffer(downloadUrl);
-
-        await conn.sendMessage(from, {
-            audio: mediaBuffer,
-            mimetype: 'audio/mpeg',
-            fileName: `${safeTitle}.mp3`,
-            caption: `🎵 *${title}*\n\n> Powered by KAMRAN-MD`
-        }, { quoted: mek });
-
-        await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
-    } catch (e) {
-        console.error('[AUDIO ERROR]', e);
         reply(`❌ Error: ${e?.message || e}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
     }

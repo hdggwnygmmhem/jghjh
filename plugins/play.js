@@ -5,8 +5,8 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "play3",
-    alias: ["ytplay4", "song5", "plays5"],
+    pattern: "play65",
+    alias: ["ytplay54", "song6", "plays5"],
     desc: "Search and download songs from YouTube via Kamran API",
     category: "downloader",
     react: "🎵",
@@ -31,18 +31,22 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        // Check if API returned success
-        if (!resData || !resData.status) {
+        if (!resData) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Could not find any results for that song.");
+            return reply("❌ No response received from API.");
         }
 
-        const info = resData.result || resData;
-        const audioUrl = info.downloadUrl || info.mp3 || info.url; // Supporting your API structure
-        const title = info.title || text;
-        const thumbnail = info.thumbnail || info.image || '';
-        const duration = info.duration || info.timestamp || '';
-        const author = info.author || info.channel || '';
+        // Debugging ke liye data print karwayenge
+        console.log("API Response:", JSON.stringify(resData));
+
+        // Sabhi possible nested structures ko check karne ke liye
+        const resultObj = resData.result || resData.data || resData;
+        
+        const audioUrl = resultObj.mp3 || resultObj.downloadUrl || resultObj.url || resultObj.audio || resultObj.link;
+        const title = resultObj.title || text;
+        const thumbnail = resultObj.thumbnail || resultObj.image || '';
+        const duration = resultObj.duration || resultObj.timestamp || '';
+        const author = resultObj.author || resultObj.channel || '';
 
         if (!audioUrl) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });

@@ -5,8 +5,8 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "play65",
-    alias: ["ytplay54", "song6", "plays5"],
+    pattern: "play64",
+    alias: ["ytplay5", "song5", "plays5"],
     desc: "Search and download songs from YouTube via Kamran API",
     category: "downloader",
     react: "🎵",
@@ -31,48 +31,45 @@ cmd({
         const response = await axios.get(apiUrl, { timeout: 30000 });
         const resData = response.data;
 
-        if (!resData) {
+        if (!resData || !resData.status) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ No response received from API.");
+            return reply("❌ Could not find any results for that song.");
         }
 
-        // Debugging ke liye data print karwayenge
-        console.log("API Response:", JSON.stringify(resData));
-
-        // Sabhi possible nested structures ko check karne ke liye
-        const resultObj = resData.result || resData.data || resData;
-        
-        const audioUrl = resultObj.mp3 || resultObj.downloadUrl || resultObj.url || resultObj.audio || resultObj.link;
-        const title = resultObj.title || text;
-        const thumbnail = resultObj.thumbnail || resultObj.image || '';
-        const duration = resultObj.duration || resultObj.timestamp || '';
-        const author = resultObj.author || resultObj.channel || '';
-
-        if (!audioUrl) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Failed to retrieve the MP3 download link from the API response.");
-        }
+        const title = resData.title || text;
+        const channel = resData.channel || '';
+        const duration = resData.duration || '';
+        const views = resData.views || '';
+        const thumbnail = resData.thumbnail || '';
+        const ytLink = resData.download_url || resData.url || '';
 
         // Prepare info caption
         let caption = `🎶 *Title:* ${title}\n`;
-        if (author) caption += `👤 *Artist/Channel:* ${author}\n`;
+        if (channel) caption += `👤 *Channel:* ${channel}\n`;
         if (duration) caption += `⏱️ *Duration:* ${duration}\n`;
+        if (views) caption += `👁️ *Views:* ${views}\n`;
         caption += `✨ *Creator:* ${resData.creator || "DRKAMRAN"}\n`;
-        caption += `📁 *Status:* Downloading audio...`;
 
-        // Send thumbnail and details first
-        if (thumbnail) {
+        // Send details / thumbnail first
+        if (thumbnail && thumbnail.trim() !== "") {
             await conn.sendMessage(from, { 
                 image: { url: thumbnail }, 
-                caption: caption 
+                caption: caption + `\n📁 *Status:* Sending audio...` 
             }, { quoted: mek });
         } else {
-            await reply(caption);
+            await reply(caption + `\n📁 *Status:* Sending audio...`);
         }
 
-        // Send the audio file using direct mp3 link
+        // Agar aapke paas ytmp3 ka koi direct audio link wala endpoint hai, toh use yahan use karein. 
+        // Filhal agar ytLink direct audio file nahi hai balki YouTube page URL hai, toh aap apne ytmp3 endpoint ko call kar sakte hain:
+        const ytmp3Api = `https://www.kamran-api.my.id/api/download/ytmp3?url=${encodeURIComponent(ytLink)}`;
+        const mp3Res = await axios.get(ytmp3Api, { timeout: 30000 }).catch(() => null);
+        
+        const directAudioUrl = mp3Res?.data?.download_url || mp3Res?.data?.mp3 || ytLink;
+
+        // Send the audio file
         await conn.sendMessage(from, {
-            audio: { url: audioUrl },
+            audio: { url: directAudioUrl },
             mimetype: 'audio/mp4',
             ptt: false 
         }, { quoted: mek });
@@ -80,7 +77,7 @@ cmd({
         // Success reaction
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
-    } catch (error) {
+    }acch (error) {
         console.error("YTPlay Error:", error);
         reply(`❌ Error: ${error.message}`);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });

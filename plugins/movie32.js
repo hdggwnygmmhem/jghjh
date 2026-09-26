@@ -13,9 +13,9 @@ cmd({
     filename: __filename
 }, async (conn, mek, m, { from, text, reply }) => {
     try {
-        const query = text ? text.trim() : "";
+        const arg = text ? text.trim() : "";
 
-        if (!query) {
+        if (!arg) {
             return reply(
                 `❎ Please provide a movie or series name!\n\n` +
                 `*Example:* \n` +
@@ -26,10 +26,9 @@ cmd({
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const apiKey = "b5e3d64c";
-        const apiUrl = `https://www.omdbapi.com/?t=${encodeURIComponent(query)}&apikey=${apiKey}`;
-
-        const { data } = await axios.get(apiUrl, { timeout: 30000 });
+        // Using your exact OMDb format with full plot
+        const response = await axios.get(`http://www.omdbapi.com/?apikey=742b2d09&t=${encodeURIComponent(arg)}&plot=full`, { timeout: 30000 });
+        const data = response.data;
 
         if (!data || data.Response === "False") {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });

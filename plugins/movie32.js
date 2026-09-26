@@ -1,16 +1,15 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 import axios from 'axios';
-import yts from 'yt-search';
 
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "video5",
-    alias: ["ytmp4", "ytv", "ytvideo"],
-    desc: "Download YouTube video from link or search query",
+    pattern: "omdb",
+    alias: ["movieinfo", "omdbmovie", "findmovie"],
+    desc: "Search movie details using OMDb API",
     category: "downloader",
-    react: "🎬",
+    react: "⭐",
     filename: __filename
 }, async (conn, mek, m, { from, text, reply }) => {
     try {
@@ -18,53 +17,51 @@ cmd({
 
         if (!query) {
             return reply(
-                `❎ Please provide a YouTube link or video name.\n\n` +
+                `❎ Please provide a movie or series name!\n\n` +
                 `*Example:* \n` +
-                `• .video https://youtu.be/uRxwAvIvLko\n` +
-                `• .video On My Way`
+                `• .omdb Avengers\n` +
+                `• .omdb Breaking Bad`
             );
         }
 
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        let targetUrl = query;
-        const ytRegex = /(youtube\.com|youtu\.be)/;
+        const apiKey = "b5e3d64c";
+        const apiUrl = `http://www.omdbapi.com/?t=${encodeURIComponent(query)}&apikey=${apiKey}`;
 
-        // Agar user ne link nahi diya, balki video ka naam diya hai toh yt-search se link nikalein
-        if (!ytRegex.test(query)) {
-            const searchResults = await yts(query);
-            if (!searchResults || searchResults.videos.length === 0) {
-                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-                return reply(`❌ Koi video nahi mili. Doosra naam try karein.`);
-            }
-            targetUrl = searchResults.videos[0].url;
-        }
+        const { data } = await axios.get(apiUrl, { timeout: 30000 });
 
-        // YouTube Video download API (Aap apni pasand ki video API yahan laga sakte hain)
-        const apiEndpoint = `https://apiziaul.vercel.app/api/downloader/ytmp4?url=${encodeURIComponent(targetUrl)}`;
-        const { data } = await axios.get(apiEndpoint, { timeout: 60000 });
-
-        // API response ke structure ke mutabiq check
-        const downloadUrl = data?.result?.downloadUrl || data?.downloadUrl || data?.result;
-        const title = data?.result?.title || data?.title || "YouTube Video";
-
-        if (!downloadUrl) {
+        if (!data || data.Response === "False") {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply(`❌ Failed to fetch video. Please check the input and try again.`);
+            return reply(`❌ Movie nahi mili! Sahi naam type karein.`);
         }
 
-        await conn.sendMessage(from, {
-            video: { url: downloadUrl },
-            mimetype: "video/mp4",
-            fileName: `${title}.mp4`,
-            caption: `🎬 *${title}*\n\n✨ *Powered by KAMRAN-MD*`
-        }, { quoted: mek });
+        let infoText = `🎬 *Title:* ${data.Title} (${data.Year})\n`;
+        infoText += `⭐ *IMDb Rating:* ${data.imdbRating}\n`;
+        infoText += `🎭 *Genre:* ${data.Genre}\n`;
+        infoText += `📅 *Released:* ${data.Released}\n`;
+        infoText += `⏳ *Runtime:* ${data.Runtime}\n`;
+        infoText += `🎥 *Director:* ${data.Director}\n`;
+        infoText += `👥 *Actors:* ${data.Actors}\n\n`;
+        infoText += `📖 *Plot:* ${data.Plot}\n\n`;
+        infoText += `✨ *Powered by KAMRAN-MD*`;
+
+        const posterUrl = data.Poster && data.Poster !== "N/A" ? data.Poster : "";
+
+        if (posterUrl) {
+            await conn.sendMessage(from, { 
+                image: { url: posterUrl }, 
+                caption: infoText 
+            }, { quoted: mek });
+        } else {
+            await reply(infoText);
+        }
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("YOUTUBE VIDEO ERROR:", error.response?.data || error);
+        console.error("OMDB API ERROR:", error.response?.data || error);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-        reply(`❌ *Download Error*\n\n• API may be down\n• Try again later.`);
+        reply(`❌ *Error*\n\n• Failed to fetch movie details. Try again later.`);
     }
 });

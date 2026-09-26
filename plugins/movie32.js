@@ -27,7 +27,7 @@ cmd({
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
         const apiKey = "b5e3d64c";
-        const apiUrl = `http://www.omdbapi.com/?t=${encodeURIComponent(query)}&apikey=${apiKey}`;
+        const apiUrl = `https://www.omdbapi.com/?t=${encodeURIComponent(query)}&apikey=${apiKey}`;
 
         const { data } = await axios.get(apiUrl, { timeout: 30000 });
 

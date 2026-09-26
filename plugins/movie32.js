@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'url';
 import { cmd } from '../command.js';
 import axios from 'axios';
+import yts from 'yt-search';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -29,23 +30,14 @@ cmd({
         let targetUrl = query;
         const ytRegex = /(youtube\.com|youtu\.be)/;
 
-        // Agar user ne link nahi diya, balki naam likha hai toh search API use karenge
+        // Agar user ne link nahi diya, balki song ka naam diya hai toh yt-search se link nikalein
         if (!ytRegex.test(query)) {
-            try {
-                // Aap koi bhi search API ya yts plugin use kar sakte hain, yahan fallback search URL banaya gaya hai
-                const searchRes = await axios.get(`https://apiziaul.vercel.app/api/search?q=${encodeURIComponent(query)}`, { timeout: 30000 });
-                // Agar search API video URL ya id deti hai toh usko targetUrl bana lein
-                if (searchRes.data && searchRes.data.url) {
-                    targetUrl = searchRes.data.url;
-                } else if (searchRes.data && searchRes.data.result && searchRes.data.result[0]?.url) {
-                    targetUrl = searchRes.data.result[0].url;
-                } else {
-                    // Agar direct search endpoint kaam na kare toh yts module ya fallback method
-                    return reply(`❌ Song search nahi ho saka. Barah-e-karam YouTube ka direct link dein.`);
-                }
-            } catch (searchErr) {
-                return reply(`❌ Song search fail ho gaya. Barah-e-karam link use karein.`);
+            const searchResults = await yts(query);
+            if (!searchResults || searchResults.videos.length === 0) {
+                await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+                return reply(`❌ Koi gana nahi mila. Doosra naam try karein.`);
             }
+            targetUrl = searchResults.videos[0].url;
         }
 
         const apiEndpoint = "https://apiziaul.vercel.app/api/downloader/ytmp3";
@@ -65,7 +57,7 @@ cmd({
             audio: { url: downloadUrl },
             mimetype: "audio/mpeg",
             fileName: `${title || "audio"}.mp3`,
-            caption: `🎧 *${title || "YouTube Audio"}*\n\n✨ *Powered by DRKAMRAN*`
+            caption: `🎧 *${title || "YouTube Audio"}*\n\n✨ *Powered by KAMRAN-MD*`
         }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });

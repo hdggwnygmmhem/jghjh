@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 cmd({
     pattern: "movie2",
     alias: ["ytmovie", "downloadmovie", "moviefast"],
-    desc: "Search and stream/download movies via MovieBox API",
+    desc: "Search and download movies/series via MovieBox Scraper API",
     category: "downloader",
     react: "🎬",
     filename: __filename
@@ -25,70 +25,65 @@ cmd({
         const query = text.trim();
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const apiBase = "https://mbox-apis.vercel.app";
+        const apiBase = "https://moviebox-api-ivory.vercel.app";
 
-        // Step 1: Search movie
-        const searchRes = await axios.get(`${apiBase}/search?q=${encodeURIComponent(query)}`, { timeout: 30000 });
+        // Step 1: Search movie/series
+        const searchRes = await axios.get(`${apiBase}/search?q=${encodeURIComponent(query)}&page=1&perPage=10`, { timeout: 30000 });
         const searchData = searchRes.data;
 
-        if (!searchData || !searchData.items || searchData.items.length === 0) {
+        // Handle array or object response format
+        const items = Array.isArray(searchData) ? searchData : (searchData.items || searchData.results || []);
+
+        if (items.length === 0) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Koi movie nahi mili. Doosra naam try karein.");
+            return reply("❌ Koi result nahi mila. Doosra naam try karein.");
         }
 
-        const item = searchData.items[0];
-        const slug = item.slug;
-        const subjectId = item.subject_id;
-        const title = item.name || query;
-        const poster = item.poster_url || '';
+        const item = items[0];
+        const subjectId = item.subject_id || item.subjectId || item.id;
+        const title = item.name || item.title || query;
+        const poster = item.poster_url || item.cover || '';
 
-        if (!subjectId || !slug) {
+        if (!subjectId) {
             await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Details fetch karne mein masla hua.");
+            return reply("❌ Subject ID nahi mil saki.");
         }
 
-        // Step 2: Fetch stream sources from your FastAPI backend
-        const streamApi = `${apiBase}/api/stream/${subjectId}?detail_path=${encodeURIComponent(slug)}&se=1&ep=1`;
-        const streamRes = await axios.get(streamApi, { timeout: 30000 });
-        const streamData = streamRes.data;
+        // Step 2: Fetch available sources for Season 1, Episode 1
+        const sourcesRes = await axios.get(`${apiBase}/sources/${subjectId}/1/1`, { timeout: 30000 });
+        const sourcesData = sourcesRes.data;
+        const sources = Array.isArray(sourcesData) ? sourcesData : (sourcesData.sources || sourcesData.items || []);
 
-        if (!streamData || !streamData.sources || streamData.sources.length === 0) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Is content ka stream link available nahi hai.");
-        }
-
-        const sources = streamData.sources;
         let infoText = `🎬 *Title:* ${title}\n`;
-        infoText += `✨ *Creator:* DRKAMRAN\n\n📥 *Available Qualities & Links:*\n`;
+        infoText += `✨ *Creator:* DRKAMRAN\n\n📥 *Download Links (Direct Redirect):*\n`;
 
-        sources.forEach((src, idx) => {
-            const res = src.resolution || 'HD';
-            const sizeMB = src.size ? (src.size / (1024 * 1024)).toFixed(2) : 'Unknown';
-            infoText += `\n${idx + 1}. 📺 *${res}* (${sizeMB} MB)\n🔗 ${src.url}\n`;
+        // Using the clean /dl/ endpoint provided by your API
+        const resolutions = [360, 480, 720, 1080];
+        resolutions.forEach((res, idx) => {
+            const dlLink = `${apiBase}/dl/${subjectId}/1/1?resolution=${res}`;
+            infoText += `\n${idx + 1}. 📺 *${res}p* ── [Click to Download](${dlLink})`;
         });
 
-        // Step 3: Send Poster with Info & Direct Playable/Download Links
-        if (poster && poster.trim() !== "") {
+        // Step 3: Send Poster & Links
+        if (poster && typeof poster === 'string' && poster.trim() !== "") {
             await conn.sendMessage(from, { 
                 image: { url: poster }, 
-                caption: infoText + `\n💡 *Note:* Agar direct download mein error aaye toh links ko browser mein open karein.` 
+                caption: infoText + `\n\n💡 *Tip:* Kisi bhi quality par click karke direct download kar sakte hain.` 
             }, { quoted: mek });
         } else {
             await reply(infoText);
         }
 
-        // Step 4: Try sending video via WhatsApp native URL streaming (Bypasses local fetch crash)
-        const bestSource = sources[sources.length - 1] || sources[0];
-        if (bestSource && bestSource.url) {
-            try {
-                await conn.sendMessage(from, {
-                    video: { url: bestSource.url },
-                    caption: `🎬 *${title}* (${bestSource.resolution || 'HD'})\n✨ Powered by DRKAMRAN`,
-                    mimetype: 'video/mp4'
-                }, { quoted: mek });
-            } catch (vidErr) {
-                console.log("Direct video stream send skipped due to CDN block, links are provided above.");
-            }
+        // Step 4: Optional - Send direct video file using the 480p redirect link
+        const bestDlUrl = `${apiBase}/dl/${subjectId}/1/1?resolution=480`;
+        try {
+            await conn.sendMessage(from, {
+                video: { url: bestDlUrl },
+                caption: `🎬 *${title}* (480p)\n✨ Powered by DRKAMRAN`,
+                mimetype: 'video/mp4'
+            }, { quoted: mek });
+        } catch (vidErr) {
+            console.log("Direct video push skipped, links are provided above.");
         }
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });

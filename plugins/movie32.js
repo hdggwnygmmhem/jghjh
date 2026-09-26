@@ -5,98 +5,55 @@ import axios from 'axios';
 const __filename = fileURLToPath(import.meta.url);
 
 cmd({
-    pattern: "movie2",
-    alias: ["ytmovie", "downloadmovie", "moviefast"],
-    desc: "Search and download movies/series via MovieBox Scraper API",
+    pattern: "youtube",
+    alias: ["ytmp35", "yta", "ytaudio"],
+    desc: "Download YouTube audio from link",
     category: "downloader",
-    react: "🎬",
+    react: "🎧",
     filename: __filename
 }, async (conn, mek, m, { from, text, reply }) => {
     try {
-        if (!text) {
+        const url = text ? text.trim() : "";
+
+        if (!url) {
             return reply(
-                `⚠️ Please provide a movie or series name!\n\n` +
-                `Example:\n` +
-                `• .movie Attack on Titan\n` +
-                `• .movie New`
+                `❎ Please provide a YouTube link.\n\n` +
+                `*Example:* .youtube https://youtu.be/uRxwAvIvLko`
             );
         }
 
-        const query = text.trim();
+        const ytRegex = /(youtube\.com|youtu\.be)/;
+        if (!ytRegex.test(url)) {
+            return reply(`⚠️ Invalid YouTube link. Please provide a valid YouTube URL.`);
+        }
+
         await conn.sendMessage(from, { react: { text: "⏳", key: mek.key } });
 
-        const apiBase = "https://moviebox-api-ivory.vercel.app";
-
-        // Step 1: Search movie/series
-        const searchRes = await axios.get(`${apiBase}/search?q=${encodeURIComponent(query)}&page=1&perPage=20`, { timeout: 30000 });
-        const resData = searchRes.data;
-
-        // Extract subjects safely from nested results structure
-        let items = [];
-        if (resData && resData.data && Array.isArray(resData.data.results)) {
-            resData.data.results.forEach(section => {
-                if (section.subjects && Array.isArray(section.subjects)) {
-                    items.push(...section.subjects);
-                }
-            });
-        } else if (Array.isArray(resData)) {
-            items = resData;
-        } else if (resData.items) {
-            items = resData.items;
-        }
-
-        if (items.length === 0) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Koi result nahi mila. Doosra naam try karein.");
-        }
-
-        const item = items[0];
-        const subjectId = item.subjectId || item.subject_id || item.id;
-        const title = item.title || item.name || query;
-        const poster = item.cover?.url || item.poster_url || '';
-
-        if (!subjectId) {
-            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
-            return reply("❌ Subject ID nahi mil saki.");
-        }
-
-        let infoText = `🎬 *Title:* ${title}\n`;
-        infoText += `✨ *Creator:* DRKAMRAN\n\n📥 *Download Links (Direct Redirect):*\n`;
-
-        // Using the clean /dl/ endpoint
-        const resolutions = [360, 480, 720, 1080];
-        resolutions.forEach((res, idx) => {
-            const dlLink = `${apiBase}/dl/${subjectId}/1/1?resolution=${res}`;
-            infoText += `\n${idx + 1}. 📺 *${res}p* ── [Click to Download](${dlLink})`;
+        const apiEndpoint = "https://apiziaul.vercel.app/api/downloader/ytmp3";
+        const { data } = await axios.get(apiEndpoint, {
+            params: { url },
+            timeout: 60000
         });
 
-        // Step 2: Send Poster & Links
-        if (poster && typeof poster === 'string' && poster.trim() !== "") {
-            await conn.sendMessage(from, { 
-                image: { url: poster }, 
-                caption: infoText + `\n\n💡 *Tip:* Kisi bhi quality par click karke direct download kar sakte hain.` 
-            }, { quoted: mek });
-        } else {
-            await reply(infoText);
+        if (!data?.status || !data?.result?.downloadUrl) {
+            await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+            return reply(`❌ Failed to fetch audio. Please check the link and try again.`);
         }
 
-        // Step 3: Optional - Send direct video file using 480p redirect link
-        const bestDlUrl = `${apiBase}/dl/${subjectId}/1/1?resolution=480`;
-        try {
-            await conn.sendMessage(from, {
-                video: { url: bestDlUrl },
-                caption: `🎬 *${title}* (480p)\n✨ Powered by DRKAMRAN`,
-                mimetype: 'video/mp4'
-            }, { quoted: mek });
-        } catch (vidErr) {
-            console.log("Direct video push skipped, links are provided above.");
-        }
+        const { title, downloadUrl } = data.result;
+
+        await conn.sendMessage(from, {
+            audio: { url: downloadUrl },
+            mimetype: "audio/mpeg",
+            fileName: `${title || "audio"}.mp3`,
+            caption: `🎧 *${title || "YouTube Audio"}*\n\n✨ *Powered by DRKAMRAN*`
+        }, { quoted: mek });
 
         await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
     } catch (error) {
-        console.error("Movie Command Error:", error);
-        reply(`❌ Error: ${error.message || "Something went wrong."}`);
+        console.error("YOUTUBE AUDIO ERROR:", error.response?.data || error);
         await conn.sendMessage(from, { react: { text: "❌", key: mek.key } });
+        reply(`❌ *Download Error*\n\n• API may be down\n• Try again later.\n• Check the link is correct.`);
     }
 });
